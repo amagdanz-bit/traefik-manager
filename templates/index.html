@@ -1036,7 +1036,8 @@ function renderRouteGrid(apps) {
         const proto = app.protocol || 'http';
         const allDomains = [...(app.rule || '').matchAll(/Host\(`([^`]+)`\)/g)].map(m => m[1]);
         const domain     = allDomains[0] || '';
-        const isComplexRule = allDomains.length === 0 && !!app.rule;
+        const isSimpleHostRule = /^(Host\(`[^`]+`\)(\s*\|\|\s*Host\(`[^`]+`\))*)$/.test((app.rule || '').trim());
+        const isComplexRule = !isSimpleHostRule && !!app.rule;
         const ruleLabel  = isComplexRule ? 'Rule' : 'Domain';
         const badgeClass = proto === 'http' ? 'badge-http' : (proto === 'tcp' ? 'badge-tcp' : 'badge-udp');
         const tlsBadge = app.tls ? `<span class="badge badge-green" style="font-size:9px"><i class="ph-bold ph-lock"></i> TLS</span>` : '';
