@@ -110,7 +110,7 @@ GROUPS_CONFIG_FILE  = os.path.join(_CONFIG_DIR, 'dashboard.yml')
 NOTIFICATIONS_PATH  = os.path.join(_CONFIG_DIR, 'notifications.yml')
 os.makedirs(GROUPS_CACHE_DIR, exist_ok=True)
 
-_notifications     = deque(maxlen=100)
+_notifications     = deque(maxlen=200)
 _notif_lock        = threading.Lock()
 
 def _load_notifications():
