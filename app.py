@@ -2549,6 +2549,17 @@ def _build_middlewares(config, config_file=''):
     return middlewares
 
 
+def _traefik_router_ep_map() -> dict:
+    ep_map = {}
+    for proto in ('http', 'tcp', 'udp'):
+        for r in traefik_api_get_all(f'/api/{proto}/routers') or []:
+            name = r.get('name', '')
+            key  = name.split('@')[0] if '@' in name else name
+            eps  = r.get('entryPoints', [])
+            if key and eps:
+                ep_map[key] = eps
+    return ep_map
+
 def _traefik_service_url_map():
     url_map = {}
     for proto, addr_key in (('http', 'url'), ('tcp', 'address'), ('udp', 'address')):
@@ -2623,21 +2634,23 @@ def _build_all_apps(include_external=True, include_internal=False):
             combined_tcp.setdefault(k, v)
         for k, v in cfg.get('udp', {}).get('services', {}).items():
             combined_udp.setdefault(k, v)
-    api_svc_urls = _traefik_service_url_map()
-    ep_mw_map    = _entrypoint_mw_map()
+    api_svc_urls  = _traefik_service_url_map()
+    ep_mw_map     = _entrypoint_mw_map()
+    router_ep_map = _traefik_router_ep_map()
     for cf, config in loaded:
         all_apps.extend(_build_apps(config, cf, combined_http, combined_tcp, combined_udp, api_svc_urls))
         all_middlewares.extend(_build_middlewares(config, cf))
     if include_external:
         all_apps.extend(_build_external_routes(include_internal=include_internal))
-    if ep_mw_map:
-        for app in all_apps:
-            ep_mws = []
-            for ep in app.get('entryPoints', []):
-                for mw in ep_mw_map.get(ep, []):
-                    if mw not in ep_mws:
-                        ep_mws.append(mw)
-            app['entrypointMiddlewares'] = ep_mws
+    for app in all_apps:
+        if not app.get('entryPoints') and app.get('name') in router_ep_map:
+            app['entryPoints'] = router_ep_map[app['name']]
+        ep_mws = []
+        for ep in app.get('entryPoints', []):
+            for mw in ep_mw_map.get(ep, []):
+                if mw not in ep_mws:
+                    ep_mws.append(mw)
+        app['entrypointMiddlewares'] = ep_mws
     settings = load_settings()
     for rname, rdata in settings.get('disabled_routes', {}).items():
         proto    = rdata.get('protocol', 'http')
