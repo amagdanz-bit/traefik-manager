@@ -834,6 +834,20 @@ async function openSettingsModal(panel) {
     if (apikeyDisplay) apikeyDisplay.classList.add('hidden');
     const apikeyValue = document.getElementById('apikeyValue');
     if (apikeyValue) apikeyValue.value = '';
+
+    document.getElementById('settingsModal').style.display = 'flex';
+    if (window.innerWidth < 640 && !panel) {
+        document.getElementById('settingsMobileRoot').style.display = 'flex';
+        document.getElementById('settingsPanelWrapper').style.display = 'none';
+        document.getElementById('settingsMobileBack').style.display = 'none';
+        document.getElementById('settingsGearIcon').style.display = '';
+        document.getElementById('settingsModalTitle').textContent = 'Settings';
+    } else {
+        document.getElementById('settingsMobileRoot').style.display = 'none';
+        document.getElementById('settingsPanelWrapper').style.display = '';
+        if (panel) switchSettingsPanel(panel);
+    }
+
     try {
         const res  = await fetch('/api/settings');
         const data = await res.json();
@@ -886,18 +900,9 @@ async function openSettingsModal(panel) {
     } catch(e) {
         console.error('Could not load settings', e);
     }
-    document.getElementById('settingsModal').style.display = 'flex';
-    if (window.innerWidth < 640 && !panel) {
-        document.getElementById('settingsMobileRoot').style.display = 'flex';
-        document.getElementById('settingsPanelWrapper').style.display = 'none';
-        document.getElementById('settingsMobileBack').style.display = 'none';
-        document.getElementById('settingsGearIcon').style.display = '';
-        document.getElementById('settingsModalTitle').textContent = 'Settings';
-    } else {
-        const target = panel || 'ui';
-        switchSettingsPanel(target);
-        if (target === 'backups') loadBackups();
-    }
+    const target = panel || 'ui';
+    switchSettingsPanel(target);
+    if (target === 'backups') loadBackups();
 }
 
 function closeSettingsModal() {
