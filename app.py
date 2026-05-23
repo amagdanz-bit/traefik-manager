@@ -1372,6 +1372,14 @@ def traefik_api_get_all(path):
     sep = '&' if '?' in path else '?'
     return traefik_api_get(f"{path}{sep}per_page=1000")
 
+def _fetch_traefik_routers_and_services():
+    all_routers  = {}
+    all_services = {}
+    for proto in ('http', 'tcp', 'udp'):
+        all_routers[proto]  = traefik_api_get_all(f'/api/{proto}/routers')  or []
+        all_services[proto] = traefik_api_get_all(f'/api/{proto}/services') or []
+    return all_routers, all_services
+
 @app.route('/api/traefik/overview')
 @login_required
 def api_overview():
@@ -2564,14 +2572,6 @@ def _build_middlewares(config, config_file=''):
     return middlewares
 
 
-def _fetch_traefik_routers_and_services():
-    all_routers  = {}
-    all_services = {}
-    for proto in ('http', 'tcp', 'udp'):
-        all_routers[proto]  = traefik_api_get_all(f'/api/{proto}/routers')  or []
-        all_services[proto] = traefik_api_get_all(f'/api/{proto}/services') or []
-    return all_routers, all_services
-
 def _traefik_router_ep_map(all_routers: dict) -> dict:
     ep_map = {}
     for proto, routers in all_routers.items():
@@ -2659,10 +2659,15 @@ def _build_all_apps(include_external=True, include_internal=False):
             combined_tcp.setdefault(k, v)
         for k, v in cfg.get('udp', {}).get('services', {}).items():
             combined_udp.setdefault(k, v)
-    all_routers, all_services = _fetch_traefik_routers_and_services()
-    api_svc_urls  = _traefik_service_url_map(all_services)
-    ep_mw_map     = _entrypoint_mw_map()
-    router_ep_map = _traefik_router_ep_map(all_routers)
+    ep_mw_map = _entrypoint_mw_map()
+    if include_external:
+        all_routers, all_services = _fetch_traefik_routers_and_services()
+        api_svc_urls  = _traefik_service_url_map(all_services)
+        router_ep_map = _traefik_router_ep_map(all_routers)
+    else:
+        all_routers = all_services = {}
+        api_svc_urls  = {}
+        router_ep_map = {}
     for cf, config in loaded:
         all_apps.extend(_build_apps(config, cf, combined_http, combined_tcp, combined_udp, api_svc_urls))
         all_middlewares.extend(_build_middlewares(config, cf))
