@@ -47,7 +47,7 @@ Middleware nodes show a usage count badge (e.g. `3x`) when they are used by more
 
 ## Route grouping
 
-Each route is shown as an individual node in the topology. Routes that share a name prefix are visually related — clicking any route node opens the popup, and clicking a related node within the popup drills into its connections.
+Each route is shown as an individual node in the topology. Routes that share a name prefix are visually related - clicking any route node opens the popup, and clicking a related node within the popup drills into its connections.
 
 ---
 

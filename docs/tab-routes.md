@@ -53,6 +53,20 @@ Click the pencil icon on any route card, or open the detail panel and click **Ed
 
 Click the trash icon on the route card. The corresponding service entry in `dynamic.yml` is removed automatically.
 
+## Entrypoint middlewares
+
+When `STATIC_CONFIG_PATH` is set, traefik-manager reads `entryPoints[name].http.middlewares` from the static config and shows those middlewares as grey **ep** chips on route cards - one chip per middleware inherited from a matched entry point. Hovering the chip shows "Applied via entrypoint". These are read-only and managed in the static config, not the dynamic config.
+
+## Bulk actions
+
+Click the **selection icon** in the filter bar to enter bulk mode. Each route card shows a checkbox - tick the ones you want to act on. A sticky action bar appears at the bottom with:
+
+- **Enable** - enables all selected routes
+- **Disable** - disables all selected routes
+- **Delete** - deletes all selected routes after a confirmation prompt
+
+Click the X in the action bar or the selection button again to exit bulk mode.
+
 ## Enabling and disabling routes
 
 Each route card has a toggle icon (green when active, grey when inactive). Clicking it:

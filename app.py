@@ -19,7 +19,7 @@ from io import StringIO
 from cryptography.fernet import Fernet, InvalidToken
 
 GITHUB_REPO  = "chr0nzz/traefik-manager"
-APP_VERSION  = "1.1.0"
+APP_VERSION  = "1.2.0"
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -31,7 +31,7 @@ logger = logging.getLogger("traefik-manager")
 
 
 app = Flask(__name__)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 _CONFIG_DIR      = os.path.dirname(os.environ.get('SETTINGS_PATH', '/app/config/manager.yml'))
 _SECRET_KEY_PATH = os.path.join(_CONFIG_DIR, '.secret_key')
@@ -136,11 +136,54 @@ def _save_notifications_bg():
     except Exception:
         logger.exception("Failed to save notifications")
 
+def _is_ntfy_url(url: str) -> bool:
+    from urllib.parse import urlparse
+    try:
+        h = urlparse(url).hostname or ''
+        return h == 'ntfy.sh' or h.startswith('ntfy.') or '/api/v1/publish' in url
+    except Exception:
+        return False
+
+def _send_webhook(url: str, wtype: str, type_: str, msg: str, ts: str, username: str = '', password: str = ''):
+    color_map = {'warning': 0xf0a500, 'error': 0xf85149, 'info': 0x58a6ff, 'success': 0x3fb950}
+    color = color_map.get(type_, 0x58a6ff)
+    tag_map = {'warning': 'warning', 'error': 'rotating_light', 'success': 'white_check_mark', 'info': 'information_source'}
+    auth = (username, password) if username else None
+    if wtype == 'discord':
+        payload = {'embeds': [{'title': msg, 'color': color, 'footer': {'text': f'Traefik Manager - {ts}'}}]}
+        requests.post(url, json=payload, timeout=5, auth=auth)
+    elif wtype == 'slack':
+        icon = {'warning': ':warning:', 'error': ':x:', 'success': ':white_check_mark:', 'info': ':information_source:'}.get(type_, ':bell:')
+        requests.post(url, json={'text': f'{icon} *Traefik Manager* - {msg}'}, timeout=5, auth=auth)
+    elif wtype == 'ntfy':
+        headers = {
+            'X-Title': 'Traefik Manager',
+            'X-Priority': '4' if type_ in ('warning', 'error') else '3',
+            'X-Tags': tag_map.get(type_, 'bell'),
+        }
+        requests.post(url, data=msg.encode('utf-8'), headers=headers, timeout=5, auth=auth)
+    else:
+        requests.post(url, json={'event': type_, 'message': msg, 'timestamp': ts}, timeout=5, auth=auth)
+
+def _fire_webhook(type_: str, msg: str, ts: str):
+    s   = load_settings()
+    url = s.get('webhook_url', '').strip()
+    if not url:
+        return
+    wtype    = s.get('webhook_type', 'discord')
+    username = s.get('webhook_username', '')
+    password = s.get('webhook_password', '')
+    try:
+        _send_webhook(url, wtype, type_, msg, ts, username, password)
+    except Exception as e:
+        logger.warning(f"Webhook delivery failed: {e}")
+
 def add_notification(type_, msg):
     entry = {'ts': time.strftime("%Y-%m-%d %H:%M:%S"), 'type': type_, 'msg': msg}
     with _notif_lock:
         _notifications.append(entry)
     _save_notifications_bg()
+    threading.Thread(target=_fire_webhook, args=(type_, msg, entry['ts']), daemon=True).start()
 
 _config_dir = os.environ.get('CONFIG_DIR', '').strip()
 ACTIVE_CONFIG_DIR = _config_dir
@@ -269,6 +312,10 @@ def load_settings() -> dict:
         'oidc_allowed_emails':  '',
         'oidc_allowed_groups':  '',
         'oidc_groups_claim':    'groups',
+        'webhook_url':          '',
+        'webhook_type':         'discord',
+        'webhook_username':     '',
+        'webhook_password':     '',
     }
     if not os.path.exists(SETTINGS_PATH):
         return defaults
@@ -354,6 +401,14 @@ def load_settings() -> dict:
             merged['oidc_allowed_groups'] = str(data['oidc_allowed_groups']).strip()
         if 'oidc_groups_claim' in data:
             merged['oidc_groups_claim'] = str(data['oidc_groups_claim']).strip()
+        if 'webhook_url' in data:
+            merged['webhook_url'] = str(data['webhook_url']).strip()
+        if 'webhook_type' in data:
+            merged['webhook_type'] = str(data['webhook_type']).strip()
+        if 'webhook_username' in data:
+            merged['webhook_username'] = str(data['webhook_username']).strip()
+        if 'webhook_password' in data:
+            merged['webhook_password'] = _decrypt_otp_secret(str(data['webhook_password']))
         return merged
     except Exception as e:
         logger.warning(f"Could not load manager.yml, using defaults: {e}")
@@ -373,7 +428,8 @@ def save_settings(domains, cert_resolver, traefik_api_url,
                   oidc_enabled=None, oidc_provider_url=None, oidc_client_id=None,
                   oidc_client_secret=None, oidc_display_name=None,
                   oidc_allowed_emails=None, oidc_allowed_groups=None,
-                  oidc_groups_claim=None):
+                  oidc_groups_claim=None, webhook_url=None, webhook_type=None,
+                  webhook_username=None, webhook_password=None):
     if visible_tabs is None:
         visible_tabs = {t: False for t in OPTIONAL_TABS}
     _cur = load_settings()
@@ -413,6 +469,14 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         oidc_allowed_groups = _cur.get('oidc_allowed_groups', '')
     if oidc_groups_claim is None:
         oidc_groups_claim = _cur.get('oidc_groups_claim', 'groups')
+    if webhook_url is None:
+        webhook_url = _cur.get('webhook_url', '')
+    if webhook_type is None:
+        webhook_type = _cur.get('webhook_type', 'discord')
+    if webhook_username is None:
+        webhook_username = _cur.get('webhook_username', '')
+    if webhook_password is None:
+        webhook_password = _cur.get('webhook_password', '')
     otp_secret = _encrypt_otp_secret(otp_secret)
     oidc_client_secret_enc = _encrypt_otp_secret(oidc_client_secret) if oidc_client_secret else ''
     os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
@@ -444,6 +508,10 @@ def save_settings(domains, cert_resolver, traefik_api_url,
             'oidc_allowed_emails':  oidc_allowed_emails,
             'oidc_allowed_groups':  oidc_allowed_groups,
             'oidc_groups_claim':    oidc_groups_claim,
+            'webhook_url':          webhook_url,
+            'webhook_type':         webhook_type,
+            'webhook_username':     webhook_username,
+            'webhook_password':     _encrypt_otp_secret(webhook_password) if webhook_password else '',
         }, f)
     os.replace(tmp, SETTINGS_PATH)
     logger.info("Manager settings saved")
@@ -784,6 +852,7 @@ _SILENT_PREFIXES = (
     '/api/manager/version',
     '/api/configs',
     '/api/settings/tabs',
+    '/api/ping',
 )
 
 @app.before_request
@@ -1303,6 +1372,14 @@ def traefik_api_get_all(path):
     sep = '&' if '?' in path else '?'
     return traefik_api_get(f"{path}{sep}per_page=1000")
 
+def _fetch_traefik_routers_and_services():
+    all_routers  = {}
+    all_services = {}
+    for proto in ('http', 'tcp', 'udp'):
+        all_routers[proto]  = traefik_api_get_all(f'/api/{proto}/routers')  or []
+        all_services[proto] = traefik_api_get_all(f'/api/{proto}/services') or []
+    return all_routers, all_services
+
 @app.route('/api/traefik/overview')
 @login_required
 def api_overview():
@@ -1353,6 +1430,104 @@ def api_entrypoints():
 @login_required
 def api_version():
     return jsonify(traefik_api_get('/api/version') or {})
+
+@app.route('/api/ping')
+@login_required
+def api_route_ping():
+    import time as _t
+    from urllib.parse import urlparse
+    url      = request.args.get('url', '').strip()
+    fallback = request.args.get('fallback', '').strip()
+    if not url or not url.startswith(('http://', 'https://')):
+        return jsonify({'ok': False, 'error': 'Invalid URL'}), 400
+    host = urlparse(url).hostname or ''
+    tm_host = request.host.split(':')[0].lower()
+    if host.lower() == tm_host:
+        return jsonify({'ok': True, 'latency_ms': 0, 'status_code': 200, 'self': True})
+    settings = load_settings()
+    self_domain = (settings.get('self_route') or {}).get('domain', '').strip().lower()
+    if self_domain and host.lower() == self_domain:
+        return jsonify({'ok': True, 'latency_ms': 0, 'status_code': 200, 'self': True})
+    def _ping(target):
+        t0   = _t.monotonic()
+        resp = requests.head(target, timeout=5, allow_redirects=True, verify=False)
+        ms   = round((_t.monotonic() - t0) * 1000)
+        return ms, resp.status_code
+    try:
+        ms, code = _ping(url)
+        return jsonify({'ok': True, 'latency_ms': ms, 'status_code': code})
+    except Exception as primary_err:
+        if fallback and fallback.startswith(('http://', 'https://')):
+            try:
+                ms, code = _ping(fallback)
+                return jsonify({'ok': True, 'latency_ms': ms, 'status_code': code, 'via_target': True})
+            except Exception:
+                pass
+        err = str(primary_err)[:80]
+        return jsonify({'ok': False, 'error': 'Timeout' if 'timeout' in err.lower() else err, 'latency_ms': None})
+
+def _apr1_hash(password: str, salt: str) -> str:
+    import hashlib
+    pw  = password.encode('latin-1')
+    sl  = salt.encode('ascii')
+    mgc = b'$apr1$'
+    a   = hashlib.md5(pw + mgc + sl)
+    b   = hashlib.md5(pw + sl + pw).digest()
+    plen = len(pw)
+    ndig, nrem = divmod(plen, 16)
+    for n in ndig * [16] + [nrem]:
+        a.update(b[:n])
+    i = plen
+    while i:
+        a.update(b'\x00' if (i & 1) else pw[:1])
+        i >>= 1
+    a = a.digest()
+    for i in range(1000):
+        c = hashlib.md5()
+        c.update(pw if (i & 1) else a)
+        if i % 3: c.update(sl)
+        if i % 7: c.update(pw)
+        c.update(a if (i & 1) else pw)
+        a = c.digest()
+    t64 = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+    def to64(v, n):
+        r = ''
+        for _ in range(n):
+            r += t64[v & 0x3f]; v >>= 6
+        return r
+    enc  = to64((a[0]<<16)|(a[6]<<8)|a[12], 4)
+    enc += to64((a[1]<<16)|(a[7]<<8)|a[13], 4)
+    enc += to64((a[2]<<16)|(a[8]<<8)|a[14], 4)
+    enc += to64((a[3]<<16)|(a[9]<<8)|a[15], 4)
+    enc += to64((a[4]<<16)|(a[10]<<8)|a[5], 4)
+    enc += to64(a[11], 2)
+    return f'$apr1${salt}${enc}'
+
+@app.route('/api/tools/digestauth', methods=['POST'])
+@login_required
+def api_digestauth():
+    import hashlib
+    data     = request.get_json(silent=True) or {}
+    username = data.get('username', '').strip()
+    realm    = data.get('realm', '').strip()
+    password = data.get('password', '')
+    if not username or not realm or not password:
+        return jsonify({'ok': False, 'error': 'username, realm and password required'}), 400
+    h = hashlib.md5(f'{username}:{realm}:{password}'.encode()).hexdigest()
+    return jsonify({'ok': True, 'hash': f'{username}:{realm}:{h}'})
+
+@app.route('/api/tools/htpasswd', methods=['POST'])
+@login_required
+def api_htpasswd():
+    import random, string
+    data     = request.get_json(silent=True) or {}
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    if not username or not password:
+        return jsonify({'ok': False, 'error': 'username and password required'}), 400
+    salt = ''.join(random.choices(string.ascii_letters + string.digits + './', k=8))
+    h    = _apr1_hash(password, salt)
+    return jsonify({'ok': True, 'hash': f'{username}:{h}'})
 
 @app.route('/api/traefik/ping')
 @login_required
@@ -1976,6 +2151,18 @@ def api_notifications_clear():
     threading.Thread(target=_save_notifications_bg, daemon=True).start()
     return jsonify({'ok': True})
 
+@app.route('/api/notifications/add', methods=['POST'])
+@login_required
+def api_notifications_add():
+    _check_csrf()
+    data = request.get_json(silent=True) or {}
+    type_ = data.get('type', 'info')
+    msg   = (data.get('message') or '').strip()
+    if not msg:
+        return jsonify({'ok': False, 'error': 'message required'}), 400
+    add_notification(type_, msg)
+    return jsonify({'ok': True})
+
 @app.route('/api/notifications/update', methods=['POST'])
 @login_required
 def api_notifications_update():
@@ -2073,6 +2260,7 @@ def api_get_settings():
 
     s.pop('password_hash', None)
     s.pop('oidc_client_secret', None)
+    s.pop('webhook_password', None)
     s['auth_enabled']          = _auth_enabled()
     s['has_password']          = _has_password_set()
     s['auth_env_forced']       = os.environ.get('AUTH_ENABLED', '').strip().lower() in ('false', '0', 'no')
@@ -2096,14 +2284,24 @@ def api_save_settings():
         acme_json_path    = str(data.get('acme_json_path', '')).strip()
         access_log_path   = str(data.get('access_log_path', '')).strip()
         static_config_path = str(data.get('static_config_path', '')).strip()
+        webhook_url      = str(data.get('webhook_url', '')).strip()
+        webhook_type     = str(data.get('webhook_type', 'discord')).strip()
+        webhook_username = str(data.get('webhook_username', '')).strip()
+        webhook_password = str(data.get('webhook_password', ''))
         existing = load_settings()
+        if not webhook_password:
+            webhook_password = existing.get('webhook_password', '')
         save_settings(domains, cert_resolver, traefik_api_url,
                       auth_enabled=existing['auth_enabled'],
                       password_hash=existing['password_hash'],
                       visible_tabs=existing['visible_tabs'],
                       acme_json_path=acme_json_path,
                       access_log_path=access_log_path,
-                      static_config_path=static_config_path)
+                      static_config_path=static_config_path,
+                      webhook_url=webhook_url,
+                      webhook_type=webhook_type,
+                      webhook_username=webhook_username,
+                      webhook_password=webhook_password)
         result = load_settings()
         result.pop('password_hash', None)
         result.pop('oidc_client_secret', None)
@@ -2112,6 +2310,24 @@ def api_save_settings():
         logger.exception("Settings save error")
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/settings/webhook-test', methods=['POST'])
+@csrf_protect
+@login_required
+def api_webhook_test():
+    data     = request.get_json(silent=True) or {}
+    url      = str(data.get('url', '')).strip()
+    wtype    = str(data.get('webhook_type', 'discord')).strip()
+    username = str(data.get('username', '')).strip()
+    password = str(data.get('password', ''))
+    if not url or not url.startswith(('http://', 'https://')):
+        return jsonify({'ok': False, 'error': 'Invalid URL'}), 400
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        _send_webhook(url, wtype, 'info', 'Traefik Manager webhook test', ts, username, password)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)[:120]})
 
 @app.route('/api/settings/test-connection', methods=['POST'])
 @csrf_protect
@@ -2356,10 +2572,25 @@ def _build_middlewares(config, config_file=''):
     return middlewares
 
 
-def _traefik_service_url_map():
+def _traefik_router_ep_map(all_routers: dict) -> dict:
+    ep_map = {}
+    for proto, routers in all_routers.items():
+        for r in routers:
+            name = r.get('name', '')
+            key  = name.split('@')[0] if '@' in name else name
+            eps  = r.get('entryPoints', [])
+            if key and eps:
+                ep_map[key] = eps
+    return ep_map
+
+def _traefik_service_url_map(all_services: dict = None):
+    if all_services is None:
+        all_services = {}
+        for proto in ('http', 'tcp', 'udp'):
+            all_services[proto] = traefik_api_get_all(f'/api/{proto}/services') or []
     url_map = {}
     for proto, addr_key in (('http', 'url'), ('tcp', 'address'), ('udp', 'address')):
-        for svc in traefik_api_get_all(f'/api/{proto}/services') or []:
+        for svc in all_services.get(proto, []):
             key = _svc_key(svc.get('name', ''))
             servers = svc.get('loadBalancer', {}).get('servers', [])
             if servers and addr_key in servers[0]:
@@ -2367,12 +2598,10 @@ def _traefik_service_url_map():
     return url_map
 
 
-def _build_external_routes(include_internal=False):
-    svc_urls = _traefik_service_url_map()
+def _build_external_routes(all_routers: dict, svc_urls: dict, include_internal=False):
     routes = []
     for proto in ('http', 'tcp', 'udp'):
-        data = traefik_api_get_all(f'/api/{proto}/routers') or []
-        for r in data:
+        for r in all_routers.get(proto, []):
             provider = r.get('provider', '')
             if not provider or provider == 'file':
                 continue
@@ -2400,6 +2629,22 @@ def _build_external_routes(include_internal=False):
     return routes
 
 
+def _entrypoint_mw_map() -> dict:
+    path = _get_static_config_path()
+    if not path or not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, 'r') as f:
+            cfg = yaml.load(f) or {}
+        result = {}
+        for ep_name, ep_val in cfg.get('entryPoints', {}).items():
+            mws = (ep_val or {}).get('http', {}).get('middlewares', [])
+            if mws:
+                result[ep_name] = [str(m) for m in mws]
+        return result
+    except Exception:
+        return {}
+
 def _build_all_apps(include_external=True, include_internal=False):
     all_apps = []
     all_middlewares = []
@@ -2414,12 +2659,29 @@ def _build_all_apps(include_external=True, include_internal=False):
             combined_tcp.setdefault(k, v)
         for k, v in cfg.get('udp', {}).get('services', {}).items():
             combined_udp.setdefault(k, v)
-    api_svc_urls = _traefik_service_url_map()
+    ep_mw_map = _entrypoint_mw_map()
+    if include_external:
+        all_routers, all_services = _fetch_traefik_routers_and_services()
+        api_svc_urls  = _traefik_service_url_map(all_services)
+        router_ep_map = _traefik_router_ep_map(all_routers)
+    else:
+        all_routers = all_services = {}
+        api_svc_urls  = {}
+        router_ep_map = {}
     for cf, config in loaded:
         all_apps.extend(_build_apps(config, cf, combined_http, combined_tcp, combined_udp, api_svc_urls))
         all_middlewares.extend(_build_middlewares(config, cf))
     if include_external:
-        all_apps.extend(_build_external_routes(include_internal=include_internal))
+        all_apps.extend(_build_external_routes(all_routers, api_svc_urls, include_internal=include_internal))
+    for app in all_apps:
+        if not app.get('entryPoints') and app.get('name') in router_ep_map:
+            app['entryPoints'] = router_ep_map[app['name']]
+        ep_mws = []
+        for ep in app.get('entryPoints', []):
+            for mw in ep_mw_map.get(ep, []):
+                if mw not in ep_mws:
+                    ep_mws.append(mw)
+        app['entrypointMiddlewares'] = ep_mws
     settings = load_settings()
     for rname, rdata in settings.get('disabled_routes', {}).items():
         proto    = rdata.get('protocol', 'http')
@@ -2436,7 +2698,7 @@ def _build_all_apps(include_external=True, include_internal=False):
                              'entryPoints': router.get('entryPoints', []),
                              'protocol': 'http', 'tls': bool(router.get('tls')), 'enabled': False,
                              'passHostHeader': svc.get('loadBalancer', {}).get('passHostHeader', True),
-                             'configFile': cf, 'provider': 'file'})
+                             'configFile': cf, 'provider': 'file', 'entrypointMiddlewares': []})
         elif proto == 'tcp':
             servers = svc.get('loadBalancer', {}).get('servers', [])
             target  = servers[0].get('address', 'N/A') if servers else 'N/A'
@@ -3058,6 +3320,9 @@ def api_save_oidc():
             domains=s['domains'],
             cert_resolver=s['cert_resolver'],
             traefik_api_url=s['traefik_api_url'],
+            auth_enabled=s.get('auth_enabled', True),
+            password_hash=s.get('password_hash', ''),
+            visible_tabs=s.get('visible_tabs'),
             oidc_enabled=bool(data.get('oidc_enabled', False)),
             oidc_provider_url=str(data.get('oidc_provider_url', '')).strip(),
             oidc_client_id=str(data.get('oidc_client_id', '')).strip(),

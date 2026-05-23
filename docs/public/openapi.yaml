@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Traefik Manager API
-  version: 1.1.0
+  version: 1.2.0
   description: |
     REST API powering the Traefik Manager web UI and official mobile app.
 
@@ -11,9 +11,9 @@ info:
 
     Two methods are supported:
 
-    **API key** *(recommended for scripts and apps)* — generate a key in **Settings → Authentication → API Key** and send it as a header. API keys bypass CSRF checks.
+    **API key** *(recommended for scripts and apps)* - generate a key in **Settings → Authentication → API Key** and send it as a header. API keys bypass CSRF checks.
 
-    **Session cookie** — log in via the web UI. The browser session is used automatically.
+    **Session cookie** - log in via the web UI. The browser session is used automatically.
 
     ## CSRF
 
@@ -114,7 +114,7 @@ tags:
   - name: Routes & Middlewares
     description: Create, edit, delete, and toggle managed routes and middlewares.
   - name: Dashboard
-    description: Dashboard configuration — custom groups and per-route icon/name overrides.
+    description: Dashboard configuration - custom groups and per-route icon/name overrides.
   - name: Settings
     description: Application settings including domains, resolvers, file paths, and tabs.
   - name: Backups
@@ -268,7 +268,7 @@ paths:
     post:
       tags: [Authentication]
       summary: Generate API key
-      description: Generate a new API key for a named device. Up to 10 keys can exist. Rate-limited to 5/hour. The full key is returned once — store it securely.
+      description: Generate a new API key for a named device. Up to 10 keys can exist. Rate-limited to 5/hour. The full key is returned once - store it securely.
       requestBody:
         required: true
         content:
@@ -389,7 +389,7 @@ paths:
     get:
       tags: [Traefik]
       summary: Overview
-      description: Traefik dashboard overview — router/service/middleware counts, features, version.
+      description: Traefik dashboard overview - router/service/middleware counts, features, version.
       responses:
         "200":
           description: Overview object from Traefik API
@@ -749,7 +749,7 @@ paths:
     get:
       tags: [Dashboard]
       summary: Get dashboard config
-      description: Get the saved Dashboard configuration — custom groups and per-route icon/name overrides.
+      description: Get the saved Dashboard configuration - custom groups and per-route icon/name overrides.
       responses:
         "200":
           description: Dashboard config
@@ -806,7 +806,7 @@ paths:
           in: path
           required: true
           schema: { type: string }
-          description: Icon name — lowercase alphanumeric and hyphens (e.g. `plex`, `grafana`)
+          description: Icon name - lowercase alphanumeric and hyphens (e.g. `plex`, `grafana`)
       responses:
         "200":
           description: PNG image

@@ -289,12 +289,23 @@ Get current application settings. Password hash is never included.
 | `auth_enabled` | Password auth on/off |
 | `oidc_enabled` | OIDC on/off |
 | `visible_tabs` | Tab visibility map |
+| `webhook_url` | Notification webhook URL |
 
 ---
 
 ### `POST /api/settings`
 
 Update settings. Send only the fields you want to change.
+
+---
+
+### `POST /api/settings/webhook-test`
+
+Send a test payload to a webhook URL without saving it.
+
+```json
+{ "url": "https://discord.com/api/webhooks/..." }
+```
 
 ---
 
@@ -611,6 +622,22 @@ Test connectivity to a Traefik API URL. No authentication required.
 ```json
 { "url": "http://traefik:8080" }
 ```
+
+---
+
+### `GET /api/ping`
+
+Ping a route's domain from the TM server and return latency. Used by the route health check in the Routes tab.
+
+| Query param | Description |
+|---|---|
+| `url` | Full URL to ping (must start with `http://` or `https://`) |
+
+```json
+{ "ok": true, "latency_ms": 42, "status_code": 200 }
+```
+
+On failure: `{ "ok": false, "error": "Timeout", "latency_ms": null }`
 
 ---
 

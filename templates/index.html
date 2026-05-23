@@ -748,10 +748,222 @@ function openMwModal() {
     if (newMwInput) { newMwInput.style.display = 'none'; newMwInput.value = ''; }
     if (mwCfSel && mwCfHid && mwCfSel.value !== '__new__') mwCfHid.value = mwCfSel.value;
     modal.style.display = 'flex';
+    const mwTplSel = document.getElementById('mwTemplate');
+    if (mwTplSel) mwTplSel.value = '';
+    setMwMode('yaml');
+    _showMwWizard('');
     _initMwMonaco('');
 }
 
 function closeMwModal() { document.getElementById('mwModal').style.display = 'none'; }
+
+function togglePwVis(inputId, btn) {
+    const el = document.getElementById(inputId);
+    if (!el) return;
+    const show = el.type === 'password';
+    el.type = show ? 'text' : 'password';
+    btn.innerHTML = show ? '<i class="ph-bold ph-eye-slash text-sm"></i>' : '<i class="ph-bold ph-eye text-sm"></i>';
+}
+
+async function generateDigestAuth() {
+    const user  = (document.getElementById('wizDaGenUser')?.value || '').trim();
+    const realm = (document.getElementById('wizDaGenRealm')?.value || '').trim();
+    const pass  = (document.getElementById('wizDaGenPass')?.value || '');
+    if (!user || !realm || !pass) { showToast('Enter a username, realm and password', 'error'); return; }
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    try {
+        const res  = await fetch('/api/tools/digestauth', { method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token': csrf}, body: JSON.stringify({username: user, realm, password: pass}) });
+        const json = await res.json();
+        if (!json.ok) { showToast(json.error || 'Failed', 'error'); return; }
+        const ta = document.getElementById('wizDaUsers');
+        if (ta) ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + json.hash;
+        document.getElementById('wizDaGenUser').value = '';
+        document.getElementById('wizDaGenRealm').value = '';
+        document.getElementById('wizDaGenPass').value = '';
+    } catch(e) { showToast('Error generating hash', 'error'); }
+}
+
+async function generateHtpasswd() {
+    const user = (document.getElementById('wizBaGenUser')?.value || '').trim();
+    const pass = (document.getElementById('wizBaGenPass')?.value || '');
+    if (!user || !pass) { showToast('Enter a username and password', 'error'); return; }
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    try {
+        const res  = await fetch('/api/tools/htpasswd', { method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token': csrf}, body: JSON.stringify({username: user, password: pass}) });
+        const json = await res.json();
+        if (!json.ok) { showToast(json.error || 'Failed', 'error'); return; }
+        const ta = document.getElementById('wizBaUsers');
+        if (ta) ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + json.hash;
+        document.getElementById('wizBaGenUser').value = '';
+        document.getElementById('wizBaGenPass').value = '';
+    } catch(e) { showToast('Error generating hash', 'error'); }
+}
+
+function setMwMode(mode) {
+    document.getElementById('mwCurrentMode').value = mode;
+    const wizBtn  = document.getElementById('mwModeWizBtn');
+    const yamlBtn = document.getElementById('mwModeYamlBtn');
+    const wizSec  = document.getElementById('mwWizardSection');
+    const edSec   = document.getElementById('mwEditorSection');
+    if (mode === 'wizard') {
+        wizBtn.classList.add('active-http');
+        yamlBtn.classList.remove('active-http');
+        if (wizSec) wizSec.style.display = '';
+        if (edSec)  edSec.style.display  = 'none';
+    } else {
+        yamlBtn.classList.add('active-http');
+        wizBtn.classList.remove('active-http');
+        if (wizSec) wizSec.style.display = 'none';
+        if (edSec)  edSec.style.display  = '';
+        const tpl = document.getElementById('mwTemplate')?.value;
+        if (tpl && _wizardTemplates.has(tpl)) {
+            buildYamlFromWizard();
+            const yaml = document.getElementById('middlewareContent')?.value || '';
+            if (_mwMonacoEditor) {
+                _mwMonacoEditor.setValue(yaml);
+                setTimeout(() => _mwMonacoEditor.layout(), 50);
+            } else {
+                _initMwMonaco(yaml);
+            }
+        } else if (_mwMonacoEditor) {
+            setTimeout(() => _mwMonacoEditor.layout(), 50);
+        }
+    }
+}
+
+const _wizardTemplates = new Set(['basicAuth','digestAuth','forwardAuth','forwardAuthAuthentik','forwardAuthAuthelia','ipAllowList','ipAllowListPrivate','rateLimit','secureHeaders','corsHeaders','redirectScheme','redirectRegex','stripPrefix','addPrefix','replacePath','compress','retry','circuitBreaker','buffering','chain','inFlightReq']);
+
+const _wizKeyMap = {
+    forwardAuthAuthentik: 'forwardAuth', forwardAuthAuthelia: 'forwardAuth',
+    ipAllowListPrivate: 'ipAllowList',
+};
+
+function _showMwWizard(tpl) {
+    document.querySelectorAll('.mw-wiz-form').forEach(el => el.style.display = 'none');
+    const none = document.getElementById('mwWiz-none');
+    if (!tpl || !_wizardTemplates.has(tpl)) { if (none) none.style.display = ''; return; }
+    const key = _wizKeyMap[tpl] || tpl;
+    const sec = document.getElementById('mwWiz-' + key);
+    if (sec) sec.style.display = '';
+    if (tpl === 'forwardAuthAuthentik') {
+        const el = document.getElementById('wizFaAddress'); if (el) el.value = 'http://authentik-server:9000/outpost.goauthentik.io/auth/traefik';
+        const hd = document.getElementById('wizFaHeaders'); if (hd) hd.value = 'X-authentik-username\nX-authentik-groups\nX-authentik-email\nX-authentik-name\nX-authentik-uid';
+    } else if (tpl === 'forwardAuthAuthelia') {
+        const el = document.getElementById('wizFaAddress'); if (el) el.value = 'http://authelia:9091/api/authz/forward-auth';
+        const hd = document.getElementById('wizFaHeaders'); if (hd) hd.value = 'Remote-User\nRemote-Groups\nRemote-Name\nRemote-Email';
+    } else if (tpl === 'ipAllowListPrivate') {
+        const el = document.getElementById('wizIpCidrs'); if (el) el.value = '10.0.0.0/8\n172.16.0.0/12\n192.168.0.0/16\n127.0.0.1/32';
+    }
+}
+
+function buildYamlFromWizard() {
+    const tpl = document.getElementById('mwTemplate')?.value;
+    if (!tpl || !_wizardTemplates.has(tpl)) return;
+    let yaml = '';
+    const key = _wizKeyMap[tpl] || tpl;
+
+    const _lines = (id) => (document.getElementById(id)?.value || '').trim().split('\n').map(l => l.trim()).filter(Boolean);
+    const _val   = (id, def='') => (document.getElementById(id)?.value || def).trim();
+    const _chk   = (id, def=false) => document.getElementById(id)?.checked ?? def;
+
+    if (key === 'basicAuth') {
+        const users = _lines('wizBaUsers');
+        const realm = _val('wizBaRealm');
+        yaml = 'basicAuth:\n  users:\n' + users.map(l => '    - "' + l + '"').join('\n');
+        if (realm) yaml += '\n  realm: "' + realm + '"';
+
+    } else if (key === 'digestAuth') {
+        const users = _lines('wizDaUsers');
+        yaml = 'digestAuth:\n  users:\n' + users.map(l => '    - "' + l + '"').join('\n');
+
+    } else if (key === 'forwardAuth') {
+        const addr  = _val('wizFaAddress');
+        const trust = _chk('wizFaTrust', true);
+        const hdrs  = _lines('wizFaHeaders');
+        yaml = 'forwardAuth:\n  address: "' + addr + '"\n  trustForwardHeader: ' + trust;
+        if (hdrs.length) yaml += '\n  authResponseHeaders:\n' + hdrs.map(h => '    - "' + h + '"').join('\n');
+
+    } else if (key === 'rateLimit') {
+        yaml = 'rateLimit:\n  average: ' + _val('wizRlAvg','100') + '\n  burst: ' + _val('wizRlBurst','50') + '\n  period: ' + _val('wizRlPeriod','1s');
+
+    } else if (key === 'ipAllowList') {
+        const cidrs = _lines('wizIpCidrs');
+        yaml = 'ipAllowList:\n  sourceRange:\n' + cidrs.map(c => '    - "' + c + '"').join('\n');
+
+    } else if (key === 'secureHeaders') {
+        const lines = ['headers:'];
+        if (_chk('wizShSsl'))     lines.push('  sslRedirect: true');
+        if (_chk('wizShHsts')) {
+            lines.push('  forceSTSHeader: true');
+            lines.push('  stsSeconds: ' + _val('wizShHstsAge','315360000'));
+            if (_chk('wizShSub'))     lines.push('  stsIncludeSubdomains: true');
+            if (_chk('wizShPreload')) lines.push('  stsPreload: true');
+        }
+        if (_chk('wizShNosniff'))  lines.push('  contentTypeNosniff: true');
+        if (_chk('wizShXss'))      lines.push('  browserXssFilter: true');
+        if (_chk('wizShFrame'))    lines.push('  frameDeny: true');
+        if (_chk('wizShReferrer')) lines.push('  referrerPolicy: "same-origin"');
+        yaml = lines.join('\n');
+
+    } else if (key === 'corsHeaders') {
+        const methods = ['GET','POST','PUT','DELETE','PATCH','OPTIONS','HEAD']
+            .filter(m => _chk('wizCors' + m.charAt(0) + m.slice(1).toLowerCase()));
+        const origins = _lines('wizCorsOrigins');
+        const hdrs    = _lines('wizCorsHeaders');
+        const maxAge  = _val('wizCorsMaxAge','100');
+        const vary    = _chk('wizCorsVary', true);
+        const lines = ['headers:'];
+        if (methods.length) lines.push('  accessControlAllowMethods:\n' + methods.map(m => '    - ' + m).join('\n'));
+        if (hdrs.length)    lines.push('  accessControlAllowHeaders:\n' + hdrs.map(h => '    - "' + h + '"').join('\n'));
+        if (origins.length) lines.push('  accessControlAllowOriginList:\n' + origins.map(o => '    - "' + o + '"').join('\n'));
+        lines.push('  accessControlMaxAge: ' + maxAge);
+        if (vary) lines.push('  addVaryHeader: true');
+        yaml = lines.join('\n');
+
+    } else if (key === 'redirectScheme') {
+        yaml = 'redirectScheme:\n  scheme: ' + _val('wizRsScheme','https') + '\n  permanent: ' + _chk('wizRsPermanent',true);
+
+    } else if (key === 'redirectRegex') {
+        const repl = _val('wizRrReplacement').replace(/\$/g, '$${');
+        yaml = 'redirectRegex:\n  regex: "' + _val('wizRrRegex') + '"\n  replacement: "' + repl + '"\n  permanent: ' + _chk('wizRrPermanent',true);
+
+    } else if (key === 'stripPrefix') {
+        const prefixes = _lines('wizSpPrefixes');
+        yaml = 'stripPrefix:\n  prefixes:\n' + prefixes.map(p => '    - "' + p + '"').join('\n');
+
+    } else if (key === 'addPrefix') {
+        yaml = 'addPrefix:\n  prefix: "' + _val('wizApPrefix') + '"';
+
+    } else if (key === 'replacePath') {
+        yaml = 'replacePath:\n  path: "' + _val('wizRpPath') + '"';
+
+    } else if (key === 'compress') {
+        yaml = 'compress:\n  minResponseBodyBytes: ' + _val('wizCmpMin','1200');
+
+    } else if (key === 'retry') {
+        yaml = 'retry:\n  attempts: ' + _val('wizRtAttempts','4') + '\n  initialInterval: ' + _val('wizRtInterval','100ms');
+
+    } else if (key === 'circuitBreaker') {
+        yaml = 'circuitBreaker:\n  expression: "' + _val('wizCbExpr') + '"';
+
+    } else if (key === 'buffering') {
+        const retryExpr = _val('wizBufRetry');
+        yaml = 'buffering:\n  maxRequestBodyBytes: ' + _val('wizBufReq','10485760') + '\n  maxResponseBodyBytes: ' + _val('wizBufRes','10485760');
+        if (retryExpr) yaml += '\n  retryExpression: "' + retryExpr + '"';
+
+    } else if (key === 'chain') {
+        const mws = _lines('wizChMiddlewares');
+        yaml = 'chain:\n  middlewares:\n' + mws.map(m => '    - ' + m).join('\n');
+
+    } else if (key === 'inFlightReq') {
+        yaml = 'inFlightReq:\n  amount: ' + _val('wizIfAmount','10');
+    }
+
+    if (yaml) {
+        document.getElementById('middlewareContent').value = yaml;
+        if (_mwMonacoEditor) _mwMonacoEditor.setValue(yaml);
+    }
+}
 
 function onRouteConfigFileChange(sel) {
     const newInput = document.getElementById('newRouteFileName');
@@ -800,7 +1012,7 @@ async function saveRouteAjax(event) {
         const json = await res.json();
         closeModal();
         showToast(json.message, json.ok ? 'success' : 'error');
-        if (json.ok) { refreshRoutes(); fetchNotifications(); }
+        if (json.ok) { refreshRoutes(); fetchNotifications(); if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData(); }
     } catch(e) {
         showToast('Error saving route', 'error');
     } finally {
@@ -810,7 +1022,10 @@ async function saveRouteAjax(event) {
 
 async function saveMwAjax(event) {
     event.preventDefault();
-    if (_mwMonacoEditor) {
+    const mwMode = document.getElementById('mwCurrentMode')?.value;
+    if (mwMode === 'wizard') {
+        buildYamlFromWizard();
+    } else if (_mwMonacoEditor) {
         document.getElementById('middlewareContent').value = _mwMonacoEditor.getValue();
     }
     const form = event.target;
@@ -826,7 +1041,7 @@ async function saveMwAjax(event) {
         const json = await res.json();
         closeMwModal();
         showToast(json.message, json.ok ? 'success' : 'error');
-        if (json.ok) { refreshRoutes(); fetchNotifications(); }
+        if (json.ok) { refreshRoutes(); fetchNotifications(); if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData(); }
     } catch(e) {
         showToast('Error saving middleware', 'error');
     } finally {
@@ -843,7 +1058,7 @@ async function deleteRoute(id, configFile) {
         const res = await fetch('/delete/' + encodeURIComponent(id), { method:'POST', headers:{'X-Requested-With':'fetch'}, body: data });
         const json = await res.json();
         showToast(json.message, json.ok ? 'success' : 'error');
-        if (json.ok) { refreshRoutes(); fetchNotifications(); }
+        if (json.ok) { refreshRoutes(); fetchNotifications(); if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData(); }
     } catch(e) { showToast('Error deleting route', 'error'); }
 }
 
@@ -856,11 +1071,11 @@ async function deleteMw(name, configFile) {
         const res = await fetch('/delete-middleware/' + encodeURIComponent(name), { method:'POST', headers:{'X-Requested-With':'fetch'}, body: data });
         const json = await res.json();
         showToast(json.message, json.ok ? 'success' : 'error');
-        if (json.ok) { refreshRoutes(); fetchNotifications(); }
+        if (json.ok) { refreshRoutes(); fetchNotifications(); if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData(); }
     } catch(e) { showToast('Error deleting middleware', 'error'); }
 }
 
-async function toggleRoute(id, currentlyEnabled) {
+async function toggleRoute(id, currentlyEnabled, silent = false) {
     const data = new FormData();
     data.append('csrf_token', document.querySelector('meta[name="csrf-token"]')?.content || '');
     try {
@@ -871,13 +1086,12 @@ async function toggleRoute(id, currentlyEnabled) {
         });
         const json = await res.json();
         if (json.ok) {
-            showToast(currentlyEnabled ? 'Route disabled.' : 'Route enabled.', 'success');
-            refreshRoutes();
+            if (!silent) { showToast(currentlyEnabled ? 'Route disabled.' : 'Route enabled.', 'success'); refreshRoutes(); }
             if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData();
         } else {
-            showToast(json.message || 'Failed to toggle route.', 'error');
+            if (!silent) showToast(json.message || 'Failed to toggle route.', 'error');
         }
-    } catch(e) { showToast('Error toggling route.', 'error'); }
+    } catch(e) { if (!silent) showToast('Error toggling route.', 'error'); }
 }
 
 async function refreshRoutes() {
@@ -888,6 +1102,46 @@ async function refreshRoutes() {
         renderMwGrid(data.middlewares || []);
         loadOverviewStats();
     } catch(e) {}
+}
+
+async function pingAllRoutes() {
+    const cards = Array.from(document.querySelectorAll('.route-card')).filter(c => c.dataset.protocol === 'http');
+    const pingable = cards.filter(c => {
+        const d = (c.dataset.domains || '').split('|').find(d => d && !d.includes('{') && !d.includes('*'));
+        return !!d;
+    });
+    if (!pingable.length) { showToast('No pingable HTTP routes found', 'info'); return; }
+    showToast(`Pinging ${pingable.length} HTTP route${pingable.length > 1 ? 's' : ''}…`, 'success');
+    let online = 0, offline = 0;
+    const offlineRoutes = [];
+    for (const card of pingable) {
+        const domain   = (card.dataset.domains || '').split('|').find(d => d && !d.includes('{') && !d.includes('*'));
+        const target   = card.dataset.target || '';
+        const statusEl = card.querySelector('.status-dot');
+        if (statusEl) { statusEl.className = 'status-dot status-checking'; statusEl.title = 'Pinging…'; }
+        try {
+            const params = `/api/ping?url=${encodeURIComponent('https://' + domain)}${target ? '&fallback=' + encodeURIComponent(target) : ''}`;
+            const data = await fetch(params).then(r => r.json());
+            if (statusEl) {
+                statusEl.className = data.ok ? 'status-dot status-online' : 'status-dot status-offline';
+                statusEl.title = data.ok
+                    ? (data.self ? `Online (self)` : data.via_target ? `Backend online · ${data.latency_ms}ms` : `Online · ${data.latency_ms}ms (${data.status_code})`)
+                    : `Unreachable${data.error ? ': ' + data.error : ''}`;
+            }
+            if (data.ok) { online++; } else { offline++; offlineRoutes.push(domain); }
+        } catch(e) {
+            if (statusEl) { statusEl.className = 'status-dot status-unknown'; statusEl.title = 'Ping failed'; }
+            offline++; offlineRoutes.push(domain);
+        }
+    }
+    const total = online + offline;
+    const type  = offline > 0 ? 'warning' : 'info';
+    const msg   = offline > 0
+        ? `Ping all: ${online}/${total} online - unreachable: ${offlineRoutes.join(', ')}`
+        : `Ping all: all ${total} route${total !== 1 ? 's' : ''} online`;
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    fetch('/api/notifications/add', { method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrf}, body: JSON.stringify({type, message: msg}) })
+        .then(() => fetchNotifications());
 }
 
 function showAddApiKeyForm() {
@@ -1021,6 +1275,7 @@ async function deleteSelfRoute() {
 }
 
 function renderRouteGrid(apps) {
+    window._lastRenderedApps = apps;
     const grid = document.getElementById('routeGrid');
     if (!grid) return;
     const emptyEl = document.getElementById('routeEmpty');
@@ -1045,7 +1300,8 @@ function renderRouteGrid(apps) {
         const openLink = (proto === 'http' && domain && !domain.includes('{') && !domain.includes('*') && !domain.includes('HostRegexp'))
             ? `<a href="https://${domain}" target="_blank" class="pill-btn pill-btn-blue" title="Open site"><i class="ph-bold ph-arrow-square-out text-sm"></i></a>` : '';
         const epBadges = (app.entryPoints || []).map(ep => '<span class="badge badge-muted" style="font-size:9px">' + _esc(ep) + '</span>').join('');
-        const mwBadges = (app.middlewares || []).map(mw => `<span class="badge" style="background:rgba(163,113,247,0.1);color:var(--purple);border:1px solid rgba(163,113,247,0.25)">${_esc(mw)}</span>`).join('');
+        const mwBadges   = (app.middlewares || []).map(mw => `<span class="badge" style="background:rgba(163,113,247,0.1);color:var(--purple);border:1px solid rgba(163,113,247,0.25)">${_esc(mw)}</span>`).join('');
+        const epMwBadges = (app.entrypointMiddlewares || []).map(mw => `<span class="badge badge-muted" title="Applied via entrypoint">${_esc(mw)} <span style="font-size:9px;opacity:0.6">ep</span></span>`).join('');
         const enabled = app.enabled !== false;
         const isFileRoute = !app.provider || app.provider === 'file';
         const appJson = JSON.stringify(app).replace(/'/g, '&#39;');
@@ -1058,11 +1314,14 @@ function renderRouteGrid(apps) {
             : isComplexRule
                 ? `<div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono" style="color:var(--blue);word-break:break-all" title="${_esc(app.rule)}">${_esc(app.rule)}</div>${_copyBtn(app.rule,'blue')}</div>`
                 : `<div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--blue)">${_esc(domain || app.rule)}</div>${_copyBtn(domain || app.rule,'blue')}</div>`;
-        const httpBody = `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">${ruleLabel}</div>${domainDisplay}</div><div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Target</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div><button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div></div>${mwBadges ? `<div class="flex flex-wrap gap-1">${mwBadges}</div>` : ''}`;
+        const httpBody = `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">${ruleLabel}</div>${domainDisplay}</div><div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Target</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div><button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div></div>${(mwBadges || epMwBadges) ? `<div class="flex flex-wrap gap-1">${mwBadges}${epMwBadges}</div>` : ''}`;
         const tcpBody = `${app.rule ? `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Rule</div><div class="text-xs font-mono truncate" style="color:var(--blue)">${_esc(app.rule)}</div></div>` : ''}<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Target</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div><button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div></div>`;
         const cfArg = app.configFile ? `,'${_esc(app.configFile)}'` : ',\'\'';
         const cfBadge = (epBadges || app.configFile) ? '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-top:8px"><div class="flex flex-wrap gap-1">' + epBadges + '</div>' + (app.configFile ? '<span class="badge badge-muted" style="font-size:9px">' + _esc(app.configFile) + '</span>' : '') + '</div>' : '';
-        const dataAttrs = `data-protocol="${proto}" data-name="${_esc(app.name.toLowerCase())}" data-routekey="${_esc(app.name)}" data-idx="${i}" data-enabled="${enabled}" data-domains="${allDomains.map(d => _esc(d)).join('|')}"`;
+        const dataAttrs = `data-protocol="${proto}" data-name="${_esc(app.name.toLowerCase())}" data-routekey="${_esc(app.name)}" data-idx="${i}" data-enabled="${enabled}" data-domains="${allDomains.map(d => _esc(d)).join('|')}" data-target="${_esc(app.target)}" data-configfile="${_esc(app.configFile||'')}"`;
+        const isBulkSelected = _bulkMode && _bulkSelected.has(app.id);
+        const bulkOutline = isBulkSelected ? 'outline:2px solid var(--blue);outline-offset:-2px;' : '';
+        const bulkCheckbox = _bulkMode ? `<input type="checkbox" class="bulk-check" onclick="event.stopPropagation()" ${isBulkSelected ? 'checked' : ''} onchange="toggleBulkSelect('${_esc(app.id)}')" style="width:15px;height:15px;accent-color:var(--blue);cursor:pointer;flex-shrink:0;border-radius:3px;margin-right:2px">` : '';
         const listDomainDisplay = allDomains.length > 1
             ? `<div style="display:flex;flex-direction:column;gap:1px">${allDomains.map(d => `<div style="display:flex;align-items:center;gap:4px"><span class="text-xs font-mono truncate" style="color:var(--blue)">${_esc(d)}</span>${_copyBtn(d,'blue')}</div>`).join('')}</div>`
             : isComplexRule
@@ -1070,9 +1329,9 @@ function renderRouteGrid(apps) {
                 : `<div style="display:flex;align-items:center;gap:4px"><span class="text-xs font-mono truncate" style="color:var(--blue)">${_esc(domain || app.rule)}</span>${_copyBtn(domain || app.rule,'blue')}</div>`;
         if (_routeViewMode === 'list') {
             const epCompact = (app.entryPoints || []).slice(0, 2).map(ep => `<span class="badge badge-muted" style="font-size:9px">${_esc(ep)}</span>`).join('');
-            return `<div class="svc-list-row route-list-grid route-card${enabled ? '' : ' opacity-50'}" ${dataAttrs}><div class="svc-list-col-status"><span class="svc-status-dot" style="background:${enabled ? 'var(--green)' : 'var(--muted)'}"></span></div><div style="display:flex;align-items:center;gap:4px"><span class="badge ${badgeClass}" style="font-size:9px">${proto.toUpperCase()}</span>${tlsBadge}${insecureBadge}</div><div class="svc-list-col-name">${_esc(app.name)}<div class="text-xs font-mono truncate" style="color:var(--muted);margin-top:1px">${_esc(app.service_name)}</div></div><div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center">${listDomainDisplay}</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div><button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div><div style="display:flex;align-items:center;gap:3px">${epCompact}</div><div class="flex items-center gap-1 flex-shrink-0" onclick="event.stopPropagation()"><button type="button" onclick="openRouteDetailFromCard(this.closest('[data-routekey]'))" class="pill-btn pill-btn-blue" title="View details"><i class="ph-bold ph-info text-sm"></i></button>${openLink}<button type="button" onclick="deleteRoute('${_esc(app.id)}'${cfArg})" class="pill-btn pill-btn-red" title="Delete"><i class="ph-bold ph-trash text-sm"></i></button><button type="button" data-app='${appJson}' onclick="handleEdit(this)" class="pill-btn pill-btn-blue" title="Edit"><i class="ph-bold ph-pencil-simple text-sm"></i></button>${toggleBtn}</div></div>`;
+            return `<div class="svc-list-row route-list-grid route-card${enabled ? '' : ' opacity-50'}" style="${bulkOutline}" ${dataAttrs}><div class="svc-list-col-status" style="display:flex;align-items:center;gap:6px">${bulkCheckbox}<span class="svc-status-dot" style="background:${enabled ? 'var(--green)' : 'var(--muted)'}"></span></div><div style="display:flex;align-items:center;gap:4px"><span class="badge ${badgeClass}" style="font-size:9px">${proto.toUpperCase()}</span>${tlsBadge}${insecureBadge}</div><div class="svc-list-col-name">${_esc(app.name)}<div class="text-xs font-mono truncate" style="color:var(--muted);margin-top:1px">${_esc(app.service_name)}</div></div><div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center">${listDomainDisplay}</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div><button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div><div style="display:flex;align-items:center;gap:3px">${epCompact}</div><div class="flex items-center gap-1 flex-shrink-0" onclick="event.stopPropagation()"><button type="button" onclick="openRouteDetailFromCard(this.closest('[data-routekey]'))" class="pill-btn pill-btn-blue" title="View details"><i class="ph-bold ph-info text-sm"></i></button>${openLink}<button type="button" onclick="deleteRoute('${_esc(app.id)}'${cfArg})" class="pill-btn pill-btn-red" title="Delete"><i class="ph-bold ph-trash text-sm"></i></button><button type="button" data-app='${appJson}' onclick="handleEdit(this)" class="pill-btn pill-btn-blue" title="Edit"><i class="ph-bold ph-pencil-simple text-sm"></i></button>${toggleBtn}</div></div>`;
         }
-        return `<div class="card route-card${enabled ? '' : ' opacity-50'}" ${dataAttrs}><div class="route-card-inner p-4 pb-2"><div class="flex justify-between items-start mb-3"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 mb-0.5"><span class="badge ${badgeClass}">${proto.toUpperCase()}</span>${tlsBadge}${insecureBadge}<span class="status-dot status-checking" title="Checking..."></span></div><h3 class="font-bold text-sm mt-1.5 truncate transition-colors" style="color:var(--text)">${_esc(app.name)}</h3><div class="text-xs font-mono truncate" style="color:var(--muted)">${_esc(app.service_name)}</div></div><div class="flex items-center gap-1.5 ml-2 flex-shrink-0" onclick="event.stopPropagation()"><button type="button" onclick="openRouteDetailFromCard(this.closest('.route-card'))" class="pill-btn pill-btn-blue" title="View details"><i class="ph-bold ph-info text-sm"></i></button>${openLink}<button type="button" onclick="deleteRoute('${_esc(app.id)}'${cfArg})" class="pill-btn pill-btn-red" title="Delete"><i class="ph-bold ph-trash text-sm"></i></button><button type="button" data-app='${appJson}' onclick="handleEdit(this)" class="pill-btn pill-btn-blue" title="Edit"><i class="ph-bold ph-pencil-simple text-sm"></i></button>${toggleBtn}</div></div><div class="space-y-2">${proto === 'http' ? httpBody : tcpBody}</div>${cfBadge}</div></div>`;
+        return `<div class="card route-card${enabled ? '' : ' opacity-50'}" style="${bulkOutline}" ${dataAttrs}><div class="route-card-inner p-4 pb-2"><div class="flex justify-between items-start mb-3"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 mb-0.5">${bulkCheckbox}<span class="badge ${badgeClass}">${proto.toUpperCase()}</span>${tlsBadge}${insecureBadge}<span class="status-dot status-checking" title="Checking..."></span></div><h3 class="font-bold text-sm mt-1.5 truncate transition-colors" style="color:var(--text)">${_esc(app.name)}</h3><div class="text-xs font-mono truncate" style="color:var(--muted)">${_esc(app.service_name)}</div></div><div class="flex items-center gap-1.5 ml-2 flex-shrink-0" onclick="event.stopPropagation()"><button type="button" onclick="openRouteDetailFromCard(this.closest('.route-card'))" class="pill-btn pill-btn-blue" title="View details"><i class="ph-bold ph-info text-sm"></i></button>${openLink}<button type="button" onclick="deleteRoute('${_esc(app.id)}'${cfArg})" class="pill-btn pill-btn-red" title="Delete"><i class="ph-bold ph-trash text-sm"></i></button><button type="button" data-app='${appJson}' onclick="handleEdit(this)" class="pill-btn pill-btn-blue" title="Edit"><i class="ph-bold ph-pencil-simple text-sm"></i></button>${toggleBtn}</div></div><div class="space-y-2">${proto === 'http' ? httpBody : tcpBody}</div>${cfBadge}</div></div>`;
     }).join('');
 
     if (_routeViewMode === 'list') {
@@ -1367,6 +1626,10 @@ function handleMwEdit(btn) {
     if (cfSel && mw.configFile) cfSel.value = mw.configFile;
     const newMwInput = document.getElementById('newMwFileName');
     if (newMwInput) { newMwInput.style.display = 'none'; newMwInput.value = ''; }
+    const mwTplSel2 = document.getElementById('mwTemplate');
+    if (mwTplSel2) mwTplSel2.value = '';
+    setMwMode('yaml');
+    _showMwWizard('');
     document.getElementById('mwModal').style.display = 'flex';
     _initMwMonaco(mw.yaml.trim());
 }
@@ -1396,13 +1659,16 @@ const mwTemplates = {
 };
 
 function applyMwTemplate(select) {
-    if (select.value && mwTemplates[select.value]) {
-        const val = mwTemplates[select.value];
-        if (_mwMonacoEditor) {
-            _mwMonacoEditor.setValue(val);
-        } else {
-            document.getElementById('middlewareContent').value = val;
-        }
+    const tpl = select.value;
+    if (!tpl) return;
+    if (_wizardTemplates.has(tpl)) {
+        _showMwWizard(tpl);
+        setMwMode('wizard');
+    } else if (mwTemplates[tpl]) {
+        setMwMode('yaml');
+        const val = mwTemplates[tpl];
+        if (_mwMonacoEditor) _mwMonacoEditor.setValue(val);
+        else document.getElementById('middlewareContent').value = val;
     }
 }
 
@@ -1561,12 +1827,20 @@ async function loadOverviewStats() {
                 
                 const proto = card.dataset.protocol;
                 if (proto === 'http') {
-                    const domainEl = card.querySelector('[style*="58a6ff"]');
-                    const domain = domainEl ? domainEl.textContent.trim() : '';
-                    if (domain && !domain.includes('{') && !domain.includes('*')) {
-                        fetch('https://' + domain, { mode: 'no-cors', cache: 'no-cache', signal: AbortSignal.timeout(5000) })
-                            .then(() => { statusEl.className = 'status-dot status-online'; statusEl.title = 'Online (ping)'; })
-                            .catch(() => { statusEl.className = 'status-dot status-offline'; statusEl.title = 'Unreachable (ping)'; });
+                    const domains = (card.dataset.domains || '').split('|').filter(d => d && !d.includes('{') && !d.includes('*'));
+                    const domain = domains[0];
+                    if (domain) {
+                        const tgt = card.dataset.target || '';
+                        const pingUrl = `/api/ping?url=${encodeURIComponent('https://' + domain)}${tgt ? '&fallback=' + encodeURIComponent(tgt) : ''}`;
+                        fetch(pingUrl)
+                            .then(r => r.json())
+                            .then(data => {
+                                statusEl.className = data.ok ? 'status-dot status-online' : 'status-dot status-offline';
+                                statusEl.title = data.ok
+                                    ? (data.self ? `Online (self)` : data.via_target ? `Backend online · ${data.latency_ms}ms` : `Online · ${data.latency_ms}ms (${data.status_code})`)
+                                    : `Unreachable${data.error ? ': ' + data.error : ''}`;
+                            })
+                            .catch(() => { statusEl.className = 'status-dot status-unknown'; statusEl.title = 'Ping failed'; });
                         return;
                     }
                 }
@@ -1818,6 +2092,75 @@ let _protoLiveFilter = 'all';
 let _providerFilter = 'all';
 let _svcViewMode = 'grid';
 let _routeViewMode = 'grid';
+let _bulkMode = false;
+let _bulkSelected = new Set();
+
+function toggleBulkMode() {
+    _bulkMode = !_bulkMode;
+    if (!_bulkMode) _bulkSelected.clear();
+    const btn = document.getElementById('bulkModeBtn');
+    if (btn) btn.classList.toggle('active-http', _bulkMode);
+    updateBulkBar();
+    const apps = window._lastRenderedApps || [];
+    if (apps.length) { renderRouteGrid(apps); loadOverviewStats(); }
+}
+
+function toggleBulkSelect(id) {
+    if (_bulkSelected.has(id)) _bulkSelected.delete(id);
+    else _bulkSelected.add(id);
+    updateBulkBar();
+    const card = document.querySelector(`.route-card[data-routekey="${CSS.escape(id)}"]`);
+    if (card) {
+        const cb = card.querySelector('.bulk-check');
+        if (cb) cb.checked = _bulkSelected.has(id);
+        card.style.outline = _bulkSelected.has(id) ? '2px solid var(--blue)' : '';
+        card.style.outlineOffset = _bulkSelected.has(id) ? '-2px' : '';
+    }
+}
+
+function updateBulkBar() {
+    const bar   = document.getElementById('bulkBar');
+    const count = document.getElementById('bulkCount');
+    if (!bar) return;
+    bar.style.display = (_bulkMode && _bulkSelected.size > 0) ? '' : 'none';
+    if (count) count.textContent = `${_bulkSelected.size} selected`;
+}
+
+async function bulkEnable() {
+    const ids = [..._bulkSelected];
+    for (const id of ids) {
+        const card = document.querySelector(`.route-card[data-routekey="${CSS.escape(id)}"]`);
+        const enabled = card?.dataset.enabled === 'true';
+        if (!enabled) await toggleRoute(id, false, true);
+    }
+    _bulkSelected.clear(); updateBulkBar(); refreshRoutes();
+}
+
+async function bulkDisable() {
+    const ids = [..._bulkSelected];
+    for (const id of ids) {
+        const card = document.querySelector(`.route-card[data-routekey="${CSS.escape(id)}"]`);
+        const enabled = card?.dataset.enabled === 'true';
+        if (enabled) await toggleRoute(id, true, true);
+    }
+    _bulkSelected.clear(); updateBulkBar(); refreshRoutes();
+}
+
+async function bulkDelete() {
+    const ids = [..._bulkSelected];
+    if (!ids.length) return;
+    if (!await _confirm(`Delete ${ids.length} route${ids.length > 1 ? 's' : ''}?`, 'Bulk Delete', 'Delete')) return;
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    for (const id of ids) {
+        const card = document.querySelector(`.route-card[data-routekey="${CSS.escape(id)}"]`);
+        const cf   = card?.dataset.configfile || '';
+        const data = new FormData();
+        data.append('csrf_token', csrf);
+        if (cf) data.append('configFile', cf);
+        await fetch('/delete/' + encodeURIComponent(id), { method:'POST', headers:{'X-Requested-With':'fetch'}, body: data });
+    }
+    _bulkSelected.clear(); updateBulkBar(); refreshRoutes(); fetchNotifications();
+}
 let _mwViewMode = 'grid';
 let _allMiddlewares = {{ middlewares | tojson | safe }};
 
@@ -3202,15 +3545,135 @@ function parseLogLine(raw) {
 
 function filterLogs() { renderLogs(); }
 
+function renderLogStats(entries) {
+    const el = document.getElementById('logStats');
+    if (!el || !entries.length) { if (el) el.style.display = 'none'; return; }
+    const parsed = entries.map(e => typeof e === 'string' ? parseLogLine(e) : e).filter(Boolean);
+    if (!parsed.length) { el.style.display = 'none'; return; }
+
+    const total = parsed.length;
+    const s2 = parsed.filter(e => e.status >= 200 && e.status < 300).length;
+    const s3 = parsed.filter(e => e.status >= 300 && e.status < 400).length;
+    const s4 = parsed.filter(e => e.status >= 400 && e.status < 500).length;
+    const s5 = parsed.filter(e => e.status >= 500).length;
+    const pct = v => total ? Math.round((v/total)*100) : 0;
+
+    const parseDur = d => {
+        if (!d || d === '-') return null;
+        const ms = parseFloat(d);
+        if (isNaN(ms)) return null;
+        if (d.includes('ms')) return ms;
+        if (d.endsWith('s')) return ms * 1000;
+        return ms;
+    };
+    const durs = parsed.map(e => parseDur(e.duration)).filter(v => v !== null);
+    const avgDur = durs.length ? durs.reduce((a,b)=>a+b,0)/durs.length : null;
+    const maxDur = durs.length ? Math.max(...durs) : null;
+    const fmtDur = v => v === null ? '-' : v >= 1000 ? (v/1000).toFixed(2)+'s' : Math.round(v)+'ms';
+    const fast = durs.filter(d=>d<100).length;
+    const mid  = durs.filter(d=>d>=100&&d<500).length;
+    const slow = durs.filter(d=>d>=500).length;
+
+    const topN = (key, n) => {
+        const m = {};
+        parsed.forEach(e => { const v = e[key]; if (v && v !== '-') m[v] = (m[v]||0) + 1; });
+        return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,n);
+    };
+    const topIps   = topN('ip', 6);
+    const topPaths = topN('path', 6);
+    const topSvcs  = topN('service', 5);
+    const methods  = topN('method', 6);
+
+    const hbar = (v, max, col) => `<div style="flex:1;height:6px;border-radius:3px;background:var(--input-bg);overflow:hidden"><div style="height:100%;border-radius:3px;background:${col};width:${max?Math.max(3,Math.round((v/max)*100)):0}%"></div></div>`;
+    const topList = (pairs, col='var(--blue)', strip=false) => {
+        const max = pairs[0]?.[1]||1;
+        return pairs.map(([k,v]) => {
+            const label = strip ? k.replace(/@docker|@file|@kubernetes/g,'') : k;
+            return `<div class="flex items-center gap-2 py-1" style="border-bottom:1px solid var(--border)">
+                <span class="text-xs font-mono truncate" style="color:var(--text);min-width:0;flex:1" title="${_esc(k)}">${_esc(label)}</span>
+                ${hbar(v, max, col)}
+                <span class="text-xs font-bold flex-shrink-0 tabular-nums" style="color:var(--muted);min-width:28px;text-align:right">${v}</span>
+            </div>`;
+        }).join('');
+    };
+
+    const methodColors = {GET:'var(--blue)',POST:'var(--green)',PUT:'var(--yellow)',DELETE:'var(--red)',PATCH:'var(--purple)',HEAD:'var(--teal)'};
+
+    const stackW = g => total ? Math.max(0,Math.round((g/total)*100)) : 0;
+
+    el.innerHTML = `
+    <div class="grid gap-3 mb-3" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="rounded-xl p-4" style="background:var(--card);border:1px solid var(--border)">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-semibold uppercase tracking-wide" style="color:var(--muted)">Status Codes</span>
+                <span class="text-xs font-bold" style="color:var(--text)">${total} requests</span>
+            </div>
+            <div class="flex gap-4 mb-3">
+                ${[['2xx',s2,'var(--green)'],['3xx',s3,'var(--blue)'],['4xx',s4,'var(--yellow)'],['5xx',s5,'var(--red)']].map(([l,v,c])=>
+                    `<div><div class="text-xl font-bold" style="color:${c}">${v}</div><div class="text-xs" style="color:var(--muted)">${l} · ${pct(v)}%</div></div>`).join('')}
+            </div>
+            <div class="flex rounded-md overflow-hidden" style="height:8px;gap:1px">
+                ${[['var(--green)',s2],['var(--blue)',s3],['var(--yellow)',s4],['var(--red)',s5]].map(([c,v])=>
+                    stackW(v) > 0 ? `<div style="background:${c};width:${stackW(v)}%;border-radius:2px"></div>` : '').join('')}
+            </div>
+        </div>
+
+        <div class="rounded-xl p-4" style="background:var(--card);border:1px solid var(--border)">
+            <div class="text-xs font-semibold uppercase tracking-wide mb-3" style="color:var(--muted)">Response Time</div>
+            <div class="flex items-end gap-4 mb-3">
+                <div><div class="text-2xl font-bold" style="color:var(--text)">${fmtDur(avgDur)}</div><div class="text-xs" style="color:var(--muted)">avg</div></div>
+                <div><div class="text-sm font-bold" style="color:var(--muted)">${fmtDur(maxDur)}</div><div class="text-xs" style="color:var(--muted)">max</div></div>
+            </div>
+            <div class="grid gap-1.5" style="grid-template-columns:1fr 1fr 1fr">
+                ${[['Fast','<100ms',fast,'var(--green)'],['Med','100-500',mid,'var(--yellow)'],['Slow','>500ms',slow,'var(--red)']].map(([l,s,v,c])=>
+                    `<div class="rounded-lg p-2 text-center" style="background:var(--input-bg)"><div class="text-sm font-bold" style="color:${c}">${v}</div><div class="text-xs" style="color:var(--muted)">${l}</div></div>`).join('')}
+            </div>
+        </div>
+
+        <div class="rounded-xl p-4" style="background:var(--card);border:1px solid var(--border)">
+            <div class="text-xs font-semibold uppercase tracking-wide mb-3" style="color:var(--muted)">Methods</div>
+            <div class="space-y-1">
+                ${methods.map(([m,v]) => {
+                    const c = methodColors[m]||'var(--muted)';
+                    const max = methods[0]?.[1]||1;
+                    return `<div class="flex items-center gap-2">
+                        <span class="text-xs font-bold flex-shrink-0" style="color:${c};min-width:52px">${_esc(m)}</span>
+                        ${hbar(v, max, c)}
+                        <span class="text-xs tabular-nums flex-shrink-0" style="color:var(--muted);min-width:28px;text-align:right">${v}</span>
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>
+    </div>
+
+    <div class="grid gap-3" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="rounded-xl p-4" style="background:var(--card);border:1px solid var(--border)">
+            <div class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:var(--muted)">Top IPs</div>
+            ${topList(topIps, 'var(--blue)')}
+        </div>
+        <div class="rounded-xl p-4" style="background:var(--card);border:1px solid var(--border)">
+            <div class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:var(--muted)">Top Paths</div>
+            ${topList(topPaths, 'var(--teal)')}
+        </div>
+        <div class="rounded-xl p-4" style="background:var(--card);border:1px solid var(--border)">
+            <div class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:var(--muted)">Top Services</div>
+            ${topList(topSvcs, 'var(--purple)', true)}
+        </div>
+    </div>`;
+    el.style.display = '';
+}
+
 function renderLogs() {
     const container = document.getElementById('logsContent');
     const q = (document.getElementById('logSearch')?.value || '').toLowerCase();
     const lines = q ? _allLogLines.filter(l => l.toLowerCase().includes(q)) : _allLogLines;
 
     if (lines.length === 0) {
+        document.getElementById('logStats')?.style && (document.getElementById('logStats').style.display = 'none');
         container.innerHTML = `<div class="text-center py-12" style="color:var(--muted)"><p>No log lines match</p></div>`;
         return;
     }
+    renderLogStats(lines);
 
     const statusColor = s => !s ? 'var(--muted)' : s >= 500 ? 'var(--red)' : s >= 400 ? 'var(--yellow)' : 'var(--green)';
     const methodColor = m => ({ GET:'var(--blue)', POST:'var(--green)', PUT:'var(--yellow)', DELETE:'var(--red)', PATCH:'var(--purple)' }[m] || 'var(--muted)');

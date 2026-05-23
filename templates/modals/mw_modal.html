@@ -32,6 +32,7 @@
                     {% endif %}
                 </div>
                 {% endif %}
+                <input type="hidden" id="mwCurrentMode" value="yaml">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label>Name</label>
@@ -73,7 +74,282 @@
                         </select>
                     </div>
                 </div>
-                <div>
+
+                <div class="flex gap-2">
+                    <button type="button" id="mwModeWizBtn" onclick="setMwMode('wizard')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px"><i class="ph-bold ph-magic-wand" style="margin-right:4px"></i>Wizard</button>
+                    <button type="button" id="mwModeYamlBtn" onclick="setMwMode('yaml')" class="proto-btn active-http" style="padding:4px 12px;font-size:11px;border-radius:6px"><i class="ph-bold ph-code" style="margin-right:4px"></i>YAML</button>
+                </div>
+
+                <div id="mwWizardSection" style="display:none">
+                    <div id="mwWiz-none" class="mw-wiz-form text-sm py-4 text-center" style="color:var(--muted)">Select a template above to use the wizard.</div>
+
+                    <div id="mwWiz-basicAuth" class="mw-wiz-form space-y-3" style="display:none">
+                        <div class="rounded-lg p-3 space-y-2" style="background:var(--input-bg);border:1px solid var(--border)">
+                            <div class="text-xs font-semibold" style="color:var(--muted)">Generate entry</div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" id="wizBaGenUser" class="input-field text-sm" placeholder="Username">
+                                <div class="relative">
+                                    <input type="password" id="wizBaGenPass" class="input-field text-sm pr-8" placeholder="Password">
+                                    <button type="button" onclick="togglePwVis('wizBaGenPass',this)" class="absolute right-2 top-1/2 -translate-y-1/2" style="background:none;border:none;cursor:pointer;color:var(--muted);padding:0"><i class="ph-bold ph-eye text-sm"></i></button>
+                                </div>
+                            </div>
+                            <button type="button" onclick="generateHtpasswd()" class="proto-btn active-http text-xs px-3 py-1" style="border-radius:6px"><i class="ph-bold ph-plus" style="margin-right:4px"></i>Generate &amp; Add</button>
+                        </div>
+                        <div>
+                            <label>Users <span class="text-xs font-normal" style="color:var(--muted)">(one per line, format: <code class="font-mono">user:htpasswd-hash</code>)</span></label>
+                            <textarea id="wizBaUsers" class="input-field font-mono text-xs" rows="4" placeholder="admin:$apr1$H6uskkkW$IgXLP6ewTrSuBkTrqE8wj/"></textarea>
+                        </div>
+                        <div>
+                            <label>Realm <span class="text-xs font-normal" style="color:var(--muted)">(optional)</span></label>
+                            <input type="text" id="wizBaRealm" class="input-field" placeholder="My Protected Area">
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-forwardAuth" class="mw-wiz-form space-y-3" style="display:none">
+                        <div>
+                            <label>Auth Service URL</label>
+                            <input type="text" id="wizFaAddress" class="input-field font-mono text-sm" placeholder="http://auth-service:4181">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="wizFaTrust" checked class="rounded" style="accent-color:var(--blue)">
+                            <span class="text-sm" style="color:var(--text)">Trust Forward Header</span>
+                        </div>
+                        <div>
+                            <label>Auth Response Headers <span class="text-xs font-normal" style="color:var(--muted)">(one per line)</span></label>
+                            <textarea id="wizFaHeaders" class="input-field font-mono text-xs" rows="4" placeholder="X-Auth-User&#10;X-Auth-Token"></textarea>
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-rateLimit" class="mw-wiz-form space-y-3" style="display:none">
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <label>Average <span class="text-xs font-normal" style="color:var(--muted)">(req/s)</span></label>
+                                <input type="number" id="wizRlAvg" class="input-field" value="100" min="1">
+                            </div>
+                            <div>
+                                <label>Burst</label>
+                                <input type="number" id="wizRlBurst" class="input-field" value="50" min="1">
+                            </div>
+                            <div>
+                                <label>Period</label>
+                                <input type="text" id="wizRlPeriod" class="input-field" value="1s" placeholder="1s">
+                            </div>
+                        </div>
+                        <p class="text-xs" style="color:var(--muted)">Allows <strong>average</strong> req/s sustained, with a <strong>burst</strong> of extra requests over the <strong>period</strong>.</p>
+                    </div>
+
+                    <div id="mwWiz-ipAllowList" class="mw-wiz-form space-y-3" style="display:none">
+                        <div>
+                            <label>Allowed CIDRs <span class="text-xs font-normal" style="color:var(--muted)">(one per line)</span></label>
+                            <textarea id="wizIpCidrs" class="input-field font-mono text-sm" rows="5" placeholder="192.168.1.0/24&#10;10.0.0.0/8&#10;127.0.0.1/32"></textarea>
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-secureHeaders" class="mw-wiz-form space-y-3" style="display:none">
+                        <div class="rounded-lg p-3 space-y-2.5" style="background:var(--input-bg);border:1px solid var(--border)">
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="wizShSsl" checked class="rounded" style="accent-color:var(--blue)">
+                                <span class="text-sm" style="color:var(--text)">SSL Redirect (force HTTPS)</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="wizShHsts" checked class="rounded" style="accent-color:var(--blue)" onchange="document.getElementById('wizShHstsOptions').style.display=this.checked?'':'none'">
+                                <span class="text-sm" style="color:var(--text)">HSTS (Strict Transport Security)</span>
+                            </div>
+                            <div id="wizShHstsOptions" class="pl-6 space-y-1.5">
+                                <div class="flex items-center gap-3">
+                                    <label class="text-xs" style="color:var(--muted)">Max Age (seconds)</label>
+                                    <input type="number" id="wizShHstsAge" class="input-field text-xs" value="315360000" style="width:130px">
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="wizShSub" checked class="rounded" style="accent-color:var(--blue)">
+                                    <span class="text-xs" style="color:var(--text)">Include Subdomains</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="wizShPreload" checked class="rounded" style="accent-color:var(--blue)">
+                                    <span class="text-xs" style="color:var(--text)">Preload</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="wizShNosniff" checked class="rounded" style="accent-color:var(--blue)">
+                                <span class="text-sm" style="color:var(--text)">X-Content-Type-Options (nosniff)</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="wizShXss" checked class="rounded" style="accent-color:var(--blue)">
+                                <span class="text-sm" style="color:var(--text)">X-XSS-Protection</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="wizShFrame" checked class="rounded" style="accent-color:var(--blue)">
+                                <span class="text-sm" style="color:var(--text)">X-Frame-Options (deny)</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="wizShReferrer" class="rounded" style="accent-color:var(--blue)">
+                                <span class="text-sm" style="color:var(--text)">Same-origin Referrer Policy</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-digestAuth" class="mw-wiz-form space-y-3" style="display:none">
+                        <div class="rounded-lg p-3 space-y-2" style="background:var(--input-bg);border:1px solid var(--border)">
+                            <div class="text-xs font-semibold" style="color:var(--muted)">Generate entry</div>
+                            <div class="grid grid-cols-3 gap-2">
+                                <input type="text" id="wizDaGenUser" class="input-field text-sm" placeholder="Username">
+                                <input type="text" id="wizDaGenRealm" class="input-field text-sm" placeholder="Realm (e.g. traefik)">
+                                <div class="relative">
+                                    <input type="password" id="wizDaGenPass" class="input-field text-sm pr-8" placeholder="Password">
+                                    <button type="button" onclick="togglePwVis('wizDaGenPass',this)" class="absolute right-2 top-1/2 -translate-y-1/2" style="background:none;border:none;cursor:pointer;color:var(--muted);padding:0"><i class="ph-bold ph-eye text-sm"></i></button>
+                                </div>
+                            </div>
+                            <button type="button" onclick="generateDigestAuth()" class="proto-btn active-http text-xs px-3 py-1" style="border-radius:6px"><i class="ph-bold ph-plus" style="margin-right:4px"></i>Generate &amp; Add</button>
+                        </div>
+                        <div>
+                            <label>Users <span class="text-xs font-normal" style="color:var(--muted)">(one per line, format: <code class="font-mono">user:realm:md5hash</code>)</span></label>
+                            <textarea id="wizDaUsers" class="input-field font-mono text-xs" rows="4" placeholder="admin:traefik:a2688e031edb4be6fe3079ef99a6274e"></textarea>
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-corsHeaders" class="mw-wiz-form space-y-3" style="display:none">
+                        <div>
+                            <label>Allowed Methods</label>
+                            <div class="flex flex-wrap gap-2 rounded-lg p-2.5" style="background:var(--input-bg);border:1px solid var(--border)">
+                                <label class="flex items-center gap-1.5 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizCorsGet" checked style="accent-color:var(--blue)"> GET</label>
+                                <label class="flex items-center gap-1.5 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizCorsPost" checked style="accent-color:var(--blue)"> POST</label>
+                                <label class="flex items-center gap-1.5 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizCorsPut" checked style="accent-color:var(--blue)"> PUT</label>
+                                <label class="flex items-center gap-1.5 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizCorsDelete" checked style="accent-color:var(--blue)"> DELETE</label>
+                                <label class="flex items-center gap-1.5 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizCorsPatch" checked style="accent-color:var(--blue)"> PATCH</label>
+                                <label class="flex items-center gap-1.5 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizCorsOptions" checked style="accent-color:var(--blue)"> OPTIONS</label>
+                                <label class="flex items-center gap-1.5 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizCorsHead" style="accent-color:var(--blue)"> HEAD</label>
+                            </div>
+                        </div>
+                        <div>
+                            <label>Allowed Origins <span class="text-xs font-normal" style="color:var(--muted)">(one per line)</span></label>
+                            <textarea id="wizCorsOrigins" class="input-field font-mono text-xs" rows="3" placeholder="https://example.com&#10;https://app.example.com"></textarea>
+                        </div>
+                        <div>
+                            <label>Allowed Headers <span class="text-xs font-normal" style="color:var(--muted)">(one per line, * for all)</span></label>
+                            <textarea id="wizCorsHeaders" class="input-field font-mono text-xs" rows="2" placeholder="*"></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label>Max Age <span class="text-xs font-normal" style="color:var(--muted)">(seconds)</span></label>
+                                <input type="number" id="wizCorsMaxAge" class="input-field" value="100" min="0">
+                            </div>
+                            <div class="flex items-end pb-2">
+                                <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizCorsVary" checked style="accent-color:var(--blue)"> Add Vary Header</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-redirectScheme" class="mw-wiz-form space-y-3" style="display:none">
+                        <div>
+                            <label>Scheme</label>
+                            <select id="wizRsScheme" class="input-field">
+                                <option value="https">https</option>
+                                <option value="http">http</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="wizRsPermanent" checked class="rounded" style="accent-color:var(--blue)">
+                            <span class="text-sm" style="color:var(--text)">Permanent redirect (301)</span>
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-redirectRegex" class="mw-wiz-form space-y-3" style="display:none">
+                        <div>
+                            <label>Regex</label>
+                            <input type="text" id="wizRrRegex" class="input-field font-mono text-sm" placeholder="^http://(.*)">
+                        </div>
+                        <div>
+                            <label>Replacement</label>
+                            <input type="text" id="wizRrReplacement" class="input-field font-mono text-sm" placeholder="https://${1}">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="wizRrPermanent" checked class="rounded" style="accent-color:var(--blue)">
+                            <span class="text-sm" style="color:var(--text)">Permanent redirect (301)</span>
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-stripPrefix" class="mw-wiz-form space-y-3" style="display:none">
+                        <div>
+                            <label>Prefixes <span class="text-xs font-normal" style="color:var(--muted)">(one per line)</span></label>
+                            <textarea id="wizSpPrefixes" class="input-field font-mono text-sm" rows="4" placeholder="/api&#10;/v1"></textarea>
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-addPrefix" class="mw-wiz-form space-y-3" style="display:none">
+                        <div>
+                            <label>Prefix</label>
+                            <input type="text" id="wizApPrefix" class="input-field font-mono text-sm" placeholder="/api">
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-replacePath" class="mw-wiz-form space-y-3" style="display:none">
+                        <div>
+                            <label>Path</label>
+                            <input type="text" id="wizRpPath" class="input-field font-mono text-sm" placeholder="/foo">
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-compress" class="mw-wiz-form space-y-3" style="display:none">
+                        <div>
+                            <label>Min Response Body Bytes <span class="text-xs font-normal" style="color:var(--muted)">(responses smaller than this are not compressed)</span></label>
+                            <input type="number" id="wizCmpMin" class="input-field" value="1200" min="0">
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-retry" class="mw-wiz-form space-y-3" style="display:none">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label>Attempts</label>
+                                <input type="number" id="wizRtAttempts" class="input-field" value="4" min="1">
+                            </div>
+                            <div>
+                                <label>Initial Interval</label>
+                                <input type="text" id="wizRtInterval" class="input-field" value="100ms" placeholder="100ms">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-circuitBreaker" class="mw-wiz-form space-y-3" style="display:none">
+                        <div>
+                            <label>Expression</label>
+                            <input type="text" id="wizCbExpr" class="input-field font-mono text-sm" value="NetworkErrorRatio() > 0.5">
+                        </div>
+                        <p class="text-xs" style="color:var(--muted)">Supported functions: <code class="font-mono">NetworkErrorRatio()</code>, <code class="font-mono">ResponseCodeRatio()</code>, <code class="font-mono">LatencyAtQuantileMS()</code></p>
+                    </div>
+
+                    <div id="mwWiz-buffering" class="mw-wiz-form space-y-3" style="display:none">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label>Max Request Body <span class="text-xs font-normal" style="color:var(--muted)">(bytes)</span></label>
+                                <input type="number" id="wizBufReq" class="input-field" value="10485760" min="0">
+                            </div>
+                            <div>
+                                <label>Max Response Body <span class="text-xs font-normal" style="color:var(--muted)">(bytes)</span></label>
+                                <input type="number" id="wizBufRes" class="input-field" value="10485760" min="0">
+                            </div>
+                        </div>
+                        <div>
+                            <label>Retry Expression <span class="text-xs font-normal" style="color:var(--muted)">(optional)</span></label>
+                            <input type="text" id="wizBufRetry" class="input-field font-mono text-sm" placeholder="IsNetworkError() &amp;&amp; Attempts() &lt; 2">
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-chain" class="mw-wiz-form space-y-3" style="display:none">
+                        <div>
+                            <label>Middlewares <span class="text-xs font-normal" style="color:var(--muted)">(one per line)</span></label>
+                            <textarea id="wizChMiddlewares" class="input-field font-mono text-sm" rows="4" placeholder="redirect-https&#10;secure-headers&#10;rate-limit"></textarea>
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-inFlightReq" class="mw-wiz-form space-y-3" style="display:none">
+                        <div>
+                            <label>Max In-Flight Requests</label>
+                            <input type="number" id="wizIfAmount" class="input-field" value="10" min="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="mwEditorSection">
                     <label>Configuration (YAML)</label>
                     <div id="mwEditorContainer" class="rounded-lg overflow-hidden" style="height:260px;border:1px solid var(--border)"></div>
                     <textarea name="middlewareContent" id="middlewareContent" style="display:none"></textarea>

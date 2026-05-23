@@ -15,14 +15,17 @@ Toggle between **grid** (default) and **list** view using the button in the filt
 
 ## Creating a middleware 
 
-Click **Add Middleware** in the top bar. Two fields:
+Click **Add Middleware** in the top bar.
 
 | Field | Description |
 |---|---|
 | Name | Unique identifier - referenced in routes as `name@file` |
 | Template | Pick a preset or choose Custom to write raw YAML |
-| Configuration | YAML body for the middleware (auto-filled when a template is chosen) |
 | Config File | Shown when multiple config files are mounted (`CONFIG_DIR` / `CONFIG_PATHS`). Select an existing file or choose **+ New file...** to type a filename - the file is created automatically in `CONFIG_DIR`. Auto-suggests `middlewares-<name>.yml`. |
+
+### Wizard mode
+
+Every template switches to **Wizard** mode - a structured form with labeled fields instead of raw YAML. Click **YAML** to switch back to the editor at any time. When you save in wizard mode the YAML is generated automatically.
 
 ### Available templates
 
