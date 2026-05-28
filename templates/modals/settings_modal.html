@@ -873,7 +873,7 @@ async function openSettingsModal(panel) {
         document.getElementById('settingsModalTitle').textContent = 'Settings';
     } else {
         document.getElementById('settingsMobileRoot').style.display = 'none';
-        document.getElementById('settingsPanelWrapper').style.display = '';
+        document.getElementById('settingsPanelWrapper').style.display = 'flex';
         if (panel) switchSettingsPanel(panel);
     }
 
