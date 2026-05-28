@@ -2575,6 +2575,30 @@ def _sanitize_go_templates(raw):
         return key
     return re.sub(r'\{\{[^}]*\}\}', _replace, raw), mapping
 
+def _restore_go_templates(obj, mapping):
+    if not mapping:
+        return obj
+    if isinstance(obj, str):
+        for ph, orig in mapping.items():
+            obj = obj.replace(ph, orig)
+        return obj
+    if isinstance(obj, dict):
+        return {k: _restore_go_templates(v, mapping) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_restore_go_templates(item, mapping) for item in obj]
+    return obj
+
+def _load_config_display(path):
+    if not os.path.exists(path):
+        return {}
+    with open(path, 'r') as f:
+        raw = f.read()
+    sanitized, mapping = _sanitize_go_templates(raw)
+    data = yaml.load(sanitized)
+    if not data or not isinstance(data, dict):
+        return {}
+    return _restore_go_templates(data, mapping) if mapping else data
+
 def load_config(path=None):
     if path is None:
         path = CONFIG_PATH
@@ -2800,7 +2824,7 @@ def _entrypoint_mw_map() -> dict:
 def _build_all_apps(include_external=True, include_internal=False):
     all_apps = []
     all_middlewares = []
-    loaded = [(os.path.basename(p) if (MULTI_CONFIG or ACTIVE_CONFIG_DIR) else '', load_config(p)) for p in CONFIG_PATHS]
+    loaded = [(os.path.basename(p) if (MULTI_CONFIG or ACTIVE_CONFIG_DIR) else '', _load_config_display(p)) for p in CONFIG_PATHS]
     combined_http = {}
     combined_tcp  = {}
     combined_udp  = {}
