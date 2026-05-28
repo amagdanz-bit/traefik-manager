@@ -1515,12 +1515,16 @@ async function _initMiddlewareChips(selectedMiddlewares) {
         hidden.value = [...selected].join(', ');
         const sel   = [...selected];
         const unsel = mws.filter(mw => !selected.has(mw));
-        container.innerHTML = [...sel, ...unsel].map((mw, i) => {
-            const on = selected.has(mw);
+        const chip = (mw, i, on) => {
             const label = mw.split('@')[0];
-            const divider = (!on && i === sel.length && sel.length > 0) ? 'margin-left:6px;padding-left:6px;border-left:1px solid var(--border);' : '';
-            return `<button type="button" onclick="_toggleMwChip('${_esc(mw)}')" style="${divider}padding:3px 10px;border-radius:9999px;border:1px solid ${on ? 'var(--purple)' : 'var(--border)'};background:${on ? 'rgba(163,113,247,0.15)' : 'transparent'};color:${on ? 'var(--purple)' : 'var(--muted)'};font-size:12px;font-family:monospace;cursor:pointer" title="${_esc(mw)}">${on ? (i + 1) + '. ' : ''}${_esc(label)}</button>`;
-        }).join('');
+            return `<button type="button" onclick="_toggleMwChip('${_esc(mw)}')" style="padding:3px 10px;border-radius:9999px;border:1px solid ${on ? 'var(--purple)' : 'var(--border)'};background:${on ? 'rgba(163,113,247,0.15)' : 'transparent'};color:${on ? 'var(--purple)' : 'var(--muted)'};font-size:12px;font-family:monospace;cursor:pointer" title="${_esc(mw)}">${on ? (i + 1) + '. ' : ''}${_esc(label)}</button>`;
+        };
+        const divider = sel.length > 0 && unsel.length > 0
+            ? `<span style="align-self:center;width:1px;height:18px;background:var(--border);margin:0 2px;flex-shrink:0"></span>`
+            : '';
+        container.innerHTML = sel.map((mw, i) => chip(mw, i, true)).join('')
+            + divider
+            + unsel.map(mw => chip(mw, 0, false)).join('');
     }
     render();
     window._mwChipState = { selected, render };
