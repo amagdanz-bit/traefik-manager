@@ -616,8 +616,8 @@ def _detect_self_route_domain() -> str:
             continue
         try:
             with open(cfg_path, 'r') as f:
-                raw = f.read()
-            data = yaml.load(re.sub(r'\{\{[^}]*\}\}', '__TM_TEMPLATE__', raw)) or {}
+                sanitized, _ = _sanitize_go_templates(f.read())
+            data = yaml.load(sanitized) or {}
             routers = (data.get('http') or {}).get('routers') or {}
             services = (data.get('http') or {}).get('services') or {}
             for rname, rdata in routers.items():
@@ -2499,8 +2499,8 @@ def _find_existing_self_route(hostname: str) -> dict:
             continue
         try:
             with open(cfg_path, 'r') as f:
-                raw = f.read()
-            data = yaml.load(re.sub(r'\{\{[^}]*\}\}', '__TM_TEMPLATE__', raw)) or {}
+                sanitized, _ = _sanitize_go_templates(f.read())
+            data = yaml.load(sanitized) or {}
             routers  = (data.get('http') or {}).get('routers') or {}
             services = (data.get('http') or {}).get('services') or {}
             for rname, rdata in routers.items():
@@ -2560,6 +2560,16 @@ def api_save_self_route():
     return jsonify({'ok': True})
 
 
+def _sanitize_go_templates(raw):
+    mapping = {}
+    counter = [0]
+    def _replace(m):
+        key = f'__TM_TEMPLATE_{counter[0]}__'
+        mapping[key] = m.group(0)
+        counter[0] += 1
+        return key
+    return re.sub(r'\{\{[^}]*\}\}', _replace, raw), mapping
+
 def load_config(path=None):
     if path is None:
         path = CONFIG_PATH
@@ -2567,7 +2577,7 @@ def load_config(path=None):
         return {}
     with open(path, 'r') as f:
         raw = f.read()
-    sanitized = re.sub(r'\{\{[^}]*\}\}', '__TM_TEMPLATE__', raw)
+    sanitized, _ = _sanitize_go_templates(raw)
     data = yaml.load(sanitized)
     return data if data and isinstance(data, dict) else {}
 
@@ -2585,10 +2595,19 @@ def _strip_empty_sections(config: dict) -> dict:
 def save_config(data, path=None):
     if path is None:
         path = CONFIG_PATH
+    template_map = {}
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            _, template_map = _sanitize_go_templates(f.read())
+    stream = StringIO()
+    yaml.dump(data, stream)
+    content = stream.getvalue()
+    for placeholder, original in template_map.items():
+        content = content.replace(placeholder, original)
     tmp = path + '.tmp'
     try:
         with open(tmp, 'w') as f:
-            yaml.dump(data, f)
+            f.write(content)
         shutil.copyfile(tmp, path)
     finally:
         try:

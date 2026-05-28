@@ -842,6 +842,8 @@ function _showMwWizard(tpl) {
     } else if (tpl === 'forwardAuthAuthelia') {
         const el = document.getElementById('wizFaAddress'); if (el) el.value = 'http://authelia:9091/api/authz/forward-auth';
         const hd = document.getElementById('wizFaHeaders'); if (hd) hd.value = 'Remote-User\nRemote-Groups\nRemote-Name\nRemote-Email';
+    } else if (tpl === 'forwardAuthGatekeeper') {
+        const hd = document.getElementById('wizGkHeaders'); if (hd) hd.value = 'X-Auth-User\nX-Auth-Email\nX-Auth-Groups';
     } else if (tpl === 'ipAllowListPrivate') {
         const el = document.getElementById('wizIpCidrs'); if (el) el.value = '10.0.0.0/8\n172.16.0.0/12\n192.168.0.0/16\n127.0.0.1/32';
     }
