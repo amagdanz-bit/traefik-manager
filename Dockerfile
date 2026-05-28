@@ -17,14 +17,23 @@ COPY . .
 
 RUN mkdir -p /app/config /app/backups /app/templates /app/static/icons \
              /app/static/vendor/monaco /app/static/vendor/fonts/inter \
-             /app/static/vendor/fonts/jetbrains-mono
+             /app/static/vendor/fonts/jetbrains-mono \
+             /app/static/vendor/phosphor
 
 RUN curl -sLo /usr/local/bin/tailwindcss \
     https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-linux-x64 \
     && chmod +x /usr/local/bin/tailwindcss
 
-RUN curl -sLo /app/static/vendor/phosphor.js \
-    "https://unpkg.com/@phosphor-icons/web@2.1.1"
+RUN curl -sL "https://registry.npmjs.org/@phosphor-icons/web/-/web-2.1.1.tgz" \
+    | tar -xz -C /tmp \
+    && for w in regular bold fill thin light duotone; do \
+         cat /tmp/package/src/$w/style.css; \
+       done \
+       | sed 's|url("./|url("./phosphor/|g' \
+       > /app/static/vendor/phosphor.css \
+    && cp /tmp/package/src/*/Phosphor*.woff2 /app/static/vendor/phosphor/ \
+    && cp /tmp/package/src/*/Phosphor*.woff /app/static/vendor/phosphor/ \
+    && rm -rf /tmp/package
 
 RUN curl -sLo /app/static/vendor/qrcode.min.js \
     "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"

@@ -198,7 +198,7 @@
                 </div>
 
                 <div class="modal-panel" id="mpanel-system" style="gap:0;padding:0;overflow:hidden;">
-                    <div style="display:flex;flex-direction:column;height:100%;min-height:0;">
+                    <div style="display:flex;flex-direction:column;flex:1;min-height:0;">
 
                         <div style="display:flex;gap:2px;padding:12px 16px 0;border-bottom:1px solid var(--border);flex-shrink:0;">
                             <button class="auth-sub-tab active" id="system-tab-tabs" onclick="switchSystemTab('tabs', this)">
@@ -286,7 +286,7 @@
                 </div>
 
                 <div class="modal-panel" id="mpanel-auth" style="gap:0;padding:0;overflow:hidden;">
-                    <div style="display:flex;flex-direction:column;height:100%;min-height:0;">
+                    <div style="display:flex;flex-direction:column;flex:1;min-height:0;">
 
                         <div style="display:flex;gap:2px;padding:12px 16px 0;border-bottom:1px solid var(--border);flex-shrink:0;">
                             <button class="auth-sub-tab active" id="auth-tab-password" onclick="switchAuthTab('password', this)">
@@ -471,7 +471,7 @@
                 </div>
 
                 <div class="modal-panel" id="mpanel-backups" style="gap:0;padding:0;overflow:hidden;">
-                    <div style="display:flex;flex-direction:column;height:100%;min-height:0;">
+                    <div style="display:flex;flex-direction:column;flex:1;min-height:0;">
                         <div style="display:flex;gap:2px;padding:12px 16px 0;border-bottom:1px solid var(--border);flex-shrink:0;">
                             <button class="auth-sub-tab active" id="backup-tab-routes" onclick="switchBackupTab('routes', this)">
                                 <i class="ph-bold ph-path"></i> Routes
@@ -491,7 +491,7 @@
                                 <i class="ph-bold ph-warning text-sm flex-shrink-0"></i>
                                 Restoring overwrites your current config. A backup is created automatically before restoring.
                             </div>
-                            <div id="sm-backups-list" style="flex:1;overflow-y:auto;">
+                            <div id="sm-backups-list" style="flex:1;overflow-y:auto;min-height:0;">
                                 <div class="text-center py-8" style="color:var(--muted)">
                                     <i class="ph-light ph-spinner-gap text-2xl animate-spin block mb-2"></i>
                                     Loading backups...
@@ -509,7 +509,7 @@
                                 <i class="ph-bold ph-warning text-sm flex-shrink-0"></i>
                                 Restoring overwrites your current static config. A backup is created automatically before restoring.
                             </div>
-                            <div id="sm-static-backups-list" style="flex:1;overflow-y:auto;">
+                            <div id="sm-static-backups-list" style="flex:1;overflow-y:auto;min-height:0;">
                                 <div class="text-center py-8" style="color:var(--muted)">
                                     <i class="ph-light ph-spinner-gap text-2xl animate-spin block mb-2"></i>
                                     Loading...
@@ -520,7 +520,7 @@
                 </div>
 
                 <div class="modal-panel" id="mpanel-static" style="gap:0;padding:0;overflow:hidden;">
-                    <div style="display:flex;flex-direction:column;height:100%;min-height:0;">
+                    <div style="display:flex;flex-direction:column;flex:1;min-height:0;">
                         <div id="staticPendingBanner" style="display:none;flex-shrink:0;" class="mx-4 mt-3 px-4 py-2.5 rounded-lg flex items-center justify-between gap-3" style="background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3)">
                             <div class="flex items-center gap-2 text-xs" style="color:#ca8a04">
                                 <i class="ph-bold ph-warning"></i>
@@ -864,6 +864,7 @@ async function openSettingsModal(panel) {
     if (apikeyValue) apikeyValue.value = '';
 
     document.getElementById('settingsModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
     if (window.innerWidth < 640 && !panel) {
         document.getElementById('settingsMobileRoot').style.display = 'flex';
         document.getElementById('settingsPanelWrapper').style.display = 'none';
@@ -938,6 +939,7 @@ async function openSettingsModal(panel) {
 
 function closeSettingsModal() {
     document.getElementById('settingsModal').style.display = 'none';
+    document.body.style.overflow = '';
 }
 
 async function changePassword() {
