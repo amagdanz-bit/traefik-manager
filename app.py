@@ -1008,14 +1008,16 @@ def setup():
     if request.method == 'POST':
         _check_csrf()
 
-        domains_raw       = request.form.get('domains', '').strip()
-        cert_resolver     = request.form.get('cert_resolver', '').strip()
-        traefik_api_url   = request.form.get('traefik_api_url', '').strip()
-        visible_tabs_raw  = request.form.get('visible_tabs', '{}')
-        pw                = request.form.get('password', '')
-        confirm           = request.form.get('confirm', '')
-        self_route_domain = request.form.get('self_route_domain', '').strip()
-        self_route_svc    = request.form.get('self_route_service', '').strip() or 'http://traefik-manager:5000'
+        domains_raw         = request.form.get('domains', '').strip()
+        cert_resolver       = request.form.get('cert_resolver', '').strip()
+        traefik_api_url     = request.form.get('traefik_api_url', '').strip()
+        traefik_api_user    = request.form.get('traefik_api_user', '').strip()
+        traefik_api_password = request.form.get('traefik_api_password', '')
+        visible_tabs_raw    = request.form.get('visible_tabs', '{}')
+        pw                  = request.form.get('password', '')
+        confirm             = request.form.get('confirm', '')
+        self_route_domain   = request.form.get('self_route_domain', '').strip()
+        self_route_svc      = request.form.get('self_route_service', '').strip() or 'http://traefik-manager:5000'
 
         domains = [d.strip() for d in domains_raw.split(',') if d.strip()]
 
@@ -1047,6 +1049,8 @@ def setup():
                 domains=domains,
                 cert_resolver=resolver,
                 traefik_api_url=traefik_api_url,
+                traefik_api_user=traefik_api_user,
+                traefik_api_password=traefik_api_password,
                 auth_enabled=True,
                 password_hash=pw_hash,
                 visible_tabs=visible_tabs,
@@ -1933,8 +1937,11 @@ def api_setup_test_connection():
     url     = _safe_api_url(raw_url)
     if not url:
         return jsonify({'ok': False, 'error': 'Invalid URL'}), 400
+    u = str(data.get('user', '')).strip()
+    p = str(data.get('password', '')).strip()
+    auth = (u, p) if u and p else None
     try:
-        resp = requests.get(f"{url}/api/version", timeout=4)
+        resp = requests.get(f"{url}/api/version", timeout=4, auth=auth)
         if resp.status_code == 200:
             info = resp.json()
             return jsonify({'ok': True, 'version': info.get('Version', '?')})

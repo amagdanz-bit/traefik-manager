@@ -491,6 +491,15 @@
                 <input type="text" id="s_apiurl" placeholder="http://traefik:8080"
                        value="{{ defaults.traefik_api_url }}">
                 <p class="field-hint">Internal URL of the Traefik API. Usually <code style="font-family:monospace;color:var(--blue)">http://traefik:8080</code> when on the same Docker network.</p>
+            </div>
+            <div class="field">
+                <label for="s_apiuser">Traefik API Username <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+                <input type="text" id="s_apiuser" placeholder="Leave blank if no auth required" autocomplete="off">
+                <p class="field-hint">Only needed if your Traefik dashboard uses <code style="font-family:monospace;color:var(--blue)">api.insecure: false</code> with basic auth.</p>
+            </div>
+            <div class="field">
+                <label for="s_apipassword">Traefik API Password <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+                <input type="password" id="s_apipassword" placeholder="Leave blank if no auth required" autocomplete="off">
                 <div class="api-test-row">
                     <button class="btn-inline" onclick="testApi()">
                         <i class="ph-bold ph-plugs-connected"></i> Test connection
@@ -676,8 +685,10 @@
             <input type="hidden" name="csrf_token"        value="{{ csrf_token }}">
             <input type="hidden" name="domains"           id="f_domains">
             <input type="hidden" name="cert_resolver"     id="f_resolver">
-            <input type="hidden" name="traefik_api_url"   id="f_apiurl">
-            <input type="hidden" name="visible_tabs"      id="f_visible_tabs">
+            <input type="hidden" name="traefik_api_url"      id="f_apiurl">
+            <input type="hidden" name="traefik_api_user"     id="f_apiuser">
+            <input type="hidden" name="traefik_api_password" id="f_apipassword">
+            <input type="hidden" name="visible_tabs"         id="f_visible_tabs">
             <input type="hidden" name="password"          id="f_password">
             <input type="hidden" name="confirm"           id="f_confirm">
             <input type="hidden" name="self_route_domain"  id="f_self_domain">
@@ -780,6 +791,8 @@ function validateStep1() {
 
 async function testApi() {
     const url    = document.getElementById('s_apiurl').value.trim();
+    const user   = document.getElementById('s_apiuser').value.trim();
+    const pw     = document.getElementById('s_apipassword').value;
     const result = document.getElementById('apiTestResult');
     if (!url) { result.textContent = 'Enter a URL first.'; result.style.color = 'var(--muted)'; return; }
     result.textContent = 'Testing…';
@@ -788,7 +801,7 @@ async function testApi() {
         const res = await fetch('/api/setup/test-connection', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url })
+            body: JSON.stringify({ url, user, password: pw })
         });
         const d = await res.json();
         if (d.ok) {
@@ -839,6 +852,8 @@ function submitSetup() {
     document.getElementById('f_domains').value      = document.getElementById('s_domains').value.trim();
     document.getElementById('f_resolver').value     = document.getElementById('s_resolver').value.trim();
     document.getElementById('f_apiurl').value       = document.getElementById('s_apiurl').value.trim();
+    document.getElementById('f_apiuser').value      = document.getElementById('s_apiuser').value.trim();
+    document.getElementById('f_apipassword').value  = document.getElementById('s_apipassword').value;
     document.getElementById('f_visible_tabs').value = JSON.stringify(setupTabs);
     document.getElementById('f_self_domain').value  = (document.getElementById('s_self_domain')?.value || '').trim();
     document.getElementById('f_self_service').value = (document.getElementById('s_self_service')?.value || '').trim();
