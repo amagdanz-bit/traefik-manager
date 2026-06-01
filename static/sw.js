@@ -1,9 +1,6 @@
-const CACHE_NAME = 'traefik-manager-v1.3.0';
+const CACHE_NAME = 'traefik-manager-v1.3.1';
 
-const STATIC_ASSETS = [
-    'https://cdn.tailwindcss.com',
-    'https://unpkg.com/@phosphor-icons/web',
-];
+const STATIC_ASSETS = [];
 
 self.addEventListener('install', event => {
     self.skipWaiting();

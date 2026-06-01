@@ -9,6 +9,7 @@
     <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#0d1117">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Traefik Manager">
@@ -1375,7 +1376,7 @@ function renderMwGrid(middlewares) {
         const mwCfArg = mw.configFile ? `,'${_esc(mw.configFile)}'` : ',\'\'';
         const mwCfBadge = mw.configFile ? `<span class="badge badge-muted" style="font-size:9px;white-space:nowrap">${_esc(mw.configFile)}</span>` : '';
         const dataAttrs = `data-mwname="${_esc(mw.name.toLowerCase())}" data-mwtype="${typeLower}"`;
-        const actions = `<div class="flex gap-1.5"><button type="button" data-mw='${mwJson}' onclick="openMwDetail(this)" class="pill-btn pill-btn-blue" title="View details"><i class="ph-bold ph-info text-sm"></i></button><button type="button" onclick="deleteMw('${_esc(mw.name)}'${mwCfArg})" class="pill-btn pill-btn-red" title="Delete"><i class="ph-bold ph-trash text-sm"></i></button><button type="button" data-mw='${mwJson}' onclick="handleMwEdit(this)" class="pill-btn pill-btn-blue" title="Edit"><i class="ph-bold ph-pencil-simple text-sm"></i></button></div>`;
+        const actions = `<div class="flex gap-1.5"><button type="button" data-mw='${mwJson}' onclick="openMwDetail(this)" class="pill-btn pill-btn-blue" title="View details"><i class="ph-bold ph-info text-xs"></i></button><button type="button" onclick="deleteMw('${_esc(mw.name)}'${mwCfArg})" class="pill-btn pill-btn-red" title="Delete"><i class="ph-bold ph-trash text-xs"></i></button><button type="button" data-mw='${mwJson}' onclick="handleMwEdit(this)" class="pill-btn pill-btn-blue" title="Edit"><i class="ph-bold ph-pencil-simple text-xs"></i></button></div>`;
         if (_mwViewMode === 'list') {
             return `<div class="svc-list-row mw-list-grid mw-card" ${dataAttrs}><div style="display:flex;align-items:center"><span class="badge ${badgeClass}" style="font-size:9px">${typeUpper}</span></div><div class="svc-list-col-name">${_esc(mw.name)}</div><div>${mwCfBadge}</div>${actions}</div>`;
         }
@@ -2883,7 +2884,7 @@ function renderDetailPanel(app, protocol, liveRouter, liveService, entrypoints) 
 
     const apiNote = liveRouter
         ? `<div class="flex items-center gap-1.5 text-xs mb-5" style="color:var(--muted)"><div style="width:5px;height:5px;border-radius:50%;background:var(--green);display:inline-block"></div> Live data from Traefik API</div>`
-        : `<div class="flex items-center gap-1.5 text-xs mb-5 p-2 rounded" style="color:var(--yellow);background:rgba(210,153,34,0.08);border:1px solid rgba(210,153,34,0.2)"><i class="ph-bold ph-warning text-xs"></i> Traefik API unavailable - showing config file data only</div>`;
+        : `<div class="flex items-center gap-1.5 text-xs mb-5 p-2 rounded" style="color:var(--yellow);background:rgba(210,153,34,0.08);border:1px solid rgba(210,153,34,0.2)"><i class="ph-bold ph-warning text-sm"></i> Traefik API unavailable - showing config file data only</div>`;
 
     
     const routerEPs = (liveRouter ? liveRouter.entryPoints : app.entryPoints) || [];
@@ -3158,7 +3159,7 @@ function _emptyMountState({ icon, title, description, steps, note }) {
                     style="background:var(--btn-secondary-bg);border:1px solid var(--border);color:var(--muted);cursor:pointer;transition:all 0.15s"
                     onmouseover="this.style.borderColor='var(--blue)';this.style.color='var(--blue)'"
                     onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
-                    <i class="ph-bold ph-copy text-xs"></i> Copy
+                    <i class="ph-bold ph-copy text-sm"></i> Copy
                 </button>
             </div>
         </div>`).join('<div style="height:12px"></div>');
@@ -3177,7 +3178,7 @@ function _emptyMountState({ icon, title, description, steps, note }) {
 function _copyCode(btn, text) {
     navigator.clipboard.writeText(text).then(() => {
         const orig = btn.innerHTML;
-        btn.innerHTML = '<i class="ph-bold ph-check text-xs"></i> Copied';
+        btn.innerHTML = '<i class="ph-bold ph-check text-sm"></i> Copied';
         btn.style.color      = 'var(--green)';
         btn.style.borderColor = 'var(--green)';
         setTimeout(() => {
@@ -3470,7 +3471,7 @@ function openPluginDetail(idx) {
         ['Name',        _esc(name)],
         ['Version',     _esc(version)],
         ['Module',      _esc(moduleName || '-')],
-        ...(repoUrl ? [['Repository', `<a href="${_esc(repoUrl)}" target="_blank" style="color:var(--blue)">${_esc(repoUrl)} <i class="ph-bold ph-arrow-square-out text-xs"></i></a>`]] : []),
+        ...(repoUrl ? [['Repository', `<a href="${_esc(repoUrl)}" target="_blank" style="color:var(--blue)">${_esc(repoUrl)} <i class="ph-bold ph-arrow-square-out text-sm"></i></a>`]] : []),
     ];
 
     const rowsHtml = rows.map(([k, v]) =>
@@ -3855,7 +3856,7 @@ function renderLogStats(entries) {
     const stackW = g => total ? Math.max(0,Math.round((g/total)*100)) : 0;
 
     el.innerHTML = `
-    <div class="grid gap-3 mb-3" style="grid-template-columns:1fr 1fr 1fr">
+    <div class="grid gap-3 mb-3 grid-cols-1 sm:grid-cols-3">
         <div class="rounded-xl p-4" style="background:var(--card);border:1px solid var(--border)">
             <div class="flex items-center justify-between mb-3">
                 <span class="text-xs font-semibold uppercase tracking-wide" style="color:var(--muted)">Status Codes</span>
@@ -3899,7 +3900,7 @@ function renderLogStats(entries) {
         </div>
     </div>
 
-    <div class="grid gap-3" style="grid-template-columns:1fr 1fr 1fr">
+    <div class="grid gap-3 grid-cols-1 sm:grid-cols-3">
         <div class="rounded-xl p-4" style="background:var(--card);border:1px solid var(--border)">
             <div class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:var(--muted)">Top IPs</div>
             ${topList(topIps, 'var(--blue)')}
@@ -3939,12 +3940,15 @@ function renderLogs() {
         const svcLabel = e.service && e.service !== '-' ? `<span class="text-xs font-mono truncate" style="color:var(--blue);max-width:180px">${_esc(e.service.replace(/@docker|@file/,''))}</span>` : '';
         const durLabel = e.duration && e.duration !== '-' ? `<span class="text-xs" style="color:var(--muted)">${_esc(e.duration)}</span>` : '';
         const entryObj = JSON.stringify(e).replace(/'/g,"&#39;");
-        return `<div class="flex items-center gap-3 px-4 py-2.5 border-b cursor-pointer hover:opacity-80 transition-opacity" style="border-color:var(--border)" onclick='openLogDetail(${entryObj})'>
-            <span class="text-xs font-mono font-bold flex-shrink-0" style="color:${mc};min-width:44px">${_esc(e.method)}</span>
+        const metaLine = [svcLabel, durLabel].filter(Boolean).join('<span style="color:var(--border);margin:0 4px">·</span>');
+        return `<div class="flex items-start gap-3 px-4 py-2.5 border-b cursor-pointer hover:opacity-80 transition-opacity" style="border-color:var(--border)" onclick='openLogDetail(${entryObj})'>
+            <span class="text-xs font-mono font-bold flex-shrink-0 mt-px" style="color:${mc};min-width:40px">${_esc(e.method)}</span>
             <span class="inline-flex items-center gap-1 flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded" style="background:${sc}18;color:${sc};border:1px solid ${sc}44;min-width:52px">${e.status||'—'} <span style="font-weight:400;opacity:.8">${e.status ? (HTTP_STATUS[e.status]||'') : 'tunnel'}</span></span>
-            <span class="text-xs font-mono flex-1 truncate" style="color:var(--text)" title="${_esc(e.path)}">${_esc(e.path)}</span>
-            <span class="text-xs flex-shrink-0 hidden sm:block" style="color:var(--muted)">${_esc(e.ip)}</span>
-            ${svcLabel}${durLabel}
+            <div class="flex-1 min-w-0">
+                <div class="text-xs font-mono truncate" style="color:var(--text)" title="${_esc(e.path)}">${_esc(e.path)}</div>
+                ${metaLine ? `<div class="flex items-center gap-1 mt-0.5">${metaLine}</div>` : ''}
+            </div>
+            <span class="text-xs flex-shrink-0 hidden sm:block mt-px" style="color:var(--muted)">${_esc(e.ip)}</span>
         </div>`;
     }).join('');
 
@@ -4043,10 +4047,6 @@ function _initMobileFilterBars() {
     if (typeof applyUiPrefs === 'function') applyUiPrefs();
     if (typeof _applyDocsLinkVisibility === 'function') _applyDocsLinkVisibility();
     _initMobileFilterBars();
-    const _rg = document.getElementById('routeGrid');
-    if (_rg) _routeCardEls = Array.from(_rg.querySelectorAll('.route-card'));
-    const _mg = document.getElementById('mwGrid');
-    if (_mg) _mwCardEls = Array.from(_mg.querySelectorAll('.mw-card'));
     refreshRoutes();
     loadOverviewStats();
     checkManagerVersion();
@@ -4930,7 +4930,7 @@ function _renderStaticProviders(providersData) {
                             <span class="font-medium">${_esc(k)}</span>
                         </div>
                         <button onclick="removeStaticItem('providers','${_esc(k)}')" class="btn-secondary text-xs flex items-center gap-1" style="height:24px;padding:0 8px;color:var(--red)">
-                            <i class="ph-bold ph-trash text-xs"></i>
+                            <i class="ph-bold ph-trash text-sm"></i>
                         </button>
                     </div>`).join('') +
                 `</div>`;
@@ -5037,7 +5037,7 @@ async function saveStaticSingleSection(section) {
 function _buildStaticTabHTML() {
     return `
     <div style="border-bottom:1px solid var(--border);flex-shrink:0;padding:12px 16px 0;display:flex;align-items:flex-end;gap:2px;">
-        <button id="staticTabArrowL" onclick="_scrollStaticTabs(-1)" style="display:none;flex-shrink:0;background:none;border:none;cursor:pointer;padding:4px 3px 6px;color:var(--muted)" title="Scroll left"><i class="ph-bold ph-caret-left text-xs"></i></button>
+        <button id="staticTabArrowL" onclick="_scrollStaticTabs(-1)" style="display:none;flex-shrink:0;background:none;border:none;cursor:pointer;padding:4px 3px 6px;color:var(--muted)" title="Scroll left"><i class="ph-bold ph-caret-left text-sm"></i></button>
         <div id="staticTabBar" style="display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;flex:1;" onscroll="_updateStaticTabArrows()">
             <button onclick="switchStaticSection('entrypoints')" id="ssnBtn-entrypoints" class="auth-sub-tab active">
                 <i class="ph-bold ph-plugs" style="color:var(--blue)"></i>
@@ -5067,7 +5067,7 @@ function _buildStaticTabHTML() {
                 Providers
             </button>
         </div>
-        <button id="staticTabArrowR" onclick="_scrollStaticTabs(1)" style="display:none;flex-shrink:0;background:none;border:none;cursor:pointer;padding:4px 3px 6px;color:var(--muted)" title="Scroll right"><i class="ph-bold ph-caret-right text-xs"></i></button>
+        <button id="staticTabArrowR" onclick="_scrollStaticTabs(1)" style="display:none;flex-shrink:0;background:none;border:none;cursor:pointer;padding:4px 3px 6px;color:var(--muted)" title="Scroll right"><i class="ph-bold ph-caret-right text-sm"></i></button>
     </div>
 
     <div id="staticPanel-entrypoints">

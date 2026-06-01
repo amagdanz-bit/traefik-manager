@@ -32,16 +32,10 @@ export default defineConfig({
       { text: 'API', link: '/api' },
       { text: 'UI Examples', link: '/ui-examples' },
       {
-        text: 'v1.3.0',
+        text: 'v1.3.1',
         items: [
+          { text: 'v1.3.1', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.3.1' },
           { text: 'v1.3.0', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.3.0' },
-          { text: 'v1.2.0', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.2.0' },
-          { text: 'v1.1.0', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.1.0' },
-          { text: 'v1.0.4', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.0.4' },
-          { text: 'v1.0.3', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.0.3' },
-          { text: 'v1.0.2', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.0.2' },
-          { text: 'v1.0.1', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.0.1' },
-          { text: 'v1.0.0', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.0.0' },
           { text: 'All releases', link: 'https://github.com/chr0nzz/traefik-manager/releases' },
         ],
       },
