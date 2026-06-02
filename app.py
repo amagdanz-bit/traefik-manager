@@ -2905,27 +2905,40 @@ def _toggle_route(route_id: str, enable: bool):
         saved       = disabled.pop(route_id)
         proto       = saved.get('protocol', 'http')
         router      = saved.get('router', {})
-        svc_name    = router.get('service', rname)
+        svc_name    = _svc_key(router.get('service', rname))
         svc         = saved.get('service', {})
         cf          = saved.get('configFile', '')
-        target_path = _resolve_config_path(cf)
-        if not target_path and cf:
-            safe_cf     = cf if cf.endswith(('.yml', '.yaml')) else cf + '.yml'
-            target_path = os.path.join(os.path.dirname(CONFIG_PATH) or '.', safe_cf)
-            if not _is_safe_path(target_path):
-                target_path = CONFIG_PATH
+        svc_cf      = saved.get('serviceConfigFile', cf)
+        def _resolve_or_fallback(f):
+            p = _resolve_config_path(f)
+            if not p and f:
+                safe = f if f.endswith(('.yml', '.yaml')) else f + '.yml'
+                candidate = os.path.join(os.path.dirname(CONFIG_PATH) or '.', safe)
+                p = candidate if _is_safe_path(candidate) else CONFIG_PATH
+            return p or CONFIG_PATH
+        target_path = _resolve_or_fallback(cf)
         config      = load_config(target_path)
-        section     = config.setdefault(proto, {})
-        section.setdefault('routers', {})[rname]   = router
-        section.setdefault('services', {})[svc_name] = svc
-        create_backup(target_path)
-        save_config(_strip_empty_sections(config), target_path)
+        config.setdefault(proto, {}).setdefault('routers', {})[rname] = router
+        if svc_cf == cf or not svc_cf:
+            config.setdefault(proto, {}).setdefault('services', {})[svc_name] = svc
+            create_backup(target_path)
+            save_config(_strip_empty_sections(config), target_path)
+        else:
+            create_backup(target_path)
+            save_config(_strip_empty_sections(config), target_path)
+            svc_path   = _resolve_or_fallback(svc_cf)
+            svc_config = load_config(svc_path)
+            svc_config.setdefault(proto, {}).setdefault('services', {})[svc_name] = svc
+            create_backup(svc_path)
+            save_config(_strip_empty_sections(svc_config), svc_path)
     else:
-        proto       = None
-        router      = None
-        svc_name    = None
-        svc         = None
-        target_path = None
+        proto        = None
+        router       = None
+        svc_name     = None
+        svc          = None
+        target_path  = None
+        svc_path     = None
+        svc_config   = None
         for p in CONFIG_PATHS:
             config = load_config(p)
             for prot in ('http', 'tcp', 'udp'):
@@ -2933,18 +2946,32 @@ def _toggle_route(route_id: str, enable: bool):
                 if rname in routers:
                     proto       = prot
                     router      = dict(routers.pop(rname))
-                    svc_name    = router.get('service', rname)
-                    svc         = dict(config.get(prot, {}).get('services', {}).pop(svc_name, {}))
+                    svc_name    = _svc_key(router.get('service', rname))
                     target_path = p
+                    svc_config  = config
                     break
             if proto:
                 break
         if proto is None:
             return
+        svc = dict(svc_config.get(proto, {}).get('services', {}).pop(svc_name, {}))
+        if not svc:
+            for p in CONFIG_PATHS:
+                if p == target_path:
+                    continue
+                other = load_config(p)
+                if svc_name in other.get(proto, {}).get('services', {}):
+                    svc      = dict(other[proto]['services'].pop(svc_name))
+                    svc_path = p
+                    other_stripped = _strip_empty_sections(other)
+                    create_backup(p)
+                    save_config(other_stripped, p)
+                    break
         cf = os.path.basename(target_path) if (MULTI_CONFIG or ACTIVE_CONFIG_DIR) else ''
-        disabled[route_id] = {'protocol': proto, 'router': router, 'service': svc, 'configFile': cf}
+        svc_cf = os.path.basename(svc_path) if svc_path and (MULTI_CONFIG or ACTIVE_CONFIG_DIR) else cf
+        disabled[route_id] = {'protocol': proto, 'router': router, 'service': svc, 'configFile': cf, 'serviceConfigFile': svc_cf}
         create_backup(target_path)
-        save_config(_strip_empty_sections(config), target_path)
+        save_config(_strip_empty_sections(svc_config), target_path)
 
     save_settings(
         domains=settings['domains'],

@@ -2656,8 +2656,9 @@ function closeSvcDetail() {
 
 function openRouteDetailFromCard(card) {
     const routeKey = card.getAttribute('data-routekey');
-    if (!routeKey || !APP_DATA) return;
-    const appData = APP_DATA.find(a => a.name === routeKey);
+    if (!routeKey) return;
+    const pool = window._lastRenderedApps || APP_DATA || [];
+    const appData = pool.find(a => a.name === routeKey) || pool.find(a => a.id === routeKey);
     if (!appData) return;
     openRouteDetail(appData.name, appData.protocol, appData);
 }
