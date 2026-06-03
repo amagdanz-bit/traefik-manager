@@ -965,6 +965,86 @@ paths:
                   version: { type: string, example: "3.2.0" }
                   error: { type: string }
 
+  # ─── TLS Options ──────────────────────────────────────────────────────────
+
+  /api/tls-options:
+    get:
+      tags: [TLS Options]
+      summary: List TLS option profiles
+      responses:
+        "200":
+          description: Array of TLS option profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name: { type: string }
+                    configFile: { type: string }
+                    minVersion: { type: string }
+                    maxVersion: { type: string }
+                    sniStrict: { type: boolean }
+                    cipherSuites: { type: array, items: { type: string } }
+                    curvePreferences: { type: array, items: { type: string } }
+                    alpnProtocols: { type: array, items: { type: string } }
+                    clientAuthType: { type: string }
+                    clientAuthCAs: { type: array, items: { type: string } }
+                    yaml: { type: string }
+    post:
+      tags: [TLS Options]
+      summary: Create or update a TLS option profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                configFile: { type: string }
+                minVersion: { type: string }
+                maxVersion: { type: string }
+                sniStrict: { type: boolean }
+                cipherSuites: { type: array, items: { type: string } }
+                curvePreferences: { type: array, items: { type: string } }
+                alpnProtocols: { type: array, items: { type: string } }
+                clientAuthType: { type: string }
+                clientAuthCAs: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: Profile saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/tls-options/{name}:
+    delete:
+      tags: [TLS Options]
+      summary: Delete a TLS option profile
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+        - in: query
+          name: configFile
+          schema: { type: string }
+      responses:
+        "200":
+          description: Profile deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
   # ─── Backups ──────────────────────────────────────────────────────────────
 
   /api/backups:

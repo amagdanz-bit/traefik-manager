@@ -657,12 +657,19 @@
                                 </div>
                                 <div class="toggle-switch" id="toggle-dashboard" onclick="toggleTabVisibility('dashboard')"><div class="toggle-knob"></div></div>
                             </div>
-                            <div class="flex items-center justify-between" style="padding:10px 12px;">
+                            <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
                                 <div>
                                     <div class="text-xs font-medium" style="color:var(--text)">Route Map</div>
                                     <div class="text-xs" style="color:var(--muted)">Topology connection map (Entry Points - Routes - Middlewares - Services)</div>
                                 </div>
                                 <div class="toggle-switch" id="toggle-routemap" onclick="toggleTabVisibility('routemap')"><div class="toggle-knob"></div></div>
+                            </div>
+                            <div class="flex items-center justify-between" style="padding:10px 12px;">
+                                <div>
+                                    <div class="text-xs font-medium" style="color:var(--text)">TLS Options</div>
+                                    <div class="text-xs" style="color:var(--muted)">Manage tls.options profiles in your dynamic config</div>
+                                </div>
+                                <div class="toggle-switch" id="toggle-tls" onclick="toggleTabVisibility('tls')"><div class="toggle-knob"></div></div>
                             </div>
                         </div>
                     </div>

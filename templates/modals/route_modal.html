@@ -111,16 +111,29 @@
                             <option value="https">HTTPS</option>
                         </select>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <input type="checkbox" name="passHostHeader" id="passHostHeader" value="true" checked class="rounded" style="accent-color:var(--blue)">
-                        <span class="text-sm" style="color:var(--text)">Pass Host Header</span>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" name="passHostHeader" id="passHostHeader" value="true" checked class="rounded" style="accent-color:var(--blue)">
+                            <span class="text-sm" style="color:var(--text)">Pass Host Header</span>
+                        </div>
+                        <span class="tm-info-btn" data-tip="Forward the original Host header to the backend. Disable if the backend needs to see its own hostname."><i class="ph-bold ph-info"></i></span>
                     </div>
-                    <p class="text-xs -mt-2" style="color:var(--muted)">Forward the original Host header to the backend. Disable if the backend needs its own hostname.</p>
-                    <div class="flex items-center gap-2">
-                        <input type="checkbox" name="insecureSkipVerify" id="insecureSkipVerify" value="true" class="rounded" style="accent-color:var(--blue)">
-                        <span class="text-sm" style="color:var(--text)">Skip TLS Verification (insecureSkipVerify)</span>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" name="insecureSkipVerify" id="insecureSkipVerify" value="true" class="rounded" style="accent-color:var(--blue)">
+                            <span class="text-sm" style="color:var(--text)">Skip TLS Verification</span>
+                        </div>
+                        <span class="tm-info-btn" data-tip="Disables certificate validation for the backend. Use for self-signed certs (e.g. Proxmox, Kasm). Adds insecureSkipVerify via a named serversTransport."><i class="ph-bold ph-info"></i></span>
                     </div>
-                    <p class="text-xs -mt-2" style="color:var(--muted)">For backends with self-signed certificates (e.g. Proxmox, Kasm).</p>
+                    <div id="wildcardCheckboxRow" style="display:none" class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="wildcardCheckbox" onchange="_onWildcardToggle(this.checked)" class="rounded" style="accent-color:var(--blue)">
+                            <span class="text-sm" style="color:var(--text)">Request wildcard certificate</span>
+                        </div>
+                        <span class="tm-info-btn" data-tip="Adds a tls.domains block with main: domain.com and sans: *.domain.com. Use with DNS challenge resolvers (Cloudflare, Route 53, etc.) to issue wildcard certs."><i class="ph-bold ph-info"></i></span>
+                    </div>
+                    <input type="hidden" name="tlsWildcardMain" id="tlsWildcardMain">
+                    <input type="hidden" name="tlsWildcardSans" id="tlsWildcardSans">
                     <div>
                         <label>Cert Resolver</label>
                         <select name="certResolver" id="certResolver" class="input-field" onchange="toggleWildcardSection(this.value)">
@@ -132,13 +145,13 @@
                         </select>
                     </div>
                     <div id="wildcardSection" style="display:none">
-                        <div class="flex items-center gap-2" style="margin-top:4px">
-                            <input type="checkbox" id="wildcardCheckbox" onchange="_onWildcardToggle(this.checked)" class="rounded" style="accent-color:var(--blue)">
-                            <span class="text-sm" style="color:var(--text)">Request wildcard certificate</span>
+                        <div class="flex items-center justify-between mb-1">
+                            <label style="margin:0">TLS Options Profile</label>
+                            <span class="tm-info-btn" data-tip="Assigns a tls.options profile to this router (e.g. min version, ciphers). Enable and manage profiles via the TLS Options tab in Settings - Interface - TABS."><i class="ph-bold ph-info"></i></span>
                         </div>
-                        <p class="text-xs mt-1" style="color:var(--muted)">Adds <code class="font-mono">tls.domains</code> with <code class="font-mono">*.domain</code> SAN - use with DNS challenge resolvers.</p>
-                        <input type="hidden" name="tlsWildcardMain" id="tlsWildcardMain">
-                        <input type="hidden" name="tlsWildcardSans" id="tlsWildcardSans">
+                        <select name="tlsOptionsProfile" id="tlsOptionsProfileSelect" class="input-field">
+                            <option value="">None (default)</option>
+                        </select>
                     </div>
                 </div>
 

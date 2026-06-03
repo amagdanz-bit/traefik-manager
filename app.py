@@ -285,7 +285,7 @@ def _get_signal_file_path() -> str:
     return os.environ.get('SIGNAL_FILE_PATH', '/signals/restart.sig')
 
 
-OPTIONAL_TABS = ['dashboard', 'routemap', 'docker', 'kubernetes', 'swarm', 'nomad', 'ecs', 'consulcatalog', 'redis', 'etcd', 'consul', 'zookeeper', 'http_provider', 'file_external', 'certs', 'crowdsec', 'plugins', 'logs']
+OPTIONAL_TABS = ['dashboard', 'routemap', 'docker', 'kubernetes', 'swarm', 'nomad', 'ecs', 'consulcatalog', 'redis', 'etcd', 'consul', 'zookeeper', 'http_provider', 'file_external', 'certs', 'tls', 'crowdsec', 'plugins', 'logs']
 
 def load_settings() -> dict:
     defaults = {
@@ -2267,6 +2267,91 @@ def api_notifications_update():
         add_notification('info', f"Traefik Manager v{version} is available - update now")
     return jsonify({'ok': True})
 
+@app.route('/api/tls-options')
+@login_required
+def api_tls_options_list():
+    opts = []
+    for p in CONFIG_PATHS:
+        config = _load_config_display(p)
+        short = os.path.basename(p) if (MULTI_CONFIG or ACTIVE_CONFIG_DIR) else ''
+        for name, data in (config.get('tls') or {}).get('options', {}).items():
+            data = data or {}
+            buf = StringIO()
+            yaml.dump({'tls': {'options': {name: data}}}, buf)
+            ca = data.get('clientAuth') or {}
+            opts.append({
+                'name': name,
+                'configFile': short,
+                'configFilePath': p,
+                'minVersion': data.get('minVersion', ''),
+                'maxVersion': data.get('maxVersion', ''),
+                'sniStrict': bool(data.get('sniStrict', False)),
+                'cipherSuites': data.get('cipherSuites', []),
+                'curvePreferences': data.get('curvePreferences', []),
+                'alpnProtocols': data.get('alpnProtocols', []),
+                'clientAuthType': ca.get('clientAuthType', ''),
+                'clientAuthCAs': ca.get('caFiles', []),
+                'yaml': buf.getvalue(),
+            })
+    return jsonify(opts)
+
+
+@app.route('/api/tls-options', methods=['POST'])
+@login_required
+def api_tls_options_save():
+    data = request.get_json(silent=True) or {}
+    name = data.get('name', '').strip()
+    config_file = data.get('configFile', '').strip()
+    if not name:
+        return jsonify({'ok': False, 'message': 'Profile name is required'}), 400
+    target_path = _resolve_config_path(config_file) or CONFIG_PATH
+    create_backup(target_path)
+    config = load_config(target_path)
+    opts = {}
+    if data.get('minVersion'):
+        opts['minVersion'] = data['minVersion']
+    if data.get('maxVersion'):
+        opts['maxVersion'] = data['maxVersion']
+    if data.get('sniStrict'):
+        opts['sniStrict'] = True
+    ciphers = [c.strip() for c in (data.get('cipherSuites') or []) if c.strip()]
+    if ciphers:
+        opts['cipherSuites'] = ciphers
+    curves = [c.strip() for c in (data.get('curvePreferences') or []) if c.strip()]
+    if curves:
+        opts['curvePreferences'] = curves
+    alpn = [c.strip() for c in (data.get('alpnProtocols') or []) if c.strip()]
+    if alpn:
+        opts['alpnProtocols'] = alpn
+    ca_type = data.get('clientAuthType', '').strip()
+    ca_cas = [c.strip() for c in (data.get('clientAuthCAs') or []) if c.strip()]
+    if ca_type and ca_type != 'NoClientCert':
+        ca_obj = {'clientAuthType': ca_type}
+        if ca_cas:
+            ca_obj['caFiles'] = ca_cas
+        opts['clientAuth'] = ca_obj
+    config.setdefault('tls', {}).setdefault('options', {})[name] = opts
+    save_config(_strip_empty_sections(config), target_path)
+    add_notification(f"TLS profile '{name}' saved", 'success')
+    return jsonify({'ok': True})
+
+
+@app.route('/api/tls-options/<name>', methods=['DELETE'])
+@login_required
+def api_tls_options_delete(name):
+    config_file = request.args.get('configFile', '').strip()
+    target_path = _resolve_config_path(config_file) or CONFIG_PATH
+    config = load_config(target_path)
+    tls_opts = (config.get('tls') or {}).get('options', {})
+    if name not in tls_opts:
+        return jsonify({'ok': False, 'message': 'Profile not found'}), 404
+    create_backup(target_path)
+    del tls_opts[name]
+    save_config(_strip_empty_sections(config), target_path)
+    add_notification(f"TLS profile '{name}' deleted", 'success')
+    return jsonify({'ok': True})
+
+
 @app.route('/api/backups')
 @login_required
 def api_backups():
@@ -2699,6 +2784,7 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
                      'passHostHeader': lb.get('passHostHeader', True),
                      'certResolver': tls_http.get('certResolver', '') if isinstance(tls_http, dict) else '',
                      'tlsDomains': tls_http.get('domains', []) if isinstance(tls_http, dict) else [],
+                     'tlsOptionsProfile': tls_http.get('options', '') if isinstance(tls_http, dict) else '',
                      'insecureSkipVerify': insecure,
                      'configFile': config_file, 'provider': 'file'})
     tcp_svcs = dict(config.get('tcp', {}).get('services', {}))
@@ -3346,6 +3432,9 @@ def save_entry():
                     if tls_sans:
                         domain_entry['sans'] = tls_sans
                     tls_entry['domains'] = [domain_entry]
+                tls_opts_profile = request.form.get('tlsOptionsProfile', '').strip()
+                if tls_opts_profile:
+                    tls_entry['options'] = tls_opts_profile
                 r['tls'] = tls_entry
             lb = {'servers': [{'url': target_url}]}
             if not pass_host:

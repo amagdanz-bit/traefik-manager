@@ -352,6 +352,59 @@ Test connectivity to a Traefik API URL before saving. Accepts optional credentia
 
 ---
 
+## TLS Options
+
+### `GET /api/tls-options`
+
+List all `tls.options` profiles from all mounted config files.
+
+**Response** - array of profiles:
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | Profile key (e.g. `modern`, `default`) |
+| `configFile` | string | Source config file basename |
+| `minVersion` | string | Minimum TLS version (e.g. `VersionTLS12`) |
+| `maxVersion` | string | Maximum TLS version |
+| `sniStrict` | boolean | SNI strict mode enabled |
+| `cipherSuites` | string[] | Cipher suite list |
+| `curvePreferences` | string[] | ECDH curve list |
+| `alpnProtocols` | string[] | ALPN protocol list |
+| `clientAuthType` | string | Client auth type |
+| `clientAuthCAs` | string[] | CA file paths |
+| `yaml` | string | Raw YAML block for display |
+
+---
+
+### `POST /api/tls-options`
+
+Create or update a TLS options profile. Sends JSON body.
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | Profile name (required) |
+| `configFile` | string | Target config file basename (multi-config only) |
+| `minVersion` | string | e.g. `VersionTLS12` |
+| `maxVersion` | string | Optional upper bound |
+| `sniStrict` | boolean | Enable SNI strict |
+| `cipherSuites` | string[] | Cipher suite list |
+| `curvePreferences` | string[] | Curve list |
+| `alpnProtocols` | string[] | ALPN list |
+| `clientAuthType` | string | Client auth type |
+| `clientAuthCAs` | string[] | CA file paths |
+
+---
+
+### `DELETE /api/tls-options/<name>`
+
+Delete a TLS options profile by name.
+
+| Query param | Description |
+|---|---|
+| `configFile` | Config file basename (multi-config only) |
+
+---
+
 ## Backups
 
 ### `GET /api/backups`

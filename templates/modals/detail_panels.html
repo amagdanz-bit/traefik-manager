@@ -18,6 +18,21 @@
     </div>
 </div>
 
+<div class="detail-backdrop" id="tlsOptDetailBackdrop" onclick="closeTlsOptDetail()"></div>
+<div class="detail-panel" id="tlsOptDetailPanel">
+    <div class="sticky top-0 z-10 flex items-center justify-between px-6 py-4" style="background:var(--card); border-bottom:1px solid var(--border)">
+        <div class="flex items-center gap-3">
+            <i class="ph-bold ph-lock-key" style="color:var(--blue)"></i>
+            <h2 class="font-bold text-sm" style="color:var(--text)" id="tlsOptDetailTitle">TLS Profile</h2>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="tlsOptDetailEditBtn" class="btn-secondary text-xs"><i class="ph-bold ph-pencil-simple"></i> Edit</button>
+            <button onclick="closeTlsOptDetail()" class="btn-icon"><i class="ph-bold ph-x text-base"></i></button>
+        </div>
+    </div>
+    <div id="tlsOptDetailContent" class="px-6 py-5 overflow-y-auto"></div>
+</div>
+
 <div class="detail-backdrop" id="svcDetailBackdrop" onclick="closeSvcDetail()"></div>
 <div class="detail-panel" id="svcDetailPanel">
     <div class="sticky top-0 z-10 flex items-center justify-between px-6 py-4" style="background:var(--card); border-bottom:1px solid var(--border)">
