@@ -79,8 +79,8 @@
 
             <div>
                 <label>ALPN Protocols</label>
-                <textarea id="tlsOptAlpn" class="input-field font-mono text-xs" rows="2" placeholder="h2&#10;http/1.1" style="resize:vertical"></textarea>
-                <p class="text-xs mt-1" style="color:var(--muted)">One per line. Leave empty to use Traefik defaults.</p>
+                <textarea id="tlsOptAlpn" class="input-field font-mono text-xs" rows="3" placeholder="h2&#10;http/1.1&#10;acme-tls/1" style="resize:vertical"></textarea>
+                <p class="text-xs mt-1" style="color:var(--muted)">One per line. Default: <code class="font-mono">h2, http/1.1, acme-tls/1</code> - leave empty to use Traefik defaults. Include <code class="font-mono">acme-tls/1</code> if using ACME cert challenges.</p>
             </div>
 
             <div>
