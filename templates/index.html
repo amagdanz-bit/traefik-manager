@@ -935,7 +935,7 @@ function buildYamlFromWizard() {
         const bypassLines    = _lines('wizOidcBypass');
         const headers = headerLines.map(l => {
             const idx = l.indexOf(':');
-            return idx > -1 ? { Name: l.slice(0, idx).trim(), Value: '{' + '{ .claims.' + l.slice(idx+1).trim() + ' }' + '}' } : null;
+            return idx > -1 ? { Name: l.slice(0, idx).trim(), Value: '{' + '{`' + '{' + '{ .claims.' + l.slice(idx+1).trim() + ' }' + '}`' + '}' + '}' } : null;
         }).filter(Boolean);
         yaml = 'plugin:\n  traefik-oidc-auth:';
         if (secret) yaml += '\n    Secret: "' + secret + '"';
@@ -1859,7 +1859,7 @@ const mwTemplates = {
     forwardAuthAuthentik: `forwardAuth:\n  address: "http://authentik-server:9000/outpost.goauthentik.io/auth/traefik"\n  trustForwardHeader: true\n  authResponseHeaders:\n    - X-authentik-username\n    - X-authentik-groups\n    - X-authentik-email\n    - X-authentik-name\n    - X-authentik-uid`,
     forwardAuthAuthelia: `forwardAuth:\n  address: "http://authelia:9091/api/authz/forward-auth"\n  trustForwardHeader: true\n  authResponseHeaders:\n    - Remote-User\n    - Remote-Groups\n    - Remote-Name\n    - Remote-Email`,
     forwardAuthGatekeeper: `forwardAuth:\n  address: "https://auth.example.com/auth/verify"\n  trustForwardHeader: false\n  authResponseHeaders:\n    - "X-Auth-User"\n    - "X-Auth-Email"\n    - "X-Auth-Groups"`,
-    oidcAuth: `plugin:\n  traefik-oidc-auth:\n    Secret: "change-me-32-char-secret"\n    Provider:\n      Url: "https://login.microsoftonline.com/{tenant}/v2.0"\n      ClientId: "client-id"\n      ClientSecret: "client-secret"\n    Scopes:\n      - openid\n      - profile\n      - email\n    SessionCookie:\n      MaxAge: 86400\n    Headers:\n      - Name: "X-Forwarded-User"\n        Value: "{{ '{{' }} .claims.preferred_username {{ '}}' }}"\n      - Name: "X-Forwarded-Email"\n        Value: "{{ '{{' }} .claims.email {{ '}}' }}"`,
+    oidcAuth: `plugin:\n  traefik-oidc-auth:\n    Secret: "change-me-32-char-secret"\n    Provider:\n      Url: "https://login.microsoftonline.com/{tenant}/v2.0"\n      ClientId: "client-id"\n      ClientSecret: "client-secret"\n    Scopes:\n      - openid\n      - profile\n      - email\n    SessionCookie:\n      MaxAge: 86400\n    Headers:\n      - Name: "X-Forwarded-User"\n        Value: "{{ '{{' }}\`{{ '{{' }} .claims.preferred_username {{ '}}' }}\`{{ '}}' }}"\n      - Name: "X-Forwarded-Email"\n        Value: "{{ '{{' }}\`{{ '{{' }} .claims.email {{ '}}' }}\`{{ '}}' }}"`,
     ipAllowList: `ipAllowList:\n  sourceRange:\n    - "127.0.0.1/32"\n    - "192.168.1.0/24"`,
     ipAllowListPrivate: `ipAllowList:\n  sourceRange:\n    - "10.0.0.0/8"\n    - "172.16.0.0/12"\n    - "192.168.0.0/16"\n    - "127.0.0.1/32"`,
     rateLimit: `rateLimit:\n  average: 100\n  burst: 50\n  period: 1s`,
