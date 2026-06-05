@@ -731,11 +731,13 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); 
 .svc-list-row:hover { background: var(--input-bg); }
 .svc-list-col-status { display: flex; align-items: center; justify-content: center; }
 .svc-list-col-proto { display: flex; align-items: center; gap: 5px; }
-.svc-list-col-name { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svc-list-col-name { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .svc-list-col-provider,
 .svc-list-col-servers,
 .svc-list-col-usedby { display: flex; align-items: center; }
-.route-list-grid { grid-template-columns: 20px 110px 1fr 200px 160px 100px auto; }
+.route-list-grid,
+.svc-list-header.route-list-grid,
+.svc-list-row.route-list-grid { grid-template-columns: 20px 110px 1fr 200px 160px 80px 180px 96px; }
 .mw-list-grid { grid-template-columns: 80px 1fr 1fr 120px; }
 
 /* Responsive */
