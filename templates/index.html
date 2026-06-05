@@ -179,6 +179,12 @@
                 <span class="badge badge-muted" id="countMw">-</span>
             </span>
         </button>
+        <button onclick="switchTab('tls')" id="btn-tls" class="tab-btn tab-optional" data-tab="tls">
+            <span class="flex items-center gap-2">
+                <i class="ph-bold ph-lock-key"></i>
+                TLS Options
+            </span>
+        </button>
         <button onclick="switchTab('routemap')" id="btn-routemap" class="tab-btn tab-optional" data-tab="routemap">
             <span class="flex items-center gap-2">
                 <i class="ph-bold ph-graph"></i>
@@ -353,6 +359,8 @@
 
     {% include 'tabs/tab_certs.html' %}
 
+    {% include 'tabs/tab_tls_options.html' %}
+
     {% include 'tabs/tab_crowdsec.html' %}
 
 
@@ -367,6 +375,8 @@
 {% include 'modals/route_modal.html' %}
 
 {% include 'modals/mw_modal.html' %}
+
+{% include 'modals/tls_options_modal.html' %}
 
 {% include 'modals/detail_panels.html' %}
 
@@ -427,7 +437,7 @@ async function _fixSelfRouteEp(fixEp) {
     } catch(e) { showToast('Failed to update self-route', 'error'); }
 }
 
-const OPTIONAL_TABS = ['dashboard', 'routemap', 'docker', 'kubernetes', 'swarm', 'nomad', 'ecs', 'consulcatalog', 'redis', 'etcd', 'consul', 'zookeeper', 'http_provider', 'file_external', 'certs', 'crowdsec', 'plugins', 'logs'];
+const OPTIONAL_TABS = ['dashboard', 'routemap', 'docker', 'kubernetes', 'swarm', 'nomad', 'ecs', 'consulcatalog', 'redis', 'etcd', 'consul', 'zookeeper', 'http_provider', 'file_external', 'certs', 'tls', 'crowdsec', 'plugins', 'logs'];
 
 let _visibleTabsCache = {};
 
@@ -496,6 +506,7 @@ function switchTab(tab) {
     if (tab === 'http_provider') refreshHttpProviderTab();
     if (tab === 'file_external') refreshFileExternalTab();
     if (tab === 'certs')         refreshCertsTab();
+    if (tab === 'tls')           refreshTlsOptionsTab();
     if (tab === 'crowdsec')      refreshCrowdSecTab();
     if (tab === 'plugins')       refreshPluginsTab();
     if (tab === 'logs')          refreshLogs();
@@ -716,9 +727,12 @@ function openModal() {
     document.getElementById('useTls') && (document.getElementById('useTls').checked = false);
     toggleTcpCertResolver(false);
     const crHttp = document.getElementById('certResolver');
-    if (crHttp) crHttp.value = availableCertResolvers.length > 0 ? availableCertResolvers[0] : '__disabled__';
+    if (crHttp) { crHttp.value = availableCertResolvers.length > 0 ? availableCertResolvers[0] : '__disabled__'; toggleWildcardSection(crHttp.value); }
     const crTcp = document.getElementById('certResolverTcp');
     if (crTcp && availableCertResolvers.length > 0) crTcp.value = availableCertResolvers[0];
+    const wcChk = document.getElementById('wildcardCheckbox'); if (wcChk) wcChk.checked = false;
+    const mainEl = document.getElementById('tlsWildcardMain'); if (mainEl) mainEl.value = '';
+    const sansEl = document.getElementById('tlsWildcardSans'); if (sansEl) sansEl.value = '';
     setProtocol('http');
     // Init config file to first option (multi-config mode)
     const cfSel = document.getElementById('configFileSelect');
@@ -727,6 +741,9 @@ function openModal() {
     const newRouteInput = document.getElementById('newRouteFileName');
     if (newRouteInput) { newRouteInput.style.display = 'none'; newRouteInput.value = ''; }
     if (cfSel && cfHid && cfSel.value !== '__new__') cfHid.value = cfSel.value;
+    const tlsOptSel = document.getElementById('tlsOptionsProfileSelect');
+    if (tlsOptSel) tlsOptSel.value = '';
+    _populateTlsOptionsSelect();
     document.getElementById('appModal').style.display = 'flex';
 }
 
@@ -833,7 +850,7 @@ function setMwMode(mode) {
     }
 }
 
-const _wizardTemplates = new Set(['basicAuth','digestAuth','forwardAuth','forwardAuthAuthentik','forwardAuthAuthelia','forwardAuthGatekeeper','ipAllowList','ipAllowListPrivate','rateLimit','secureHeaders','corsHeaders','redirectScheme','redirectRegex','stripPrefix','addPrefix','replacePath','compress','retry','circuitBreaker','buffering','chain','inFlightReq']);
+const _wizardTemplates = new Set(['basicAuth','digestAuth','forwardAuth','forwardAuthAuthentik','forwardAuthAuthelia','forwardAuthGatekeeper','oidcAuth','ipAllowList','ipAllowListPrivate','rateLimit','secureHeaders','corsHeaders','redirectScheme','redirectRegex','stripPrefix','addPrefix','replacePath','compress','retry','circuitBreaker','buffering','chain','inFlightReq']);
 
 const _wizKeyMap = {
     forwardAuthAuthentik: 'forwardAuth', forwardAuthAuthelia: 'forwardAuth',
@@ -859,6 +876,11 @@ function _showMwWizard(tpl) {
         const hd = document.getElementById('wizFaHeaders'); if (hd) hd.value = 'Remote-User\nRemote-Groups\nRemote-Name\nRemote-Email';
     } else if (tpl === 'forwardAuthGatekeeper') {
         const hd = document.getElementById('wizGkHeaders'); if (hd) hd.value = 'X-Auth-User\nX-Auth-Email\nX-Auth-Groups';
+        const ga = document.getElementById('wizGkAuthorization'); if (ga) ga.checked = false;
+    } else if (tpl === 'oidcAuth') {
+        const sc = document.getElementById('wizOidcScopes'); if (sc) sc.value = 'openid\nprofile\nemail';
+        const hd = document.getElementById('wizOidcHeaders'); if (hd) hd.value = 'X-Forwarded-User: preferred_username\nX-Forwarded-Email: email\nX-Forwarded-Name: name';
+        const mx = document.getElementById('wizOidcSessionMaxAge'); if (mx) mx.value = '86400';
     } else if (tpl === 'ipAllowListPrivate') {
         const el = document.getElementById('wizIpCidrs'); if (el) el.value = '10.0.0.0/8\n172.16.0.0/12\n192.168.0.0/16\n127.0.0.1/32';
     }
@@ -896,9 +918,35 @@ function buildYamlFromWizard() {
         const policy = _val('wizGkPolicy');
         const addr   = url ? url + '/auth/verify' + (policy ? '?policy=' + policy : '') : '';
         const trust  = _chk('wizGkTrust', false);
+        const auth   = _chk('wizGkAuthorization', false);
         const hdrs   = _lines('wizGkHeaders');
+        const allHdrs = auth ? ['Authorization', ...hdrs.filter(h => h !== 'Authorization')] : hdrs;
         yaml = 'forwardAuth:\n  address: "' + addr + '"\n  trustForwardHeader: ' + trust;
-        if (hdrs.length) yaml += '\n  authResponseHeaders:\n' + hdrs.map(h => '    - "' + h + '"').join('\n');
+        if (allHdrs.length) yaml += '\n  authResponseHeaders:\n' + allHdrs.map(h => '    - "' + h + '"').join('\n');
+
+    } else if (key === 'oidcAuth') {
+        const providerUrl    = _val('wizOidcProviderUrl');
+        const clientId       = _val('wizOidcClientId');
+        const clientSecret   = _val('wizOidcClientSecret');
+        const secret         = _val('wizOidcSecret');
+        const scopes         = _lines('wizOidcScopes');
+        const maxAge         = parseInt(_val('wizOidcSessionMaxAge','86400')) || 86400;
+        const headerLines    = _lines('wizOidcHeaders');
+        const bypassLines    = _lines('wizOidcBypass');
+        const headers = headerLines.map(l => {
+            const idx = l.indexOf(':');
+            return idx > -1 ? { Name: l.slice(0, idx).trim(), Value: '{' + '{`' + '{' + '{ .claims.' + l.slice(idx+1).trim() + ' }' + '}`' + '}' + '}' } : null;
+        }).filter(Boolean);
+        yaml = 'plugin:\n  traefik-oidc-auth:';
+        if (secret) yaml += '\n    Secret: "' + secret + '"';
+        yaml += '\n    Provider:';
+        if (providerUrl) yaml += '\n      Url: "' + providerUrl + '"';
+        if (clientId)    yaml += '\n      ClientId: "' + clientId + '"';
+        if (clientSecret) yaml += '\n      ClientSecret: "' + clientSecret + '"';
+        if (scopes.length) yaml += '\n    Scopes:\n' + scopes.map(s => '      - ' + s).join('\n');
+        yaml += '\n    SessionCookie:\n      MaxAge: ' + maxAge;
+        if (headers.length) yaml += '\n    Headers:\n' + headers.map(h => '      - Name: "' + h.Name + '"\n        Value: "' + h.Value + '"').join('\n');
+        if (bypassLines.length) yaml += '\n    BypassAuthenticationRule:\n' + bypassLines.map(r => '      - "' + r + '"').join('\n');
 
     } else if (key === 'rateLimit') {
         yaml = 'rateLimit:\n  average: ' + _val('wizRlAvg','100') + '\n  burst: ' + _val('wizRlBurst','50') + '\n  period: ' + _val('wizRlPeriod','1s');
@@ -1312,8 +1360,9 @@ function renderRouteGrid(apps) {
         const isComplexRule = !isSimpleHostRule && !!app.rule;
         const ruleLabel  = isComplexRule ? 'Rule' : 'Domain';
         const badgeClass = proto === 'http' ? 'badge-http' : (proto === 'tcp' ? 'badge-tcp' : 'badge-udp');
-        const tlsBadge = app.tls ? `<span class="badge badge-green" style="font-size:9px"><i class="ph-bold ph-lock"></i> TLS</span>` : '';
+        const tlsBadge = app.tls ? `<span class="badge badge-green" style="font-size:9px"><i class="ph-bold ph-lock"></i> TLS${app.tlsOptionsProfile ? ' ' + _esc(app.tlsOptionsProfile) : ''}</span>` : '';
         const insecureBadge = app.insecureSkipVerify ? `<span class="badge" style="font-size:9px;background:rgba(240,180,0,0.12);color:#d4a017;border:1px solid rgba(240,180,0,0.3)" title="insecureSkipVerify enabled"><i class="ph-bold ph-warning"></i> TLS skip</span>` : '';
+        const tlsProfileBadge = '';
         const openLink = (proto === 'http' && domain && !domain.includes('{') && !domain.includes('*') && !domain.includes('HostRegexp'))
             ? `<a href="https://${domain}" target="_blank" class="pill-btn pill-btn-blue" title="Open site"><i class="ph-bold ph-arrow-square-out text-sm"></i></a>` : '';
         const openUrl  = (proto === 'http' && domain && !domain.includes('{') && !domain.includes('*') && !domain.includes('HostRegexp')) ? 'https://' + domain : '';
@@ -1332,10 +1381,9 @@ function renderRouteGrid(apps) {
             : isComplexRule
                 ? `<div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono" style="color:var(--blue);word-break:break-all" title="${_esc(app.rule)}">${_esc(app.rule)}</div>${_copyBtn(app.rule,'blue')}</div>`
                 : `<div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--blue)">${_esc(domain || app.rule)}</div>${_copyBtn(domain || app.rule,'blue')}</div>`;
-        const httpBody = `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">${ruleLabel}</div>${domainDisplay}</div><div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Target</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div><button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div></div>${(mwBadges || epMwBadges) ? `<div class="flex flex-wrap gap-1">${mwBadges}${epMwBadges}</div>` : ''}`;
-        const tcpBody = `${app.rule ? `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Rule</div><div class="text-xs font-mono truncate" style="color:var(--blue)">${_esc(app.rule)}</div></div>` : ''}<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Target</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div><button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div></div>`;
+        const httpBody = `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">${ruleLabel}</div>${domainDisplay}</div><div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Target</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div><button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div></div>`; const tcpBody = `${app.rule ? `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Rule</div><div class="text-xs font-mono truncate" style="color:var(--blue)">${_esc(app.rule)}</div></div>` : ''}<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Target</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div><button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div></div>`;
         const cfArg = app.configFile ? `,'${_esc(app.configFile)}'` : ',\'\'';
-        const cfBadge = (epBadges || app.configFile) ? '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-top:8px"><div class="flex flex-wrap gap-1">' + epBadges + '</div>' + (app.configFile ? '<span class="badge badge-muted" style="font-size:9px">' + _esc(app.configFile) + '</span>' : '') + '</div>' : '';
+        const cfBadge = (epBadges || mwBadges || epMwBadges || app.configFile) ? `<div class="flex flex-wrap items-center gap-1 mt-2">${epBadges}${mwBadges}${epMwBadges}${app.configFile ? `<span class="badge badge-muted" style="font-size:9px;margin-left:auto">${_esc(app.configFile)}</span>` : ''}</div>` : '';
         const dataAttrs = `data-protocol="${proto}" data-name="${_esc(app.name.toLowerCase())}" data-routekey="${_esc(app.name)}" data-idx="${i}" data-enabled="${enabled}" data-domains="${allDomains.map(d => _esc(d)).join('|')}" data-target="${_esc(app.target)}" data-configfile="${_esc(app.configFile||'')}"`;
         const isBulkSelected = _bulkMode && _bulkSelected.has(app.id);
         const bulkOutline = isBulkSelected ? 'outline:2px solid var(--blue);outline-offset:-2px;' : '';
@@ -1347,13 +1395,14 @@ function renderRouteGrid(apps) {
                 : `<div style="display:flex;align-items:center;gap:4px"><span class="text-xs font-mono truncate" style="color:var(--blue)">${_esc(domain || app.rule)}</span>${_copyBtn(domain || app.rule,'blue')}</div>`;
         if (_routeViewMode === 'list') {
             const epCompact = (app.entryPoints || []).slice(0, 2).map(ep => `<span class="badge badge-muted" style="font-size:9px">${_esc(ep)}</span>`).join('');
-            return `<div class="svc-list-row route-list-grid route-card${enabled ? '' : ' opacity-50'}" style="${bulkOutline}" ${dataAttrs}><div class="svc-list-col-status" style="display:flex;align-items:center;gap:6px">${bulkCheckbox}<span class="svc-status-dot" style="background:${enabled ? 'var(--green)' : 'var(--muted)'}"></span></div><div style="display:flex;align-items:center;gap:4px"><span class="badge ${badgeClass}" style="font-size:9px">${proto.toUpperCase()}</span>${tlsBadge}${insecureBadge}</div><div class="svc-list-col-name">${_esc(app.name)}<div class="text-xs font-mono truncate" style="color:var(--muted);margin-top:1px">${_esc(app.service_name)}</div></div><div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center">${listDomainDisplay}</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div><button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div><div style="display:flex;align-items:center;gap:3px">${epCompact}</div><div class="flex items-center gap-1 flex-shrink-0" onclick="event.stopPropagation()"><button type="button" data-app='${appJson}' data-openurl="${openUrl}" onclick="event.stopPropagation();_openRouteMenu(event,this)" class="pill-btn pill-btn-blue" title="More"><i class="ph-bold ph-dots-three text-sm"></i></button><button type="button" data-app='${appJson}' onclick="handleEdit(this)" class="pill-btn pill-btn-blue" title="Edit"><i class="ph-bold ph-pencil-simple text-sm"></i></button>${toggleBtn}</div></div>`;
+            const mwCompact = (app.middlewares || []).map(mw => `<span class="badge" style="font-size:9px;background:rgba(163,113,247,0.1);color:var(--purple);border:1px solid rgba(163,113,247,0.25)">${_esc(mw)}</span>`).join('');
+            return `<div class="svc-list-row route-list-grid route-card${enabled ? '' : ' opacity-50'}" style="${bulkOutline}" ${dataAttrs}><div class="svc-list-col-status" style="display:flex;align-items:center;gap:6px">${bulkCheckbox}<span class="svc-status-dot" style="background:${enabled ? 'var(--green)' : 'var(--muted)'}"></span></div><div style="display:flex;align-items:center;gap:4px"><span class="badge ${badgeClass}" style="font-size:9px">${proto.toUpperCase()}</span>${tlsBadge}${insecureBadge}${tlsProfileBadge}</div><div class="svc-list-col-name">${_esc(app.name)}<div class="text-xs font-mono truncate" style="color:var(--muted);margin-top:1px">${_esc(app.service_name)}</div></div><div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center">${listDomainDisplay}</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div><button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:3px">${epCompact}</div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:3px">${mwCompact}</div><div class="flex items-center gap-1 flex-shrink-0" onclick="event.stopPropagation()"><button type="button" data-app='${appJson}' data-openurl="${openUrl}" onclick="event.stopPropagation();_openRouteMenu(event,this)" class="pill-btn pill-btn-blue" title="More"><i class="ph-bold ph-dots-three text-sm"></i></button><button type="button" data-app='${appJson}' onclick="handleEdit(this)" class="pill-btn pill-btn-blue" title="Edit"><i class="ph-bold ph-pencil-simple text-sm"></i></button>${toggleBtn}</div></div>`;
         }
-        return `<div class="card route-card${enabled ? '' : ' opacity-50'}" style="${bulkOutline}" ${dataAttrs}><div class="route-card-inner p-4 pb-2"><div class="flex justify-between items-start mb-3"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 mb-0.5">${bulkCheckbox}<span class="badge ${badgeClass}">${proto.toUpperCase()}</span>${tlsBadge}${insecureBadge}<span class="status-dot status-checking" title="Checking..."></span></div><h3 class="font-bold text-sm mt-1.5 truncate transition-colors" style="color:var(--text)">${_esc(app.name)}</h3><div class="text-xs font-mono truncate" style="color:var(--muted)">${_esc(app.service_name)}</div></div><div class="flex items-center gap-1.5 ml-2 flex-shrink-0" onclick="event.stopPropagation()"><button type="button" data-app='${appJson}' data-openurl="${openUrl}" onclick="event.stopPropagation();_openRouteMenu(event,this)" class="pill-btn pill-btn-blue" title="More"><i class="ph-bold ph-dots-three text-sm"></i></button><button type="button" data-app='${appJson}' onclick="handleEdit(this)" class="pill-btn pill-btn-blue" title="Edit"><i class="ph-bold ph-pencil-simple text-sm"></i></button>${toggleBtn}</div></div><div class="space-y-2">${proto === 'http' ? httpBody : tcpBody}</div>${cfBadge}</div></div>`;
+        return `<div class="card route-card${enabled ? '' : ' opacity-50'}" style="${bulkOutline}" ${dataAttrs}><div class="route-card-inner p-4 pb-2"><div class="flex justify-between items-start mb-3"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 mb-0.5">${bulkCheckbox}<span class="badge ${badgeClass}">${proto.toUpperCase()}</span>${tlsBadge}${insecureBadge}${tlsProfileBadge}<span class="status-dot status-checking" title="Checking..."></span></div><h3 class="font-bold text-sm mt-1.5 truncate transition-colors" style="color:var(--text)">${_esc(app.name)}</h3><div class="text-xs font-mono truncate" style="color:var(--muted)">${_esc(app.service_name)}</div></div><div class="flex items-center gap-1.5 ml-2 flex-shrink-0" onclick="event.stopPropagation()"><button type="button" data-app='${appJson}' data-openurl="${openUrl}" onclick="event.stopPropagation();_openRouteMenu(event,this)" class="pill-btn pill-btn-blue" title="More"><i class="ph-bold ph-dots-three text-sm"></i></button><button type="button" data-app='${appJson}' onclick="handleEdit(this)" class="pill-btn pill-btn-blue" title="Edit"><i class="ph-bold ph-pencil-simple text-sm"></i></button>${toggleBtn}</div></div><div class="space-y-2">${proto === 'http' ? httpBody : tcpBody}</div>${cfBadge}</div></div>`;
     }).join('');
 
     if (_routeViewMode === 'list') {
-        const header = `<div class="svc-list-header route-list-grid"><div></div><div>Protocol</div><div>Name</div><div>Domain / Rule</div><div>Target</div><div>Entry Points</div><div></div></div>`;
+        const header = `<div class="svc-list-header route-list-grid"><div></div><div>Protocol</div><div>Name</div><div>Domain / Rule</div><div>Target</div><div>Entry Points</div><div>Middlewares</div><div></div></div>`;
         grid.className = '';
         grid.innerHTML = `<div class="svc-list">${header}${grid.innerHTML}</div>`;
     } else {
@@ -1563,7 +1612,30 @@ function toggleTcpCertResolver(checked) {
     if (row) row.style.display = checked ? '' : 'none';
 }
 
-function cloneRoute(btn) {
+function toggleWildcardSection(resolverVal) {
+    const show = resolverVal && resolverVal !== '__disabled__';
+    ['wildcardCheckboxRow', 'wildcardSection'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = show ? '' : 'none';
+    });
+    if (!show) {
+        const chk = document.getElementById('wildcardCheckbox');
+        if (chk) chk.checked = false;
+        _onWildcardToggle(false);
+    }
+}
+
+function _onWildcardToggle(checked) {
+    const mainEl = document.getElementById('tlsWildcardMain');
+    const sansEl = document.getElementById('tlsWildcardSans');
+    if (!mainEl || !sansEl) return;
+    if (!checked) { mainEl.value = ''; sansEl.value = ''; return; }
+    const domSel = document.getElementById('domainSelect');
+    const base   = domSel ? domSel.value : (document.getElementById('singleDomain')?.textContent || '').trim();
+    if (base) { mainEl.value = base; sansEl.value = '*.' + base; }
+}
+
+async function cloneRoute(btn) {
     const app = JSON.parse(btn.getAttribute('data-app'));
     openModal();
     document.getElementById('modalTitle').innerText = 'Clone Route';
@@ -1584,9 +1656,27 @@ function cloneRoute(btn) {
             if (!app.tls && app.tls !== false) crHttp.value = '__disabled__';
             else if (app.certResolver) crHttp.value = app.certResolver;
             else crHttp.value = '__none__';
+            toggleWildcardSection(crHttp.value);
         }
         const insecureChk = document.getElementById('insecureSkipVerify');
         if (insecureChk) insecureChk.checked = !!app.insecureSkipVerify;
+        const tlsDomains = app.tlsDomains || [];
+        const chk = document.getElementById('wildcardCheckbox');
+        if (tlsDomains.length && chk) {
+            const first = tlsDomains[0];
+            chk.checked = true;
+            const mainEl = document.getElementById('tlsWildcardMain');
+            const sansEl = document.getElementById('tlsWildcardSans');
+            if (mainEl) mainEl.value = first.main || '';
+            if (sansEl) sansEl.value = (first.sans || []).join('\n');
+        } else if (chk) {
+            chk.checked = false;
+        }
+        const tlsOptSel = document.getElementById('tlsOptionsProfileSelect');
+        if (tlsOptSel) {
+            await _populateTlsOptionsSelect();
+            tlsOptSel.value = app.tlsOptionsProfile || '';
+        }
     } else if (proto === 'tcp') {
         const target = (app.target || '').split(':');
         document.getElementById('targetIpTcp').value = target[0] || '';
@@ -1643,7 +1733,7 @@ function _closeRouteMenu() {
 
 document.addEventListener('click', () => _closeRouteMenu());
 
-function handleEdit(btn) {
+async function handleEdit(btn) {
     const app = JSON.parse(btn.getAttribute('data-app'));
     document.getElementById('isEdit').value = 'true';
     document.getElementById('originalId').value = app.id;
@@ -1700,9 +1790,27 @@ function handleEdit(btn) {
             if (!app.tls && app.tls !== false) crHttp.value = '__disabled__';
             else if (app.certResolver) crHttp.value = app.certResolver;
             else crHttp.value = '__none__';
+            toggleWildcardSection(crHttp.value);
         }
         const insecureChk = document.getElementById('insecureSkipVerify');
         if (insecureChk) insecureChk.checked = !!app.insecureSkipVerify;
+        const tlsDomains = app.tlsDomains || [];
+        const wChk = document.getElementById('wildcardCheckbox');
+        if (tlsDomains.length && wChk) {
+            const first = tlsDomains[0];
+            wChk.checked = true;
+            const mainEl = document.getElementById('tlsWildcardMain');
+            const sansEl = document.getElementById('tlsWildcardSans');
+            if (mainEl) mainEl.value = first.main || '';
+            if (sansEl) sansEl.value = (first.sans || []).join('\n');
+        } else if (wChk) {
+            wChk.checked = false;
+        }
+        const tlsOptSel2 = document.getElementById('tlsOptionsProfileSelect');
+        if (tlsOptSel2) {
+            await _populateTlsOptionsSelect();
+            tlsOptSel2.value = app.tlsOptionsProfile || '';
+        }
 
     } else if (proto === 'tcp') {
         document.getElementById('tcpRule').value = app.rule || '';
@@ -1751,6 +1859,7 @@ const mwTemplates = {
     forwardAuthAuthentik: `forwardAuth:\n  address: "http://authentik-server:9000/outpost.goauthentik.io/auth/traefik"\n  trustForwardHeader: true\n  authResponseHeaders:\n    - X-authentik-username\n    - X-authentik-groups\n    - X-authentik-email\n    - X-authentik-name\n    - X-authentik-uid`,
     forwardAuthAuthelia: `forwardAuth:\n  address: "http://authelia:9091/api/authz/forward-auth"\n  trustForwardHeader: true\n  authResponseHeaders:\n    - Remote-User\n    - Remote-Groups\n    - Remote-Name\n    - Remote-Email`,
     forwardAuthGatekeeper: `forwardAuth:\n  address: "https://auth.example.com/auth/verify"\n  trustForwardHeader: false\n  authResponseHeaders:\n    - "X-Auth-User"\n    - "X-Auth-Email"\n    - "X-Auth-Groups"`,
+    oidcAuth: `plugin:\n  traefik-oidc-auth:\n    Secret: "change-me-32-char-secret"\n    Provider:\n      Url: "https://login.microsoftonline.com/{tenant}/v2.0"\n      ClientId: "client-id"\n      ClientSecret: "client-secret"\n    Scopes:\n      - openid\n      - profile\n      - email\n    SessionCookie:\n      MaxAge: 86400\n    Headers:\n      - Name: "X-Forwarded-User"\n        Value: "{{ '{{' }}\`{{ '{{' }} .claims.preferred_username {{ '}}' }}\`{{ '}}' }}"\n      - Name: "X-Forwarded-Email"\n        Value: "{{ '{{' }}\`{{ '{{' }} .claims.email {{ '}}' }}\`{{ '}}' }}"`,
     ipAllowList: `ipAllowList:\n  sourceRange:\n    - "127.0.0.1/32"\n    - "192.168.1.0/24"`,
     ipAllowListPrivate: `ipAllowList:\n  sourceRange:\n    - "10.0.0.0/8"\n    - "172.16.0.0/12"\n    - "192.168.0.0/16"\n    - "127.0.0.1/32"`,
     rateLimit: `rateLimit:\n  average: 100\n  burst: 50\n  period: 1s`,
@@ -3597,6 +3706,240 @@ async function refreshCertsTab() {
     }
 }
 
+let _tlsOptions = [];
+
+async function refreshTlsOptionsTab() {
+    const el = document.getElementById('tlsOptsContent');
+    if (!el) return;
+    el.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i><p>Loading TLS profiles...</p></div>`;
+    try {
+        const res = await fetch('/api/tls-options');
+        _tlsOptions = await res.json();
+        renderTlsOptions(_tlsOptions);
+    } catch(e) {
+        el.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-bold ph-warning text-3xl block mb-2"></i><p>Failed to load TLS profiles</p></div>`;
+    }
+}
+
+function filterTlsOptions() {
+    const q = (document.getElementById('tlsOptsSearch')?.value || '').toLowerCase();
+    renderTlsOptions(_tlsOptions.filter(o => o.name.toLowerCase().includes(q)));
+}
+
+function renderTlsOptions(opts) {
+    const el = document.getElementById('tlsOptsContent');
+    if (!el) return;
+    if (!opts || opts.length === 0) {
+        el.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-lock-key text-4xl block mb-3 opacity-30"></i><p class="text-sm">No TLS profiles defined.</p><p class="text-xs mt-1">Click <strong>Add TLS Profile</strong> to create one.</p></div>`;
+        return;
+    }
+    const cards = opts.map((o, i) => {
+        const cfBadge = o.configFile ? `<span class="badge badge-muted" style="font-size:9px">${_esc(o.configFile)}</span>` : '';
+        const verBadge = o.minVersion ? `<span class="badge badge-green" style="font-size:9px"><i class="ph-bold ph-lock"></i> ${_esc(o.minVersion.replace('VersionTLS','TLS '))}+</span>` : '';
+        const sniBadge = o.sniStrict ? `<span class="badge" style="font-size:9px;background:rgba(36,161,222,0.12);color:var(--blue);border:1px solid rgba(36,161,222,0.35)">SNI Strict</span>` : '';
+        const mtlsBadge = (o.clientAuthType && o.clientAuthType !== 'NoClientCert') ? `<span class="badge badge-muted" style="font-size:9px">mTLS</span>` : '';
+
+        const mkRow = (label, val) => `
+            <div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)">
+                <div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">${label}</div>
+                <div class="text-xs font-mono" style="color:var(--text)">${val}</div>
+            </div>`;
+        const mkListRow = (label, items) => items?.length ? `
+            <div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)">
+                <div class="text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:var(--muted)">${label}</div>
+                <pre class="font-mono leading-relaxed" style="color:var(--green);font-size:11px">${items.map(v => _esc(v)).join('\n')}</pre>
+            </div>` : '';
+
+        const rows = [];
+        if (o.cipherSuites?.length) rows.push(mkListRow('Cipher Suites', o.cipherSuites));
+        if (o.curvePreferences?.length) rows.push(mkRow('Curves', _esc(o.curvePreferences.join(', '))));
+        if (o.alpnProtocols?.length) rows.push(mkRow('ALPN', _esc(o.alpnProtocols.join(', '))));
+        if (o.clientAuthType && o.clientAuthType !== 'NoClientCert') rows.push(mkRow('Client Auth', _esc(o.clientAuthType)));
+
+        return `<div class="card route-card tls-opt-card" data-name="${_esc(o.name.toLowerCase())}" data-idx="${i}">
+            <div class="route-card-inner p-4 pb-2">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-1.5 mb-1.5">${verBadge}${sniBadge}${mtlsBadge}${cfBadge}</div>
+                        <h3 class="font-bold text-sm font-mono truncate" style="color:var(--text)" title="${_esc(o.name)}">${_esc(o.name)}</h3>
+                    </div>
+                    <div class="flex items-center gap-1.5 ml-2 flex-shrink-0">
+                        <button type="button" data-idx="${i}" onclick="_tlsOptInfo(this)" class="pill-btn pill-btn-blue" title="View details"><i class="ph-bold ph-info text-xs"></i></button>
+                        <button type="button" onclick="deleteTlsOption('${_esc(o.name)}','${_esc(o.configFile || '')}')" class="pill-btn pill-btn-red" title="Delete"><i class="ph-bold ph-trash text-xs"></i></button>
+                        <button type="button" data-idx="${i}" onclick="_tlsOptEdit(this)" class="pill-btn pill-btn-blue" title="Edit"><i class="ph-bold ph-pencil-simple text-xs"></i></button>
+                    </div>
+                </div>
+                <div class="space-y-2">${rows.join('')}</div>
+            </div>
+        </div>`;
+    }).join('');
+    el.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">${cards}</div>`;
+}
+
+function _tlsOptEdit(btn) {
+    const idx = parseInt(btn.getAttribute('data-idx'));
+    openTlsOptionModal(_tlsOptions[idx]);
+}
+
+function _tlsOptInfo(btn) {
+    const idx = parseInt(btn.getAttribute('data-idx'));
+    openTlsOptDetail(_tlsOptions[idx]);
+}
+
+function openTlsOptDetail(o) {
+    document.getElementById('tlsOptDetailTitle').textContent = o.name;
+    document.getElementById('tlsOptDetailEditBtn').onclick = () => { closeTlsOptDetail(); openTlsOptionModal(o); };
+    const row = (label, val) => val ? `<div class="flex gap-3 py-2.5" style="border-bottom:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider w-36 flex-shrink-0 pt-0.5" style="color:var(--muted)">${label}</div><div class="text-sm font-mono break-all" style="color:var(--text)">${val}</div></div>` : '';
+    const listRow = (label, items) => items?.length ? `<div class="py-2.5" style="border-bottom:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--muted)">${label}</div><div class="space-y-1">${items.map(v => `<div class="text-xs font-mono px-2 py-1 rounded" style="background:var(--input-bg);color:var(--green)">${_esc(v)}</div>`).join('')}</div></div>` : '';
+    const rows = [
+        row('Config File',   _esc(o.configFile || '')),
+        row('Min Version',   o.minVersion ? _esc(o.minVersion) : ''),
+        row('Max Version',   o.maxVersion ? _esc(o.maxVersion) : ''),
+        row('SNI Strict',    o.sniStrict ? 'Yes' : ''),
+        listRow('Cipher Suites',    o.cipherSuites),
+        listRow('Curve Preferences', o.curvePreferences),
+        listRow('ALPN Protocols',   o.alpnProtocols),
+        row('Client Auth Type', o.clientAuthType && o.clientAuthType !== 'NoClientCert' ? _esc(o.clientAuthType) : ''),
+        listRow('CA Files', o.clientAuthCAs),
+    ].filter(Boolean).join('');
+    const allRoutes = window._lastRenderedApps || APP_DATA || [];
+    const usedBy = allRoutes.filter(r => r.tlsOptionsProfile === o.name);
+    const usedByHtml = `<div class="mt-5">
+        <div class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--muted)">Used By</div>
+        ${usedBy.length ? usedBy.map(r => `<div class="flex items-center gap-2 py-2" style="border-bottom:1px solid var(--border)">
+            <span class="badge badge-http" style="font-size:9px">HTTP</span>
+            <span class="text-sm font-mono truncate" style="color:var(--text)">${_esc(r.name)}</span>
+            ${r.configFile ? `<span class="badge badge-muted ml-auto" style="font-size:9px;flex-shrink:0">${_esc(r.configFile)}</span>` : ''}
+        </div>`).join('') : `<div class="text-xs py-2" style="color:var(--muted)">No routes using this profile.</div>`}
+    </div>`;
+    const yamlHtml = o.yaml ? `<div class="mt-5"><button onclick="const b=this.nextElementSibling;const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('i').className='ph-bold '+(open?'ph-caret-right':'ph-caret-down')+' text-xs mr-1'" class="flex items-center text-xs mb-2" style="color:var(--muted);background:none;border:none;cursor:pointer;padding:0"><i class="ph-bold ph-caret-right text-xs mr-1"></i><span class="font-semibold uppercase tracking-wider">Raw YAML</span></button><div style="display:none"><div class="rounded-lg p-4 overflow-x-auto" style="background:var(--input-bg);border:1px solid var(--border)"><pre class="text-xs font-mono leading-relaxed" style="color:var(--green)">${_esc(o.yaml)}</pre></div></div></div>` : '';
+    document.getElementById('tlsOptDetailContent').innerHTML = `<div>${rows}</div>${usedByHtml}${yamlHtml}`;
+    document.getElementById('tlsOptDetailPanel').classList.add('open');
+    document.getElementById('tlsOptDetailBackdrop').classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeTlsOptDetail() {
+    document.getElementById('tlsOptDetailPanel').classList.remove('open');
+    document.getElementById('tlsOptDetailBackdrop').classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+function onTlsOptConfigFileChange(sel) {
+    const newInput = document.getElementById('tlsOptNewFileName');
+    if (newInput) newInput.style.display = sel.value === '__new__' ? 'block' : 'none';
+}
+
+function toggleTlsClientAuthCAs(val) {
+    const row = document.getElementById('tlsClientAuthCAsRow');
+    if (row) row.style.display = (val && val !== '' && val !== 'NoClientCert') ? 'block' : 'none';
+}
+
+function openTlsOptionModal(opt) {
+    const modal = document.getElementById('tlsOptionsModal');
+    const isEdit = !!opt;
+    document.getElementById('tlsOptionsModalTitle').textContent = isEdit ? 'Edit TLS Profile' : 'Add TLS Profile';
+    document.getElementById('tlsOptEditName').value    = isEdit ? (opt.name || '') : '';
+    document.getElementById('tlsOptName').value        = isEdit ? (opt.name || '') : '';
+    document.getElementById('tlsOptName').readOnly     = isEdit;
+    document.getElementById('tlsOptMinVersion').value  = isEdit ? (opt.minVersion || '') : '';
+    document.getElementById('tlsOptMaxVersion').value  = isEdit ? (opt.maxVersion || '') : '';
+    document.getElementById('tlsOptSniStrict').checked = isEdit ? !!opt.sniStrict : false;
+    document.getElementById('tlsOptCiphers').value     = isEdit ? (opt.cipherSuites || []).join('\n') : '';
+    document.getElementById('tlsOptCurves').value      = isEdit ? (opt.curvePreferences || []).join('\n') : '';
+    document.getElementById('tlsOptAlpn').value        = isEdit ? (opt.alpnProtocols || []).join('\n') : '';
+    const caType = isEdit ? (opt.clientAuthType || '') : '';
+    document.getElementById('tlsOptClientAuthType').value = caType;
+    document.getElementById('tlsOptClientAuthCAs').value  = isEdit ? (opt.clientAuthCAs || []).join('\n') : '';
+    toggleTlsClientAuthCAs(caType);
+    const cfSel = document.getElementById('tlsOptConfigFileSelect');
+    if (cfSel) cfSel.value = isEdit ? (opt.configFile || '') : '';
+    const newFileInput = document.getElementById('tlsOptNewFileName');
+    if (newFileInput) { newFileInput.style.display = 'none'; newFileInput.value = ''; }
+    document.getElementById('tlsOptConfigFile').value = isEdit ? (opt.configFile || '') : '';
+    modal.style.display = 'flex';
+}
+
+function closeTlsOptionModal() {
+    document.getElementById('tlsOptionsModal').style.display = 'none';
+}
+
+async function saveTlsOption() {
+    const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const name = document.getElementById('tlsOptName').value.trim();
+    if (!name) { showToast('Profile name is required', 'error'); return; }
+    const cfSel = document.getElementById('tlsOptConfigFileSelect');
+    let configFile = cfSel ? cfSel.value : (document.getElementById('tlsOptConfigFile').value || '');
+    if (configFile === '__new__') {
+        const newName = (document.getElementById('tlsOptNewFileName')?.value || '').trim();
+        if (!newName) { showToast('Enter a filename for the new config file', 'error'); return; }
+        configFile = newName.endsWith('.yml') || newName.endsWith('.yaml') ? newName : newName + '.yml';
+    }
+    const toList = v => v.split('\n').map(s => s.trim()).filter(Boolean);
+    const caType = document.getElementById('tlsOptClientAuthType').value;
+    const body = {
+        name,
+        configFile,
+        minVersion:        document.getElementById('tlsOptMinVersion').value,
+        maxVersion:        document.getElementById('tlsOptMaxVersion').value,
+        sniStrict:         document.getElementById('tlsOptSniStrict').checked,
+        cipherSuites:      toList(document.getElementById('tlsOptCiphers').value),
+        curvePreferences:  toList(document.getElementById('tlsOptCurves').value),
+        alpnProtocols:     toList(document.getElementById('tlsOptAlpn').value),
+        clientAuthType:    caType,
+        clientAuthCAs:     toList(document.getElementById('tlsOptClientAuthCAs').value),
+    };
+    try {
+        const res = await fetch('/api/tls-options', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch', 'X-CSRF-Token': token },
+            body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        if (json.ok) {
+            closeTlsOptionModal();
+            showToast('TLS profile saved');
+            refreshTlsOptionsTab();
+            _populateTlsOptionsSelect();
+        } else {
+            showToast(json.message || 'Save failed', 'error');
+        }
+    } catch(e) { showToast('Save failed', 'error'); }
+}
+
+async function deleteTlsOption(name, configFile) {
+    if (!confirm(`Delete TLS profile "${name}"?`)) return;
+    const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const params = configFile ? `?configFile=${encodeURIComponent(configFile)}` : '';
+    try {
+        const res = await fetch(`/api/tls-options/${encodeURIComponent(name)}${params}`, {
+            method: 'DELETE',
+            headers: { 'X-Requested-With': 'fetch', 'X-CSRF-Token': token },
+        });
+        const json = await res.json();
+        if (json.ok) {
+            showToast('TLS profile deleted');
+            refreshTlsOptionsTab();
+            _populateTlsOptionsSelect();
+        } else {
+            showToast(json.message || 'Delete failed', 'error');
+        }
+    } catch(e) { showToast('Delete failed', 'error'); }
+}
+
+async function _populateTlsOptionsSelect() {
+    const sel = document.getElementById('tlsOptionsProfileSelect');
+    if (!sel) return;
+    const current = sel.value;
+    try {
+        const res = await fetch('/api/tls-options');
+        const opts = await res.json();
+        const inner = `<option value="">None (default)</option>` + opts.map(o => `<option value="${_esc(o.name)}">${_esc(o.name)}</option>`).join('');
+        sel.innerHTML = inner;
+        sel.value = current;
+    } catch(e) {}
+}
+
 let _csDecisions = [];
 let _csAlerts    = [];
 let _csTypeFilter = 'all';
@@ -4638,6 +4981,7 @@ function closeStaticForm(section) {
 function _resetStaticForm(section) {
     if (section === 'entrypoints') {
         ['sfEpName','sfEpAddr','sfEpRedirect'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+        const h3 = document.getElementById('sfEpHttp3'); if (h3) h3.checked = false;
     } else if (section === 'resolvers') {
         ['sfResName','sfResEmail','sfResProvider'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
         const st = document.getElementById('sfResStorage'); if (st) st.value = '/acme.json';
@@ -4660,6 +5004,7 @@ function _prefillStaticForm(section, name) {
         document.getElementById('sfEpName').value    = name;
         document.getElementById('sfEpAddr').value    = ep.address || '';
         document.getElementById('sfEpRedirect').value = ep.http?.redirections?.entryPoint?.to || '';
+        const h3chk = document.getElementById('sfEpHttp3'); if (h3chk) h3chk.checked = !!ep.http3;
     } else if (section === 'resolvers') {
         const acme = ((d.certificatesResolvers || {})[name] || {}).acme || {};
         document.getElementById('sfResName').value    = name;
@@ -4716,7 +5061,7 @@ async function submitStaticSection(section) {
     let name, payload;
     if (section === 'entrypoints') {
         name    = document.getElementById('sfEpName').value.trim();
-        payload = { address: document.getElementById('sfEpAddr').value.trim(), redirect_to: document.getElementById('sfEpRedirect').value.trim() };
+        payload = { address: document.getElementById('sfEpAddr').value.trim(), redirect_to: document.getElementById('sfEpRedirect').value.trim(), http3: document.getElementById('sfEpHttp3')?.checked || false };
     } else if (section === 'resolvers') {
         name    = document.getElementById('sfResName').value.trim();
         payload = { email: document.getElementById('sfResEmail').value.trim(), storage: document.getElementById('sfResStorage').value.trim(), challenge_type: document.getElementById('sfResChallenge').value, provider: document.getElementById('sfResProvider').value.trim(), http_entrypoint: document.getElementById('sfResHttpEp').value.trim() };
@@ -5089,6 +5434,11 @@ function _buildStaticTabHTML() {
             <div>
                 <label class="text-xs block mb-1" style="color:var(--muted)">HTTP → HTTPS redirect <span style="color:var(--muted);font-weight:400">(optional)</span></label>
                 <input id="sfEpRedirect" type="text" class="input-field text-sm" placeholder="Name of the HTTPS entrypoint to redirect to, e.g. websecure">
+            </div>
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="sfEpHttp3" class="rounded" style="accent-color:var(--blue)">
+                <span class="text-xs" style="color:var(--text)">Enable HTTP/3 (QUIC)</span>
+                <span class="text-xs" style="color:var(--muted)">- adds <code class="font-mono">http3: {}</code> to this entrypoint</span>
             </div>
             <div class="flex gap-2 justify-end pt-1">
                 <button onclick="closeStaticForm('entrypoints')" class="btn-secondary text-xs">Cancel</button>

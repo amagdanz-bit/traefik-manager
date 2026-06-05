@@ -262,10 +262,12 @@ Add routes, manage middlewares, monitor services, and view TLS certificates - al
 - **Advanced rule editor** - toggle between a domain chip builder and a free-text rule input for complex expressions (`PathPrefix`, `HostRegexp`, `&&` / `||` compounds, etc.)
 - **Multiple domains per route** - select any combination of your configured domains; generates multi-host Traefik rules (`Host(\`sub.d1\`) || Host(\`sub.d2\`)`)
 - **Per-service insecureSkipVerify** - checkbox adds a named `serversTransport` for backends with self-signed certs (Proxmox, Kasm, etc.); yellow TLS skip badge shown on route cards
+- **Wildcard certificate domains** - "Request wildcard certificate" checkbox auto-fills `tls.domains` from the selected domain; use with DNS challenge resolvers to request `*.domain.com` certs
+- **TLS Options tab** - create and manage named `tls.options` profiles (min/max version, cipher suites, curve preferences, SNI strict, ALPN, mTLS client auth); assign a profile to any route via the route form
 - **23 middleware wizard templates** with guided form fields (Basic Auth, Forward Auth, Rate Limit, IP Allowlist, Secure Headers, CORS, Redirect, Strip/Add Prefix, Retry, Circuit Breaker, Buffering, and more) - toggle to raw YAML for anything else
 - **Route clone** - duplicate a route into the add modal pre-filled with its service URL, middlewares, and entrypoints
 - **Multi-config file support** - mount several dynamic config files with `CONFIG_DIR` or `CONFIG_PATHS`; a dropdown selects which file each route or middleware is saved to; **create new files on the fly** when `CONFIG_DIR` is set
-- Timestamped backups before every change; one-click restore from Settings
+- **Timestamped backups** before every change; one-click restore from Settings; `POST /api/backup/create` and `POST /api/backup/static/create` for automation
 
 **Live Dashboard**
 - Real-time stats: router counts, service health, entrypoints, Traefik version

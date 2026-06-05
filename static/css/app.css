@@ -450,6 +450,9 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); 
 .rm-group-expanded .rm-group-caret { transform: rotate(180deg); }
 .rm-mw-count { margin-left: auto; font-size: 9px; font-weight: 700; background: rgba(255,255,255,0.2); border-radius: 4px; padding: 1px 4px; flex-shrink: 0; }
 
+.tm-info-btn { display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;cursor:default;color:var(--muted);flex-shrink:0;position:relative; }
+.tm-info-btn:hover { color:var(--blue); }
+.tm-info-btn[data-tip]:hover::after { content:attr(data-tip);position:absolute;right:0;top:calc(100% + 6px);background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11px;line-height:1.5;color:var(--text);white-space:normal;width:240px;z-index:9999;box-shadow:0 6px 20px rgba(0,0,0,0.35);pointer-events:none;text-transform:none;font-weight:400;letter-spacing:0; }
 .rm-tooltip { position: absolute; z-index: 9999; display: none; min-width: 200px; max-width: 320px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); pointer-events: none; }
 .rm-tooltip-name { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
 .rm-tooltip-row { display: flex; align-items: flex-start; gap: 8px; margin-top: 5px; font-size: 11px; }
@@ -728,11 +731,13 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); 
 .svc-list-row:hover { background: var(--input-bg); }
 .svc-list-col-status { display: flex; align-items: center; justify-content: center; }
 .svc-list-col-proto { display: flex; align-items: center; gap: 5px; }
-.svc-list-col-name { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svc-list-col-name { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .svc-list-col-provider,
 .svc-list-col-servers,
 .svc-list-col-usedby { display: flex; align-items: center; }
-.route-list-grid { grid-template-columns: 20px 110px 1fr 200px 160px 100px auto; }
+.route-list-grid,
+.svc-list-header.route-list-grid,
+.svc-list-row.route-list-grid { grid-template-columns: 20px 110px 1fr 200px 160px 80px 180px 96px; }
 .mw-list-grid { grid-template-columns: 80px 1fr 1fr 120px; }
 
 /* Responsive */

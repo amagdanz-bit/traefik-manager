@@ -49,6 +49,7 @@
                                 <option value="forwardAuthAuthentik">Forward Auth (Authentik)</option>
                                 <option value="forwardAuthAuthelia">Forward Auth (Authelia)</option>
                                 <option value="forwardAuthGatekeeper">Forward Auth (Gatekeeper)</option>
+                                <option value="oidcAuth">OIDC Auth (traefik-oidc-auth)</option>
                             </optgroup>
                             <optgroup label="Security">
                                 <option value="ipAllowList">IP Allow List</option>
@@ -136,11 +137,63 @@
                             <input type="checkbox" id="wizGkTrust" class="rounded" style="accent-color:var(--blue)">
                             <span class="text-sm" style="color:var(--text)">Trust Forward Header</span>
                         </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="wizGkAuthorization" class="rounded" style="accent-color:var(--blue)">
+                            <span class="text-sm" style="color:var(--text)">Forward Authorization header</span>
+                        </div>
                         <div>
                             <label>Auth Response Headers <span class="text-xs font-normal" style="color:var(--muted)">(one per line)</span></label>
                             <textarea id="wizGkHeaders" class="input-field font-mono text-xs" rows="4">X-Auth-User
 X-Auth-Email
 X-Auth-Groups</textarea>
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-oidcAuth" class="mw-wiz-form space-y-3" style="display:none">
+                        <div class="rounded-md px-3 py-2 text-xs" style="background:rgba(163,113,247,0.08);border:1px solid rgba(163,113,247,0.25);color:var(--purple)">
+                            <i class="ph-bold ph-info mr-1"></i>Requires the <code class="font-mono">sevensolutions/traefik-oidc-auth</code> plugin installed via the Plugins tab.
+                        </div>
+                        <div class="grid grid-cols-1 gap-3">
+                            <div>
+                                <label>Provider URL</label>
+                                <input type="text" id="wizOidcProviderUrl" class="input-field font-mono text-sm" placeholder="https://login.microsoftonline.com/{tenant}/v2.0">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label>Client ID</label>
+                                    <input type="text" id="wizOidcClientId" class="input-field font-mono text-sm" placeholder="client-id">
+                                </div>
+                                <div>
+                                    <label>Client Secret</label>
+                                    <input type="text" id="wizOidcClientSecret" class="input-field font-mono text-sm" placeholder="client-secret">
+                                </div>
+                            </div>
+                            <div>
+                                <label>Session Secret <span class="text-xs font-normal" style="color:var(--muted)">(32+ character random string)</span></label>
+                                <input type="text" id="wizOidcSecret" class="input-field font-mono text-sm" placeholder="change-me-with-own-32-character-secret">
+                            </div>
+                            <div>
+                                <label>Scopes <span class="text-xs font-normal" style="color:var(--muted)">(one per line)</span></label>
+                                <textarea id="wizOidcScopes" class="input-field font-mono text-xs" rows="3">openid
+profile
+email</textarea>
+                            </div>
+                            <div>
+                                <label>Session Max Age <span class="text-xs font-normal" style="color:var(--muted)">(seconds)</span></label>
+                                <input type="number" id="wizOidcSessionMaxAge" class="input-field" value="86400" min="0">
+                            </div>
+                            <div>
+                                <label>Forward Claims as Headers <span class="text-xs font-normal" style="color:var(--muted)">(Name: claim, one per line)</span></label>
+                                <textarea id="wizOidcHeaders" class="input-field font-mono text-xs" rows="4">X-Forwarded-User: preferred_username
+X-Forwarded-Email: email
+X-Forwarded-Name: name</textarea>
+                                <p class="text-xs mt-1" style="color:var(--muted)">Format: <code class="font-mono">Header-Name: claim_field</code></p>
+                            </div>
+                            <div>
+                                <label>Bypass Rules <span class="text-xs font-normal" style="color:var(--muted)">(regex, one per line - optional)</span></label>
+                                <textarea id="wizOidcBypass" class="input-field font-mono text-xs" rows="3" placeholder="^/health$&#10;^/metrics$&#10;^/api/public/.*"></textarea>
+                                <p class="text-xs mt-1" style="color:var(--muted)">Paths matching these patterns skip authentication.</p>
+                            </div>
                         </div>
                     </div>
 

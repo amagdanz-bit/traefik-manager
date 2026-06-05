@@ -119,7 +119,10 @@ window.rmEnsureData = async function() {
             fetch('/api/dashboard/config')
         ]);
         const routeData = await routeRes.json();
-        _rmAllRoutes = routeData.apps || [];
+        _rmAllRoutes = (routeData.apps || []).map(r => ({
+            ...r,
+            middlewares: [...new Set([...(r.middlewares || []), ...(r.entrypointMiddlewares || [])])]
+        }));
         try {
             const epData = await epRes.json();
             _rmAllEps = Array.isArray(epData)
