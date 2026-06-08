@@ -14,6 +14,7 @@ The first thing the script asks is what you want to install:
 What would you like to install?
   1) Traefik + Traefik Manager (full stack)
   2) Traefik Manager only
+  3) Traefik Manager Agent
 ```
 
 If you choose **Traefik Manager only**, it then asks how to deploy it:
@@ -54,16 +55,16 @@ Your base domain and subdomains for:
 
 **TLS / Certificates**
 
-| Option | Description |
-|---|---|
-| Let's Encrypt - HTTP challenge | Port 80 must be open. Simplest for most setups. |
-| Let's Encrypt - DNS: Cloudflare | Requires a Cloudflare API token. Works without port 80. |
-| Let's Encrypt - DNS: Route 53 | Requires AWS access key and secret. |
-| Let's Encrypt - DNS: DigitalOcean | Requires a DigitalOcean API token. |
-| Let's Encrypt - DNS: Namecheap | Requires Namecheap API user and key. |
-| Let's Encrypt - DNS: DuckDNS | Requires a DuckDNS token. |
-| Let's Encrypt - DNS: deSEC | Requires a deSEC token. Works without port 80. |
-| No TLS (HTTP only) | Port 80 only. Suitable for internal LAN use. |
+| Option                            | Description                                             |
+| -----------------------------------| ---------------------------------------------------------|
+| Let's Encrypt - HTTP challenge    | Port 80 must be open. Simplest for most setups.         |
+| Let's Encrypt - DNS: Cloudflare   | Requires a Cloudflare API token. Works without port 80. |
+| Let's Encrypt - DNS: Route 53     | Requires AWS access key and secret.                     |
+| Let's Encrypt - DNS: DigitalOcean | Requires a DigitalOcean API token.                      |
+| Let's Encrypt - DNS: Namecheap    | Requires Namecheap API user and key.                    |
+| Let's Encrypt - DNS: DuckDNS      | Requires a DuckDNS token.                               |
+| Let's Encrypt - DNS: deSEC        | Requires a deSEC token. Works without port 80.          |
+| No TLS (HTTP only)                | Port 80 only. Suitable for internal LAN use.            |
 
 **Dynamic config layout**
 
@@ -271,6 +272,65 @@ git pull
 venv/bin/pip install -q -r requirements.txt gunicorn
 sudo systemctl restart traefik-manager
 ```
+
+---
+
+## Mode 4 - Traefik Manager Agent
+
+Installs the [TMA agent](agent.md) on a remote server so a central Traefik Manager can manage it. This mode does not install TM itself.
+
+### Install methods
+
+After choosing **Traefik Manager Agent**, the script asks which install method to use:
+
+```
+Install method
+  1) Docker - Agent only (agent alongside existing Traefik)
+  2) Docker - Agent + Traefik (deploy both together)
+  3) Binary - Agent only (systemd service, no Docker)
+```
+
+### What the script asks
+
+1. **API key** - generate this in your TM Settings - Agents before running the script
+2. **Traefik API URL** - where the agent can reach Traefik (default: `http://traefik:8080`)
+3. **Dynamic config path** - where Traefik reads config files (default: `/app/config`)
+4. **Static config path** - optional, enables static config editing
+5. **Optional paths** - ACME/certs, access log, plugins dir
+6. **Restart method** - how the agent should restart Traefik after static config changes
+7. **CrowdSec** - optional, connect to a local CrowdSec instance
+8. **Git backup** - optional, autonomous git backup for this server's configs
+9. **Install directory and port**
+
+### Docker output
+
+The script generates a `docker-compose.yml` with only the env vars and volume mounts needed for the options you enabled, then runs `docker compose up -d`.
+
+### Binary output
+
+Downloads the `tma` binary from GitHub Releases and writes a systemd unit with all `Environment=` lines, then runs `systemctl enable --now tma`.
+
+### Useful commands
+
+**Docker:**
+```bash
+cd /opt/traefik-manager-agent
+docker compose logs -f
+docker compose pull && docker compose up -d
+```
+
+**Binary:**
+```bash
+sudo systemctl status tma
+sudo journalctl -u tma -f
+sudo systemctl restart tma
+```
+
+### Next steps after install
+
+1. In TM Settings - Agents, click **Add Agent**
+2. Enter the agent URL (e.g. `http://server-ip:8090`) and the API key
+3. Use the **server switcher** in the TM nav bar to switch to this agent
 
 ---
 

@@ -293,6 +293,13 @@ Add routes, manage middlewares, monitor services, and view TLS certificates - al
 - **CrowdSec** - active decisions (bans, captchas, bypasses) and recent alerts from a CrowdSec LAPI; unban IPs with one click. Configure via `CROWDSEC_LAPI_URL` / `CROWDSEC_API_KEY` env vars or **Settings → System Monitoring → CrowdSec**
 - **Configurable file paths** - set `acme.json`, access log, and static config paths from **Settings → File Paths** without a container restart; UI setting takes priority over env vars
 
+**Multi-Server Management**
+- **Traefik Manager Agent (TMA)** - lightweight Go daemon that runs alongside Traefik on any remote server; install it in seconds with the one-liner installer
+- **Server switcher** in the nav bar - switch between local and remote agents; all data tabs show that server's routes, services, middlewares, backups, and logs
+- **Settings → Agents** multi-step wizard - generates a ready-to-paste Docker Compose or systemd unit with all env vars pre-filled; API key shown once and stored encrypted
+- **Per-server git backup** - each agent handles its own autonomous git cycle via env vars; viewed from TM when that agent is active
+- Manage unlimited remote Traefik instances from a single TM - no VPN or SSH required
+
 **Security**
 - bcrypt passwords (cost 12), CSRF protection, session management with session fixation protection
 - Optional TOTP 2FA · 7-day remember me · configurable inactivity timeout
@@ -363,11 +370,12 @@ Open **http://your-server:5000** - the setup wizard will guide you through the r
 
 | Runtime                                                                                                              | Guide                                                                                                                 |
 | ----------------------------------------------------------------------------------------------------------------------| -----------------------------------------------------------------------------------------------------------------------|
-| <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/windows-terminal.png" width="20" height="20"> Installer | [One-liner: full stack, TM-only Docker, TM-only Linux service](https://traefik-manager.xyzlab.dev/traefik-stack.html) |
+| <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/windows-terminal.png" width="20" height="20"> Installer | [One-liner: full stack, TM-only Docker, TM-only Linux service, Agent](https://traefik-manager.xyzlab.dev/traefik-stack.html) |
 | <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/docker.png" width="20" height="20"> Docker              | [Docker Compose setup, networking, behind Traefik](https://traefik-manager.xyzlab.dev/docker.html)                    |
 | <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/podman.png" width="20" height="20"> Podman              | [Rootless, Quadlet/systemd, SELinux labels](https://traefik-manager.xyzlab.dev/podman.html)                           |
 | <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/linux.png" width="20" height="20"> Linux                | [Native Python + systemd, no container required](https://traefik-manager.xyzlab.dev/linux.html)                       |
 | <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/unraid.png" width="20" height="20"> Unraid              | [Community Applications template, networking, multi-config](https://traefik-manager.xyzlab.dev/unraid.html)           |
+| <i>Agent</i>                                                                                                         | [TMA - remote agent for multi-server management](https://traefik-manager.xyzlab.dev/agent.html)                       |
 
 ---
 

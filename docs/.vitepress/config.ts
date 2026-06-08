@@ -75,6 +75,13 @@ export default defineConfig({
         ],
       },
       {
+        text: 'Multi-Server (Agent)',
+        items: [
+          { text: 'Traefik Manager Agent', link: '/agent' },
+          { text: 'Agent API Reference', link: '/api-agent' },
+        ],
+      },
+      {
         text: 'Management',
         collapsed: true,
         items: [

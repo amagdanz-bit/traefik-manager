@@ -115,7 +115,7 @@ window.rmEnsureData = async function() {
     try {
         const [routeRes, epRes, cfgRes] = await Promise.all([
             fetch('/api/routes/all'),
-            fetch('/api/traefik/entrypoints'),
+            agentFetch('/api/traefik/entrypoints'),
             fetch('/api/dashboard/config')
         ]);
         const routeData = await routeRes.json();

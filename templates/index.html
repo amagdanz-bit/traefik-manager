@@ -401,6 +401,122 @@ function _csrfHeaders() {
     const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
     return { 'X-CSRF-Token': token };
 }
+
+let _activeAgent = null;
+const _agentRegistry = {};
+let _agentList = [];
+const _agentHealthCache = {};
+
+function agentFetch(path, opts) {
+    if (!_activeAgent) return fetch(path, opts);
+    const proxyPath = '/api/agents/proxy/' + _activeAgent.id + '/' + path.replace(/^\/api\//, '');
+    return fetch(proxyPath, { ...opts, headers: { ...(opts && opts.headers), ..._csrfHeaders() } });
+}
+
+function _renderServerSwitcherList(runHealthChecks) {
+    const agents = _agentList;
+    const wrap = document.getElementById('serverSwitcherWrap');
+    const list = document.getElementById('serverSwitcherList');
+    if (!wrap || !list) return;
+    wrap.style.display = agents.length ? '' : 'none';
+    const localActive = !_activeAgent;
+    list.innerHTML = `
+        <div class="notif-item${localActive ? ' active' : ''}" onclick="switchServer(null)" style="cursor:pointer;${localActive?'background:var(--input-bg);':''}">
+            <div class="flex items-center gap-2 py-1">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:var(--green)"></span>
+                <span class="text-xs font-medium" style="color:var(--text)">Local</span>
+                ${localActive ? '<i class="ph-bold ph-check text-xs ml-auto" style="color:var(--blue)"></i>' : ''}
+            </div>
+        </div>` +
+        agents.map(a => {
+            const active = _activeAgent && _activeAgent.id === a.id;
+            const dotColor = _agentHealthCache[a.id] || 'var(--muted)';
+            return `<div class="notif-item${active?' active':''}" onclick="switchServer('${a.id}')" style="cursor:pointer;${active?'background:var(--input-bg);':''}">
+                <div class="flex items-center gap-2 py-1">
+                    <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${dotColor}" id="ss-dot-${a.id}"></span>
+                    <div style="min-width:0;flex:1;">
+                        <div class="text-xs font-medium truncate" style="color:var(--text)">${_esc(a.name)}</div>
+                        <div class="text-xs truncate font-mono" style="color:var(--muted)">${_esc(a.url)}</div>
+                    </div>
+                    ${active ? '<i class="ph-bold ph-check text-xs ml-auto flex-shrink-0" style="color:var(--blue)"></i>' : ''}
+                </div>
+            </div>`;
+        }).join('');
+    if (runHealthChecks) {
+        agents.forEach(a => fetch('/api/agents/' + a.id + '/health').then(r => r.json()).then(d => {
+            _agentHealthCache[a.id] = d.ok ? 'var(--green)' : 'var(--red)';
+            const dot = document.getElementById('ss-dot-' + a.id);
+            if (dot) dot.style.background = _agentHealthCache[a.id];
+        }).catch(() => { _agentHealthCache[a.id] = 'var(--red)'; }));
+    }
+}
+
+function _updateServerSwitcherList(agents) {
+    agents.forEach(a => _agentRegistry[a.id] = a);
+    _agentList = agents;
+    _renderServerSwitcherList(true);
+}
+
+function switchServer(agentId) {
+    const agent = agentId ? (_agentRegistry[agentId] || null) : null;
+    _activeAgent = agent;
+    const label = document.getElementById('serverSwitcherLabel');
+    if (label) label.textContent = agent ? agent.name : 'Local';
+    document.getElementById('serverSwitcherMenu')?.classList.remove('open');
+    const chip = document.getElementById('agentServerLabel');
+    if (chip) { chip.textContent = agent ? agent.name : ''; chip.style.display = agent ? '' : 'none'; }
+    _renderServerSwitcherList(false);
+    if (typeof _staticSettingsLoaded !== 'undefined') _staticSettingsLoaded = false;
+    _refreshStaticAvailability();
+    refreshCurrentTab();
+}
+
+async function _refreshStaticAvailability() {
+    const sidebarBtn = document.getElementById('msb-static');
+    const mobileRow  = document.getElementById('msb-static-mobile');
+    try {
+        let available = false;
+        if (_activeAgent) {
+            const res = await agentFetch('/api/static');
+            available = res.ok;
+        } else {
+            const res  = await fetch('/api/static/available');
+            const data = await res.json();
+            available  = !!data.available;
+        }
+        if (sidebarBtn) sidebarBtn.style.display = available ? '' : 'none';
+        if (mobileRow)  mobileRow.style.display  = available ? '' : 'none';
+    } catch(e) {
+        if (_activeAgent) {
+            if (sidebarBtn) sidebarBtn.style.display = 'none';
+            if (mobileRow)  mobileRow.style.display  = 'none';
+        }
+    }
+}
+
+function _setAgentEditControls(_agentActive) {}
+
+function refreshCurrentTab() {
+    const active = document.querySelector('.tab-btn.active');
+    if (!active) return;
+    const tab = active.id.replace('btn-', '');
+    switchTab(tab);
+}
+
+function toggleServerMenu() {
+    const menu = document.getElementById('serverSwitcherMenu');
+    if (!menu) return;
+    const opening = !menu.classList.contains('open');
+    document.querySelectorAll('.notif-panel.open').forEach(p => p.classList.remove('open'));
+    if (opening) menu.classList.add('open');
+}
+
+document.addEventListener('click', e => {
+    const wrap = document.getElementById('serverSwitcherWrap');
+    if (wrap && !wrap.contains(e.target)) {
+        document.getElementById('serverSwitcherMenu')?.classList.remove('open');
+    }
+});
 </script>
 
 <script>
@@ -1086,7 +1202,9 @@ async function saveRouteAjax(event) {
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
-        const res = await fetch(form.action, { method:'POST', headers:{'X-Requested-With':'fetch'}, body: new FormData(form) });
+        const fd = new FormData(form);
+        if (_activeAgent) fd.append('agent_id', _activeAgent.id);
+        const res = await fetch(form.action, { method:'POST', headers:{'X-Requested-With':'fetch'}, body: fd });
         const json = await res.json();
         closeModal();
         showToast(json.message, json.ok ? 'success' : 'error');
@@ -1115,7 +1233,9 @@ async function saveMwAjax(event) {
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
-        const res = await fetch(form.action, { method:'POST', headers:{'X-Requested-With':'fetch'}, body: new FormData(form) });
+        const fd = new FormData(form);
+        if (_activeAgent) fd.append('agent_id', _activeAgent.id);
+        const res = await fetch(form.action, { method:'POST', headers:{'X-Requested-With':'fetch'}, body: fd });
         const json = await res.json();
         closeMwModal();
         showToast(json.message, json.ok ? 'success' : 'error');
@@ -1132,6 +1252,7 @@ async function deleteRoute(id, configFile) {
     const data = new FormData();
     data.append('csrf_token', document.querySelector('meta[name="csrf-token"]')?.content || '');
     if (configFile) data.append('configFile', configFile);
+    if (_activeAgent) data.append('agent_id', _activeAgent.id);
     try {
         const res = await fetch('/delete/' + encodeURIComponent(id), { method:'POST', headers:{'X-Requested-With':'fetch'}, body: data });
         const json = await res.json();
@@ -1145,6 +1266,7 @@ async function deleteMw(name, configFile) {
     const data = new FormData();
     data.append('csrf_token', document.querySelector('meta[name="csrf-token"]')?.content || '');
     if (configFile) data.append('configFile', configFile);
+    if (_activeAgent) data.append('agent_id', _activeAgent.id);
     try {
         const res = await fetch('/delete-middleware/' + encodeURIComponent(name), { method:'POST', headers:{'X-Requested-With':'fetch'}, body: data });
         const json = await res.json();
@@ -1160,7 +1282,7 @@ async function toggleRoute(id, currentlyEnabled, silent = false) {
         const res = await fetch('/api/routes/' + encodeURIComponent(id) + '/toggle', {
             method: 'POST',
             headers: { 'X-Requested-With': 'fetch', 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enable: !currentlyEnabled, csrf_token: document.querySelector('meta[name="csrf-token"]')?.content || '' })
+            body: JSON.stringify({ enable: !currentlyEnabled, agent_id: _activeAgent ? _activeAgent.id : '', csrf_token: document.querySelector('meta[name="csrf-token"]')?.content || '' })
         });
         const json = await res.json();
         if (json.ok) {
@@ -1174,13 +1296,20 @@ async function toggleRoute(id, currentlyEnabled, silent = false) {
 
 async function refreshRoutes() {
     try {
-        const res = await fetch('/api/routes');
+        let res;
+        if (_activeAgent) {
+            res = await fetch('/api/agents/' + _activeAgent.id + '/routes', { headers: {'X-Requested-With': 'fetch'} });
+        } else {
+            res = await fetch('/api/routes');
+        }
         const data = await res.json();
         renderRouteGrid(data.apps || []);
         renderMwGrid(data.middlewares || []);
         loadOverviewStats();
     } catch(e) {}
 }
+
+function _setAgentBanner(_show) {}
 
 async function pingAllRoutes() {
     const cards = Array.from(document.querySelectorAll('.route-card')).filter(c => c.dataset.protocol === 'http');
@@ -1911,12 +2040,12 @@ let _currentVersion = null;
 async function loadOverviewStats() {
     try {
         const [overview, routers, services, middlewares, version, entrypoints] = await Promise.allSettled([
-            fetch('/api/traefik/overview').then(r => r.json()),
-            fetch('/api/traefik/routers').then(r => r.json()),
-            fetch('/api/traefik/services').then(r => r.json()),
-            fetch('/api/traefik/middlewares').then(r => r.json()),
-            fetch('/api/traefik/version').then(r => r.json()),
-            fetch('/api/traefik/entrypoints').then(r => r.json()),
+            agentFetch('/api/traefik/overview').then(r => r.json()),
+            agentFetch('/api/traefik/routers').then(r => r.json()),
+            agentFetch('/api/traefik/services').then(r => r.json()),
+            agentFetch('/api/traefik/middlewares').then(r => r.json()),
+            agentFetch('/api/traefik/version').then(r => r.json()),
+            agentFetch('/api/traefik/entrypoints').then(r => r.json()),
         ]);
 
         
@@ -2149,12 +2278,12 @@ async function loadOverviewStats() {
     }
 
     
-    fetch('/api/traefik/certs').then(r => r.json()).then(res => {
+    agentFetch('/api/traefik/certs').then(r => r.json()).then(res => {
         const n = (res.certs || []).length;
         document.getElementById('certsTabCount').textContent = n || '-';
     }).catch(() => {});
 
-    fetch('/api/traefik/plugins').then(r => r.json()).then(res => {
+    agentFetch('/api/traefik/plugins').then(r => r.json()).then(res => {
         const n = (res.plugins || []).length;
         document.getElementById('pluginsTabCount').textContent = n || '-';
     }).catch(() => {});
@@ -2488,7 +2617,12 @@ async function refreshLiveView() {
     container.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i><p>Loading services...</p></div>`;
 
     try {
-        const res = await fetch('/api/traefik/services').then(r => r.json());
+        const r = await agentFetch('/api/traefik/services');
+        const res = await r.json();
+        if (res.error) {
+            container.innerHTML = `<div class="text-center py-16 rounded-xl" style="color:var(--muted);border:1px solid var(--border)"><i class="ph-light ph-plug-slash text-5xl block mb-3 opacity-30"></i><p class="font-medium">Traefik API not reachable</p><p class="text-sm mt-2 font-mono px-4" style="color:var(--text-secondary);word-break:break-all">${_esc(res.error)}</p></div>`;
+            return;
+        }
         const http = (res.http || []).map(s => ({ ...s, _proto: 'HTTP' }));
         const tcp  = (res.tcp  || []).map(s => ({ ...s, _proto: 'TCP' }));
         const udp  = (res.udp  || []).map(s => ({ ...s, _proto: 'UDP' }));
@@ -2829,9 +2963,9 @@ async function openRouteDetail(name, protocol, appData) {
     try {
         
         const [routersRes, servicesRes, entrypointsRes] = await Promise.allSettled([
-            fetch('/api/traefik/routers').then(r => r.json()),
-            fetch('/api/traefik/services').then(r => r.json()),
-            fetch('/api/traefik/entrypoints').then(r => r.json()),
+            agentFetch('/api/traefik/routers').then(r => r.json()),
+            agentFetch('/api/traefik/services').then(r => r.json()),
+            agentFetch('/api/traefik/entrypoints').then(r => r.json()),
         ]);
 
         let liveRouter = null, liveService = null, entrypoints = [];
@@ -3322,11 +3456,14 @@ async function refreshPluginsTab() {
     const container = document.getElementById('pluginsContent');
     container.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i><p>Loading plugins...</p></div>`;
     try {
+        const availP = _activeAgent
+            ? Promise.resolve({ available: false })
+            : fetch('/api/static/available').then(r => r.json());
         const [res, avail] = await Promise.all([
-            fetch('/api/traefik/plugins').then(r => r.json()),
-            fetch('/api/static/available').then(r => r.json()),
+            agentFetch('/api/traefik/plugins').then(r => r.json()),
+            availP,
         ]);
-        _pluginCanManage = avail.available === true;
+        _pluginCanManage = !_activeAgent && avail.available === true;
         const addBtn = document.getElementById('pluginAddBtnWrap');
         if (addBtn) addBtn.style.display = _pluginCanManage ? 'flex' : 'none';
 
@@ -3684,7 +3821,7 @@ async function refreshCertsTab() {
     const container = document.getElementById('certsContent');
     container.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i><p>Loading certificates...</p></div>`;
     try {
-        const res  = await fetch('/api/traefik/certs').then(r => r.json());
+        const res  = await agentFetch('/api/traefik/certs').then(r => r.json());
         const certs = Array.isArray(res.certs) ? res.certs : [];
 
         if (res.error && certs.length === 0) {
@@ -3968,8 +4105,8 @@ async function refreshCrowdSecTab() {
     altEl.innerHTML = spinner;
     try {
         const [decisions, alerts] = await Promise.all([
-            fetch('/api/crowdsec/decisions').then(r => r.json()),
-            fetch('/api/crowdsec/alerts').then(r => r.json()),
+            agentFetch('/api/crowdsec/decisions').then(r => r.json()),
+            agentFetch('/api/crowdsec/alerts').then(r => r.json()),
         ]);
         _csDecisions = Array.isArray(decisions) ? decisions : [];
         _csAlerts    = Array.isArray(alerts)    ? alerts    : [];
@@ -4112,7 +4249,7 @@ async function refreshLogs() {
     const container = document.getElementById('logsContent');
     container.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i><p>Loading logs...</p></div>`;
     try {
-        const res = await fetch(`/api/traefik/logs?lines=${_currentLogLines}`).then(r => r.json());
+        const res = await agentFetch(`/api/traefik/logs?lines=${_currentLogLines}`).then(r => r.json());
         if (res.error) {
             container.innerHTML = _emptyMountState({
                 icon: 'ph-terminal',
@@ -4394,14 +4531,7 @@ function _initMobileFilterBars() {
     } catch(e) {
         applyTabVisibility({});
     }
-    try {
-        const res  = await fetch('/api/static/available');
-        const data = await res.json();
-        const sidebarBtn = document.getElementById('msb-static');
-        if (sidebarBtn) sidebarBtn.style.display = data.available ? '' : 'none';
-        const mobileStaticRow = document.getElementById('msb-static-mobile');
-        if (mobileStaticRow) mobileStaticRow.style.display = data.available ? '' : 'none';
-    } catch(e) {}
+    _refreshStaticAvailability();
     if (typeof applyUiPrefs === 'function') applyUiPrefs();
     if (typeof _applyDocsLinkVisibility === 'function') _applyDocsLinkVisibility();
     _initMobileFilterBars();
@@ -4409,6 +4539,7 @@ function _initMobileFilterBars() {
     loadOverviewStats();
     checkManagerVersion();
     fetchNotifications();
+    fetch('/api/agents').then(r => r.json()).then(d => _updateServerSwitcherList(d.agents || [])).catch(() => {});
     setInterval(fetchNotifications, 60000);
 })();
 
@@ -4705,11 +4836,12 @@ function openStaticYamlPopout() {
 async function openStaticYamlPopoutFromShortcut() {
     if (!_staticRawContent) {
         try {
-            const res  = await fetch('/api/static/config');
+            const res  = await agentFetch(_activeAgent ? '/api/static' : '/api/static/config');
             const data = await res.json();
-            if (data.raw) {
-                _staticRawContent = data.raw;
-                _staticOriginalContent = data.raw;
+            const raw  = _activeAgent ? data.content : data.raw;
+            if (raw) {
+                _staticRawContent = raw;
+                _staticOriginalContent = raw;
             }
         } catch(e) {}
     }
@@ -4828,11 +4960,10 @@ async function discardStaticChanges() {
 async function saveStaticConfig() {
     const content = _staticMonaco ? _staticMonaco.getValue() : _staticRawContent;
     try {
-        const res  = await fetch('/api/static/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
-            body: JSON.stringify({ content }),
-        });
+        const fetchFn = _activeAgent
+            ? () => agentFetch('/api/static', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) })
+            : () => fetch('/api/static/config', { method: 'POST', headers: { 'Content-Type': 'application/json', ..._csrfHeaders() }, body: JSON.stringify({ content }) });
+        const res  = await fetchFn();
         const data = await res.json();
         if (data.ok) {
             _staticRawContent = content;
@@ -4841,11 +4972,13 @@ async function saveStaticConfig() {
             _clearStaticPending();
             _showStaticRestartBanner();
             showToast('Static config saved', 'success');
-            try {
-                const r2 = await fetch('/api/static/config');
-                const d2 = await r2.json();
-                _renderStaticSections(d2.parsed);
-            } catch(e) {}
+            if (!_activeAgent) {
+                try {
+                    const r2 = await fetch('/api/static/config');
+                    const d2 = await r2.json();
+                    _renderStaticSections(d2.parsed);
+                } catch(e) {}
+            }
         } else {
             showToast(data.error || 'Save failed', 'error');
         }
@@ -4965,9 +5098,9 @@ async function _waitForReconnect(immediate = false) {
 async function triggerTraefikRestart() {
     _showRestartOverlay();
     try {
-        const res  = await fetch('/api/static/restart', {
+        const res  = await agentFetch('/api/static/restart', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+            headers: { 'Content-Type': 'application/json' },
         });
         const data = await res.json();
         if (data.ok) {
@@ -5767,12 +5900,13 @@ async function _loadStaticFromDisk() {
     const wrapper = document.getElementById('staticSettingsContent');
     if (!wrapper) return;
     try {
-        const fetches = [fetch('/api/static/config')];
+        const fetches = [_activeAgent ? agentFetch('/api/static') : fetch('/api/static/config')];
         if (!_traefikRuntime) fetches.push(fetch('/api/traefik/runtime').then(r => r.json()).catch(() => null));
         const results = await Promise.all(fetches);
         const res = results[0];
         if (results[1]) _traefikRuntime = results[1];
         const data = await res.json();
+        if (_activeAgent && data.content !== undefined) data.raw = data.content;
         if (data.error) {
             wrapper.innerHTML = `<div class="text-center py-16" style="color:var(--muted)">
                 <i class="ph-light ph-warning-circle text-4xl block mb-3 opacity-40"></i>
@@ -5783,10 +5917,25 @@ async function _loadStaticFromDisk() {
         if (_providerMonaco) { _providerMonaco.dispose(); _providerMonaco = null; }
         _staticRawContent = data.raw || '';
         _staticOriginalContent = _staticRawContent;
-        wrapper.innerHTML = _buildStaticTabHTML();
         _clearStaticPending();
         _staticPendingChanges = false;
         _hideStaticRestartBanner();
+        if (_activeAgent) {
+            const hdrAddBtn = document.getElementById('staticHdrAddBtn');
+            if (hdrAddBtn) hdrAddBtn.style.display = 'none';
+            wrapper.innerHTML = `<div class="text-center py-16" style="color:var(--muted)">
+                <i class="ph-light ph-sliders-horizontal text-4xl block mb-3 opacity-30"></i>
+                <p class="text-sm font-medium mb-2" style="color:var(--text)">Remote Static Config</p>
+                <p class="text-xs max-w-xs mx-auto mb-4">Section editing is not available for remote agents. Use the Raw YAML editor to view and edit the config.</p>
+                <button onclick="openStaticYamlPopout()" class="nav-btn text-xs">
+                    <i class="ph-bold ph-code"></i> Open Raw YAML Editor
+                </button>
+            </div>`;
+            return;
+        }
+        const hdrAddBtn = document.getElementById('staticHdrAddBtn');
+        if (hdrAddBtn) hdrAddBtn.style.display = '';
+        wrapper.innerHTML = _buildStaticTabHTML();
         _renderStaticSections(data.parsed || {});
         _renderEpRuntimeWarning();
         switchStaticSection(_staticActiveSection);

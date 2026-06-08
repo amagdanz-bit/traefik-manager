@@ -62,6 +62,12 @@ Variables marked ✅ **override** the corresponding `manager.yml` field on every
 | `CROWDSEC_LAPI_URL` | _(unset)_ | ✅ `crowdsec_lapi_url` | CrowdSec LAPI base URL (e.g. `http://crowdsec:8080`) |
 | `CROWDSEC_API_KEY` | _(unset)_ | ✅ `crowdsec_api_key` | CrowdSec bouncer API key (stored encrypted) |
 
+### Agents
+
+| Variable | Default | Override | Description |
+|---|---|---|---|
+| `AGENT_API_RATE_LIMIT` | `30` | - | Max requests/minute on `/api/agents/*` endpoints in TM (per IP) |
+
 ### Security
 
 | Variable | Default | Override | Description |

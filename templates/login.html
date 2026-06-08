@@ -533,6 +533,11 @@
                 <input type="text" id="s_self_service" placeholder="http://traefik-manager:5000" value="{{ detected_self_svc or 'http://traefik-manager:5000' }}">
                 <p class="field-hint">Internal URL Docker/Traefik uses to reach this container. Usually the service name on the same network.</p>
             </div>
+            <div class="field">
+                <label for="s_self_entrypoint">Entry point</label>
+                <input type="text" id="s_self_entrypoint" placeholder="websecure" value="{{ detected_self_entry_point or 'websecure' }}">
+                <p class="field-hint">Traefik entry point to attach this route to (e.g. <code style="font-family:monospace">websecure</code>, <code style="font-family:monospace">https</code>).</p>
+            </div>
 
             <div class="btn-row">
                 <button class="btn-secondary" onclick="goTo(1)">
@@ -691,8 +696,9 @@
             <input type="hidden" name="visible_tabs"         id="f_visible_tabs">
             <input type="hidden" name="password"          id="f_password">
             <input type="hidden" name="confirm"           id="f_confirm">
-            <input type="hidden" name="self_route_domain"  id="f_self_domain">
-            <input type="hidden" name="self_route_service" id="f_self_service">
+            <input type="hidden" name="self_route_domain"      id="f_self_domain">
+            <input type="hidden" name="self_route_service"     id="f_self_service">
+            <input type="hidden" name="self_route_entry_point" id="f_self_entrypoint">
         </form>
 
     </div>
@@ -855,8 +861,9 @@ function submitSetup() {
     document.getElementById('f_apiuser').value      = document.getElementById('s_apiuser').value.trim();
     document.getElementById('f_apipassword').value  = document.getElementById('s_apipassword').value;
     document.getElementById('f_visible_tabs').value = JSON.stringify(setupTabs);
-    document.getElementById('f_self_domain').value  = (document.getElementById('s_self_domain')?.value || '').trim();
-    document.getElementById('f_self_service').value = (document.getElementById('s_self_service')?.value || '').trim();
+    document.getElementById('f_self_domain').value      = (document.getElementById('s_self_domain')?.value      || '').trim();
+    document.getElementById('f_self_service').value     = (document.getElementById('s_self_service')?.value     || '').trim();
+    document.getElementById('f_self_entrypoint').value  = (document.getElementById('s_self_entrypoint')?.value  || '').trim() || 'websecure';
 
     if (!TEMP_PW_MODE) {
         const pw      = document.getElementById('s_password').value;

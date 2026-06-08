@@ -49,6 +49,10 @@
                     <span style="display:flex;align-items:center;gap:12px;"><i class="ph-bold ph-bell" style="color:var(--muted)"></i>Notifications</span>
                     <i class="ph-bold ph-caret-right" style="color:var(--muted)"></i>
                 </button>
+                <button class="settings-mobile-row" onclick="switchSettingsPanel('agents'); loadAgentsList()">
+                    <span style="display:flex;align-items:center;gap:12px;"><i class="ph-bold ph-robot" style="color:var(--muted)"></i>Agents</span>
+                    <i class="ph-bold ph-caret-right" style="color:var(--muted)"></i>
+                </button>
                 <button class="settings-mobile-row" onclick="switchSettingsPanel('about')">
                     <span style="display:flex;align-items:center;gap:12px;"><i class="ph-bold ph-info" style="color:var(--muted)"></i>About</span>
                     <i class="ph-bold ph-caret-right" style="color:var(--muted)"></i>
@@ -79,6 +83,9 @@
                 </button>
                 <button class="modal-sidebar-btn" id="msb-notifications" onclick="switchSettingsPanel('notifications', this)">
                     <i class="ph-bold ph-bell"></i> Notifications
+                </button>
+                <button class="modal-sidebar-btn" id="msb-agents" onclick="switchSettingsPanel('agents', this); loadAgentsList()">
+                    <i class="ph-bold ph-robot"></i> Agents
                 </button>
                 <button class="modal-sidebar-btn" id="msb-about" onclick="switchSettingsPanel('about', this)">
                     <i class="ph-bold ph-info"></i> About
@@ -479,7 +486,7 @@
 
                 <div class="modal-panel" id="mpanel-backups" style="gap:0;padding:0;overflow:hidden;">
                     <div style="display:flex;flex-direction:column;flex:1;min-height:0;">
-                        <div style="display:flex;gap:2px;padding:12px 16px 0;border-bottom:1px solid var(--border);flex-shrink:0;">
+                        <div style="display:flex;gap:2px;padding:12px 16px 0;border-bottom:1px solid var(--border);flex-shrink:0;align-items:flex-end;">
                             <button class="auth-sub-tab active" id="backup-tab-routes" onclick="switchBackupTab('routes', this)">
                                 <i class="ph-bold ph-path"></i> Dynamic Config
                             </button>
@@ -489,6 +496,7 @@
                             <button class="auth-sub-tab" id="backup-tab-git" onclick="switchBackupTab('git', this)">
                                 <i class="ph-bold ph-git-branch"></i> Git
                             </button>
+                            <span id="backupRemoteChip" style="display:none;margin-left:auto;margin-bottom:6px;font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;background:rgba(36,161,222,0.12);border:1px solid rgba(36,161,222,0.25);color:var(--blue)"></span>
                         </div>
                         <div id="backup-sub-routes" class="auth-sub-panel" style="display:flex;flex-direction:column;gap:0;">
                             <div class="flex items-center justify-between mb-3" style="flex-shrink:0;">
@@ -546,7 +554,10 @@
 
                                 <div id="gitStatusLine" class="text-xs mb-3 px-3 py-2 rounded-lg" style="background:var(--bg);border:1px solid var(--border);color:var(--muted);display:none;"></div>
 
-                                <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+                                <div id="gitEnvNote" style="display:none;" class="text-xs mb-3 px-3 py-2 rounded-lg" style="background:rgba(36,161,222,0.06);border:1px solid rgba(36,161,222,0.2);color:var(--muted)">
+                                    <i class="ph-bold ph-info" style="color:var(--blue)"></i> Git backup on this agent is configured via environment variables (<code>GIT_BACKUP_*</code>).
+                                </div>
+                                <div id="gitConfigForm" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
                                     <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background:var(--bg);border:1px solid var(--border);">
                                         <div>
                                             <div class="text-xs font-medium">Enable Git Backup</div>
@@ -586,7 +597,7 @@
                                         <div class="toggle-switch" id="toggle-git-autopush" onclick="toggleGitAutoPush()"><div class="toggle-knob"></div></div>
                                     </div>
                                 </div>
-                                <button onclick="saveGitBackupSettings()" class="nav-btn text-xs w-full justify-center mb-4">
+                                <button id="gitSaveSettingsBtn" onclick="saveGitBackupSettings()" class="nav-btn text-xs w-full justify-center mb-4">
                                     <i class="ph-bold ph-floppy-disk"></i> Save Git Settings
                                 </button>
 
@@ -788,6 +799,233 @@
                     </div>
                 </div>
 
+                <div class="modal-panel" id="mpanel-agents" style="gap:0;padding:0;overflow:hidden;">
+                    <div id="agentListView" style="display:flex;flex-direction:column;height:100%;">
+                        <div class="flex items-center justify-between px-4 py-3" style="border-bottom:1px solid var(--border);flex-shrink:0;">
+                            <div class="font-semibold text-sm" style="color:var(--text)">Remote Agents</div>
+                            <button onclick="startAddAgent()" class="btn-secondary text-xs py-1 px-2.5">
+                                <i class="ph-bold ph-plus text-xs"></i> Add Agent
+                            </button>
+                        </div>
+                        <div id="agentsListBody" style="flex:1;overflow-y:auto;padding:16px;">
+                            <div class="text-center py-8" style="color:var(--muted)">
+                                <i class="ph-light ph-robot text-4xl block mb-2 opacity-30"></i>
+                                <p class="text-xs">Loading agents…</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="agentWizardView" style="display:none;flex-direction:column;height:100%;">
+                        <div class="flex items-center gap-2 px-4 py-3" style="border-bottom:1px solid var(--border);flex-shrink:0;">
+                            <button onclick="cancelAddAgent()" class="btn-icon" style="margin-right:4px"><i class="ph-bold ph-caret-left text-sm"></i></button>
+                            <div class="font-semibold text-sm" id="agentWizardTitle" style="color:var(--text)">Add Agent</div>
+                            <div class="ml-auto flex items-center gap-1.5" id="agentWizardStepPills" style="color:var(--muted);font-size:11px;">
+                                <span id="wiz-step-pill-1" style="padding:2px 8px;border-radius:9999px;background:var(--blue);color:#fff;">1</span>
+                                <span id="wiz-step-pill-2" style="padding:2px 8px;border-radius:9999px;background:var(--border);color:var(--muted);">2</span>
+                                <span id="wiz-step-pill-3" style="padding:2px 8px;border-radius:9999px;background:var(--border);color:var(--muted);">3</span>
+                            </div>
+                        </div>
+                        <div style="flex:1;overflow-y:auto;padding:16px;">
+                            <div id="agentWizStep1">
+                                <p class="text-xs mb-4" style="color:var(--muted)">Enter the name and URL for this remote agent. The URL is where TMA is reachable from this Traefik Manager instance.</p>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="settings-section-label">Agent Name</label>
+                                        <input id="agentWizName" type="text" class="input-field text-xs" placeholder="e.g. Server 2" maxlength="100">
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Agent URL</label>
+                                        <input id="agentWizUrl" type="url" class="input-field text-xs" placeholder="https://server2.example.com:8090">
+                                        <p class="text-xs mt-1" style="color:var(--muted)">The public address where TMA is running on the remote server.</p>
+                                    </div>
+                                </div>
+                                <div id="agentWizStep1Err" class="text-xs mt-3 px-3 py-2 rounded" style="display:none;background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.3);color:var(--red)"></div>
+                                <div class="flex justify-end mt-5">
+                                    <button onclick="agentWizStep1Next()" class="btn-primary text-xs py-1.5 px-4" id="agentWizStep1Btn">Continue <i class="ph-bold ph-caret-right text-xs"></i></button>
+                                </div>
+                            </div>
+
+                            <div id="agentWizStep2" style="display:none;">
+                                <div class="px-3 py-2.5 rounded-lg mb-4 text-xs" style="background:rgba(240,136,62,0.1);border:1px solid rgba(240,136,62,0.3);color:var(--orange);">
+                                    <i class="ph-bold ph-warning mr-1"></i> Save this API key - it will not be shown again.
+                                </div>
+                                <div class="flex items-center gap-2 px-3 py-2.5 rounded-lg mb-4" style="background:var(--input-bg);border:1px solid var(--border);">
+                                    <code id="agentWizKeyDisplay" class="text-xs font-mono flex-1 break-all" style="color:var(--text)"></code>
+                                    <button onclick="copyAgentKey()" class="btn-icon flex-shrink-0" title="Copy"><i class="ph-bold ph-copy text-sm"></i></button>
+                                </div>
+                                <p class="text-xs mb-5" style="color:var(--muted)">Set <code style="color:var(--blue)">TMA_API_KEY</code> to this value in your agent's environment. The key is stored encrypted in TM settings.</p>
+                                <div class="flex justify-end">
+                                    <button onclick="agentWizStep2Next()" class="btn-primary text-xs py-1.5 px-4">I've saved the key <i class="ph-bold ph-caret-right text-xs"></i></button>
+                                </div>
+                            </div>
+
+                            <div id="agentWizStep3" style="display:none;">
+                                <p class="text-xs mb-3" style="color:var(--muted)">Configure paths and options, then copy the generated install commands to your remote server.</p>
+                                <div class="flex gap-1 mb-4 flex-wrap" id="agentCfgTabs">
+                                    <button class="auth-sub-tab active text-xs" onclick="switchAgentCfgTab('traefik',this)">Traefik</button>
+                                    <button class="auth-sub-tab text-xs" onclick="switchAgentCfgTab('paths',this)">Paths</button>
+                                    <button class="auth-sub-tab text-xs" onclick="switchAgentCfgTab('restart',this)">Restart</button>
+                                    <button class="auth-sub-tab text-xs" onclick="switchAgentCfgTab('git',this)">Git Backup</button>
+                                    <button class="auth-sub-tab text-xs" onclick="switchAgentCfgTab('crowdsec',this)">CrowdSec</button>
+                                </div>
+
+                                <div id="agentCfgPane-traefik" class="auth-sub-panel space-y-3" style="display:flex;flex-direction:column;">
+                                    <div>
+                                        <label class="settings-section-label">Traefik API URL</label>
+                                        <input id="agCfgTraefikUrl" type="text" class="input-field text-xs" value="http://traefik:8080" oninput="agentCfgChanged()">
+                                        <p class="text-xs mt-1" style="color:var(--muted)">Internal Traefik API - typically <code>http://traefik:8080</code> (not the public dashboard URL)</p>
+                                    </div>
+                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;background:var(--input-bg);border:1px solid var(--border)">
+                                        <div>
+                                            <div class="text-sm font-medium">Skip TLS Verification</div>
+                                            <div class="text-xs" style="color:var(--muted)">Disable cert check for HTTPS Traefik API URLs (use if self-signed or Cloudflare Origin cert)</div>
+                                        </div>
+                                        <div class="toggle-switch" id="agCfgInsecureTLS" onclick="this.classList.toggle('on');agentCfgChanged()"><div class="toggle-knob"></div></div>
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Dynamic Config Path</label>
+                                        <input id="agCfgConfigPath" type="text" class="input-field text-xs" value="/app/config" oninput="agentCfgChanged()">
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Static Config Path <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgStaticPath" type="text" class="input-field text-xs" placeholder="/etc/traefik/traefik.yml" oninput="agentCfgChanged()">
+                                    </div>
+                                </div>
+
+                                <div id="agentCfgPane-paths" class="auth-sub-panel space-y-3" style="display:none;flex-direction:column;">
+                                    <div>
+                                        <label class="settings-section-label">Backup Dir</label>
+                                        <input id="agCfgBackupDir" type="text" class="input-field text-xs" placeholder="/app/backups" oninput="agentCfgChanged()">
+                                        <p class="text-xs mt-1" style="color:var(--muted)">Where the agent stores local backup zips. Defaults to <code>/app/backups</code> - set a host path here to persist backups across container restarts.</p>
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">ACME / Certs Path <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgAcmePath" type="text" class="input-field text-xs" placeholder="/etc/traefik/acme.json" oninput="agentCfgChanged()">
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Access Log Path <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgLogPath" type="text" class="input-field text-xs" placeholder="/var/log/traefik/access.log" oninput="agentCfgChanged()">
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Plugins Dir <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgPluginsDir" type="text" class="input-field text-xs" placeholder="/etc/traefik/plugins" oninput="agentCfgChanged()">
+                                    </div>
+                                </div>
+
+                                <div id="agentCfgPane-restart" class="auth-sub-panel" style="display:none;">
+                                    <label class="settings-section-label mb-2">Restart Method</label>
+                                    <div class="flex gap-2 flex-wrap mb-3" id="restartMethodChips">
+                                        <button class="agent-chip active" onclick="selectRestartMethod('',this)">None</button>
+                                        <button class="agent-chip" onclick="selectRestartMethod('proxy',this)">Socket Proxy</button>
+                                        <button class="agent-chip" onclick="selectRestartMethod('poison-pill',this)">Poison Pill</button>
+                                        <button class="agent-chip" onclick="selectRestartMethod('socket',this)">Direct Socket</button>
+                                    </div>
+                                    <div id="restartProxyFields" class="space-y-2" style="display:none;">
+                                        <div>
+                                            <label class="settings-section-label">Docker Host</label>
+                                            <input id="agCfgDockerHost" type="text" class="input-field text-xs" placeholder="tcp://socket-proxy:2375" oninput="agentCfgChanged()">
+                                        </div>
+                                        <div>
+                                            <label class="settings-section-label">Container Name</label>
+                                            <input id="agCfgContainer" type="text" class="input-field text-xs" value="traefik" oninput="agentCfgChanged()">
+                                        </div>
+                                    </div>
+                                    <div id="restartPoisonPillFields" class="space-y-2" style="display:none;">
+                                        <div>
+                                            <label class="settings-section-label">Signal File Path</label>
+                                            <input id="agCfgSignalFile" type="text" class="input-field text-xs" placeholder="/signals/restart.sig" oninput="agentCfgChanged()">
+                                        </div>
+                                    </div>
+                                    <div id="restartSocketFields" style="display:none;">
+                                        <div>
+                                            <label class="settings-section-label">Container Name</label>
+                                            <input id="agCfgSocketContainer" type="text" class="input-field text-xs" value="traefik" oninput="agentCfgChanged()">
+                                        </div>
+                                        <p class="text-xs mt-1" style="color:var(--muted)">Requires <code>/var/run/docker.sock:/var/run/docker.sock:ro</code> volume.</p>
+                                    </div>
+                                </div>
+
+                                <div id="agentCfgPane-git" class="auth-sub-panel space-y-3" style="display:none;flex-direction:column;">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="agCfgGitEnabled" onchange="agentCfgChanged()">
+                                        <span class="text-xs font-medium" style="color:var(--text)">Enable Git Backup</span>
+                                    </label>
+                                    <div id="agentGitFields" class="space-y-2" style="display:none;">
+                                        <div>
+                                            <label class="settings-section-label">Repository URL</label>
+                                            <input id="agCfgGitRepo" type="text" class="input-field text-xs" placeholder="https://github.com/you/traefik-configs" oninput="agentCfgChanged()">
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <div style="flex:1">
+                                                <label class="settings-section-label">Branch</label>
+                                                <input id="agCfgGitBranch" type="text" class="input-field text-xs" value="main" oninput="agentCfgChanged()">
+                                            </div>
+                                            <div style="flex:1">
+                                                <label class="settings-section-label">Username</label>
+                                                <input id="agCfgGitUser" type="text" class="input-field text-xs" oninput="agentCfgChanged()">
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="settings-section-label">Access Token</label>
+                                            <input id="agCfgGitToken" type="password" class="input-field text-xs" placeholder="ghp_..." oninput="agentCfgChanged()">
+                                        </div>
+                                        <label class="flex items-center gap-2 cursor-pointer">
+                                            <input type="checkbox" id="agCfgGitAutoPush" checked onchange="agentCfgChanged()">
+                                            <span class="text-xs" style="color:var(--text)">Auto-push on config change</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div id="agentCfgPane-crowdsec" class="auth-sub-panel space-y-3" style="display:none;flex-direction:column;">
+                                    <div>
+                                        <label class="settings-section-label">LAPI URL <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgCsUrl" type="text" class="input-field text-xs" placeholder="http://crowdsec:8080" oninput="agentCfgChanged()">
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">API Key <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgCsKey" type="password" class="input-field text-xs" placeholder="bouncer-api-key" oninput="agentCfgChanged()">
+                                    </div>
+                                </div>
+
+                                <div id="agentRotateKeyBanner" style="display:none;" class="mt-4">
+                                    <div class="px-3 py-2.5 rounded-lg text-xs flex items-center gap-3" style="background:rgba(36,161,222,0.08);border:1px solid rgba(36,161,222,0.25);color:var(--muted)">
+                                        <i class="ph-bold ph-key flex-shrink-0" style="color:var(--blue)"></i>
+                                        <span style="flex:1">API key is hidden after first creation. Rotate to get a new one - this immediately invalidates the old key.</span>
+                                        <button id="agentRotateKeyBtn" onclick="rotateAgentKey()" class="btn-secondary text-xs py-1 px-2.5 flex-shrink-0" style="white-space:nowrap"><i class="ph-bold ph-arrows-clockwise text-xs"></i> Rotate Key</button>
+                                    </div>
+                                    <div id="agentRotatedKeyDisplay" style="display:none;" class="mt-2">
+                                        <div class="px-3 py-2 rounded-lg text-xs" style="background:rgba(248,81,73,0.08);border:1px solid rgba(248,81,73,0.3);color:var(--orange)"><i class="ph-bold ph-warning mr-1"></i> Save this new key - it will not be shown again. Your agent will stop working until you update it.</div>
+                                        <div class="flex items-center gap-2 px-3 py-2.5 rounded-lg mt-2" style="background:var(--input-bg);border:1px solid var(--border);">
+                                            <code id="agentRotatedKeyText" class="text-xs font-mono flex-1 break-all" style="color:var(--text)"></code>
+                                            <button onclick="copyRotatedKey()" class="btn-icon flex-shrink-0" title="Copy"><i class="ph-bold ph-copy text-sm"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-5 space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <div class="text-xs font-semibold" style="color:var(--muted)">Docker Compose</div>
+                                        <button onclick="copyAgentCompose()" class="btn-icon" title="Copy"><i class="ph-bold ph-copy text-xs"></i></button>
+                                    </div>
+                                    <pre id="agentComposeOutput" style="font-size:10px;line-height:1.5;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;color:var(--text);white-space:pre;margin:0;max-height:220px;overflow-y:auto;"></pre>
+                                    <div class="flex items-center justify-between mt-3">
+                                        <div class="text-xs font-semibold" style="color:var(--muted)">Docker Run</div>
+                                        <button onclick="copyAgentRun()" class="btn-icon" title="Copy"><i class="ph-bold ph-copy text-xs"></i></button>
+                                    </div>
+                                    <pre id="agentRunOutput" style="font-size:10px;line-height:1.5;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;color:var(--text);white-space:pre;margin:0;max-height:160px;overflow-y:auto;"></pre>
+                                </div>
+
+                                <div class="flex justify-between mt-5">
+                                    <button onclick="agentWizStep3Save()" class="btn-secondary text-xs py-1.5 px-4" id="agentWizSaveBtn">
+                                        <i class="ph-bold ph-floppy-disk text-xs"></i> Save Config
+                                    </button>
+                                    <button onclick="agentWizDone()" class="btn-primary text-xs py-1.5 px-4">Done <i class="ph-bold ph-check text-xs"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="modal-panel" id="mpanel-about">
                     <div class="space-y-4">
 
@@ -863,7 +1101,16 @@
 
 <script>
 
+function _backupFetch(path, opts) {
+    if (typeof agentFetch === 'function') return agentFetch(path, opts);
+    return fetch(path, opts);
+}
+
 async function createAndLoadStaticBackup() {
+    if (typeof _activeAgent !== 'undefined' && _activeAgent) {
+        showToast('Static config backup is included in the dynamic config backup for remote agents', 'info');
+        return;
+    }
     const btn = document.querySelector('[onclick="createAndLoadStaticBackup()"]');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph-light ph-spinner-gap animate-spin"></i> Creating…'; }
     try {
@@ -882,9 +1129,17 @@ async function createAndLoadStaticBackup() {
 }
 
 function switchBackupTab(id, btn) {
+    const isAgent = typeof _activeAgent !== 'undefined' && !!_activeAgent;
+    const staticTabBtn = document.getElementById('backup-tab-static');
+    if (staticTabBtn) staticTabBtn.style.display = isAgent ? 'none' : '';
+    const chip = document.getElementById('backupRemoteChip');
+    if (chip) { chip.textContent = isAgent ? _activeAgent.name : ''; chip.style.display = isAgent ? '' : 'none'; }
+    if (isAgent && id === 'static') id = 'routes';
     document.querySelectorAll('#mpanel-backups .auth-sub-tab').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('#mpanel-backups .auth-sub-panel').forEach(p => p.style.display = 'none');
-    if (btn) btn.classList.add('active');
+    if (btn && id !== 'static') btn.classList.add('active');
+    const activeTabBtn = document.getElementById('backup-tab-' + id);
+    if (activeTabBtn && isAgent && id !== 'static') activeTabBtn.classList.add('active');
     const panel = document.getElementById('backup-sub-' + id);
     if (panel) panel.style.display = 'flex';
     if (id === 'git') loadGitTab();
@@ -906,29 +1161,40 @@ function toggleGitAutoPush() {
 }
 
 async function loadGitTab() {
-    try {
-        const res  = await fetch('/api/settings');
-        const data = await res.json();
-        _gitBackupEnabled  = bool(data.git_backup_enabled);
-        _gitAutoPushEnabled = bool(data.git_backup_auto_push !== false);
-        const tog1 = document.getElementById('toggle-git-backup');
-        const tog2 = document.getElementById('toggle-git-autopush');
-        if (tog1) tog1.classList.toggle('on', _gitBackupEnabled);
-        if (tog2) tog2.classList.toggle('on', _gitAutoPushEnabled);
-        _setVal('gitBackupRepo',      data.git_backup_repo || '');
-        _setVal('gitBackupBranch',    data.git_backup_branch || 'main');
-        _setVal('gitBackupUsername',  data.git_backup_username || '');
-        _setVal('gitBackupCommitMsg', data.git_backup_commit_message || 'traefik-manager: {action} at {timestamp}');
-        const tokenSet = document.getElementById('gitTokenSet');
-        if (tokenSet) tokenSet.style.display = data.git_backup_token_set ? '' : 'none';
-    } catch(e) {}
+    const isAgent = typeof _activeAgent !== 'undefined' && !!_activeAgent;
+    const configForm    = document.getElementById('gitConfigForm');
+    const saveBtn       = document.getElementById('gitSaveSettingsBtn');
+    const resetBtn      = document.getElementById('gitResetBtn');
+    const envNote       = document.getElementById('gitEnvNote');
+    if (configForm) configForm.style.display = isAgent ? 'none' : 'flex';
+    if (saveBtn)    saveBtn.style.display    = isAgent ? 'none' : '';
+    if (resetBtn)   resetBtn.style.display   = isAgent ? 'none' : '';
+    if (envNote)    envNote.style.display    = isAgent ? '' : 'none';
+    if (!isAgent) {
+        try {
+            const res  = await fetch('/api/settings');
+            const data = await res.json();
+            _gitBackupEnabled  = bool(data.git_backup_enabled);
+            _gitAutoPushEnabled = bool(data.git_backup_auto_push !== false);
+            const tog1 = document.getElementById('toggle-git-backup');
+            const tog2 = document.getElementById('toggle-git-autopush');
+            if (tog1) tog1.classList.toggle('on', _gitBackupEnabled);
+            if (tog2) tog2.classList.toggle('on', _gitAutoPushEnabled);
+            _setVal('gitBackupRepo',      data.git_backup_repo || '');
+            _setVal('gitBackupBranch',    data.git_backup_branch || 'main');
+            _setVal('gitBackupUsername',  data.git_backup_username || '');
+            _setVal('gitBackupCommitMsg', data.git_backup_commit_message || 'traefik-manager: {action} at {timestamp}');
+            const tokenSet = document.getElementById('gitTokenSet');
+            if (tokenSet) tokenSet.style.display = data.git_backup_token_set ? '' : 'none';
+        } catch(e) {}
+    }
     loadGitStatus();
     loadGitCommits();
 }
 
 async function loadGitStatus() {
     try {
-        const res  = await fetch('/api/backup/git/status');
+        const res  = await _backupFetch('/api/backup/git/status');
         const data = await res.json();
         const line = document.getElementById('gitStatusLine');
         if (!line) return;
@@ -946,7 +1212,7 @@ async function loadGitCommits() {
     if (!list) return;
     list.innerHTML = `<div class="text-center py-4" style="color:var(--muted)"><i class="ph-light ph-spinner-gap animate-spin text-xl block mb-1"></i></div>`;
     try {
-        const res     = await fetch('/api/backup/git/commits');
+        const res     = await _backupFetch('/api/backup/git/commits');
         const commits = await res.json();
         if (!commits.length) {
             list.innerHTML = `<div class="text-center py-6" style="color:var(--muted)"><i class="ph-light ph-git-commit text-3xl block mb-2 opacity-30"></i><p class="text-xs">No commits yet</p></div>`;
@@ -1011,13 +1277,14 @@ async function gitTestConnection() {
     const btn = document.getElementById('gitTestBtn');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph-light ph-spinner-gap animate-spin text-xs"></i> Testing…'; }
     try {
-        const token   = document.getElementById('gitBackupToken')?.value || '';
-        const payload = {
+        const isAgent = typeof _activeAgent !== 'undefined' && !!_activeAgent;
+        const payload = isAgent ? {} : {
             repo_url: document.getElementById('gitBackupRepo')?.value.trim() || '',
             username: document.getElementById('gitBackupUsername')?.value.trim() || '',
         };
+        const token = !isAgent && document.getElementById('gitBackupToken')?.value || '';
         if (token) payload.token = token;
-        const res  = await fetch('/api/backup/git/test', { method: 'POST', headers: { 'Content-Type': 'application/json', ..._csrfHeaders() }, body: JSON.stringify(payload) });
+        const res  = await _backupFetch('/api/backup/git/test', { method: 'POST', headers: { 'Content-Type': 'application/json', ..._csrfHeaders() }, body: JSON.stringify(payload) });
         const data = await res.json();
         if (data.ok) {
             showToast('Connection successful', 'success');
@@ -1036,7 +1303,7 @@ async function gitPushNow() {
     const btn = document.getElementById('gitPushBtn');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph-light ph-spinner-gap animate-spin text-xs"></i> Pushing…'; }
     try {
-        const res  = await fetch('/api/backup/git/push', { method: 'POST', headers: _csrfHeaders() });
+        const res  = await _backupFetch('/api/backup/git/push', { method: 'POST', headers: _csrfHeaders() });
         const data = await res.json();
         if (data.ok) {
             showToast('Pushed successfully', 'success');
@@ -1059,7 +1326,7 @@ async function gitResetRepo() {
     const btn = document.getElementById('gitResetBtn');
     if (btn) { btn.disabled = true; }
     try {
-        const res  = await fetch('/api/backup/git/repo', { method: 'DELETE', headers: _csrfHeaders() });
+        const res  = await _backupFetch('/api/backup/git/repo', { method: 'DELETE', headers: _csrfHeaders() });
         const data = await res.json();
         if (data.ok) {
             showToast('Repository reset - push again to re-initialize', 'success');
@@ -1078,7 +1345,7 @@ async function gitResetRepo() {
 async function gitRestoreCommit(sha, shaShort) {
     if (!await _confirm(`Restore config from commit ${shaShort}? Local backups will be created first.`, 'Git Restore', 'Restore')) return;
     try {
-        const res  = await fetch(`/api/backup/git/restore/${sha}`, { method: 'POST', headers: _csrfHeaders() });
+        const res  = await _backupFetch(`/api/backup/git/restore/${sha}`, { method: 'POST', headers: _csrfHeaders() });
         const data = await res.json();
         if (data.ok) {
             showToast('Restored successfully', 'success');
@@ -1092,7 +1359,7 @@ async function gitRestoreCommit(sha, shaShort) {
 
 async function gitViewDiff(sha) {
     try {
-        const res  = await fetch(`/api/backup/git/commit/${sha}/diff`);
+        const res  = await _backupFetch(`/api/backup/git/commit/${sha}/diff`);
         const data = await res.json();
         if (data.error) { showToast('Diff error: ' + data.error, 'error'); return; }
         if (!data.files || !data.files.length) { showToast('No changes in this commit', 'info'); return; }
@@ -1446,18 +1713,25 @@ function _renderBackupList(containerId, backups) {
 }
 
 async function loadBackups() {
+    const isAgent    = typeof _activeAgent !== 'undefined' && !!_activeAgent;
+    const staticTab  = document.getElementById('backup-tab-static');
+    if (staticTab)  staticTab.style.display = isAgent ? 'none' : '';
+    const chip = document.getElementById('backupRemoteChip');
+    if (chip) { chip.textContent = isAgent ? _activeAgent.name : ''; chip.style.display = isAgent ? '' : 'none'; }
     const routesList  = document.getElementById('sm-backups-list');
     const staticList  = document.getElementById('sm-static-backups-list');
     const spinner = `<div class="text-center py-8" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-2xl animate-spin block mb-2"></i>Loading…</div>`;
     if (routesList) routesList.innerHTML = spinner;
     if (staticList) staticList.innerHTML = spinner;
     try {
-        const res     = await fetch('/api/backups');
-        const backups = await res.json();
-        const routes  = backups.filter(b => b.kind !== 'static');
+        const res  = await _backupFetch('/api/backups');
+        const raw  = await res.json();
+        const rawArr  = Array.isArray(raw) ? raw : (raw.backups || []);
+        const backups = rawArr.map(b => ({ ...b, modified: b.modified || b.date || '' }));
+        const routes  = isAgent ? backups : backups.filter(b => b.kind !== 'static');
         const statics = backups.filter(b => b.kind === 'static');
         _renderBackupList('sm-backups-list', routes);
-        _renderBackupList('sm-static-backups-list', statics);
+        if (!isAgent) _renderBackupList('sm-static-backups-list', statics);
     } catch (e) {
         if (routesList) routesList.innerHTML = `<p class="text-sm" style="color:var(--red)">Failed to load backups</p>`;
         if (staticList) staticList.innerHTML = `<p class="text-sm" style="color:var(--red)">Failed to load backups</p>`;
@@ -1468,9 +1742,9 @@ async function createAndLoadBackups() {
     const btn = document.querySelector('[onclick="createAndLoadBackups()"]');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph-light ph-spinner-gap animate-spin"></i> Creating…'; }
     try {
-        const res  = await fetch('/api/backup/create', { method: 'POST', headers: _csrfHeaders() });
+        const res  = await _backupFetch('/api/backup/create', { method: 'POST', headers: _csrfHeaders() });
         const data = await res.json();
-        if (data.success) {
+        if (data.success || data.ok) {
             const n = data.count || 1;
             showToast(`Backup created (${n} file${n > 1 ? 's' : ''})`, 'success');
             loadBackups();
@@ -1486,9 +1760,9 @@ async function createAndLoadBackups() {
 async function restoreBackup(name) {
     if (!await _confirm(`Restore backup "${name}"? Your current config will be backed up first.`, 'Restore Backup', 'Restore')) return;
     try {
-        const res  = await fetch(`/api/restore/${encodeURIComponent(name)}`, { method: 'POST', headers: _csrfHeaders() });
+        const res  = await _backupFetch(`/api/restore/${encodeURIComponent(name)}`, { method: 'POST', headers: _csrfHeaders() });
         const data = await res.json();
-        if (data.success) {
+        if (data.success || data.ok) {
             showToast('Backup restored successfully!', 'success');
             closeSettingsModal();
             setTimeout(() => location.reload(), 1500);
@@ -1503,9 +1777,9 @@ async function restoreBackup(name) {
 async function deleteBackup(name) {
     if (!await _confirm(`Delete backup "${name}"?`, 'Delete Backup', 'Delete')) return;
     try {
-        const res  = await fetch(`/api/backup/delete/${encodeURIComponent(name)}`, { method: 'POST', headers: _csrfHeaders() });
+        const res  = await _backupFetch(`/api/backup/delete/${encodeURIComponent(name)}`, { method: 'POST', headers: _csrfHeaders() });
         const data = await res.json();
-        if (data.success) { showToast('Backup deleted', 'success'); loadBackups(); }
+        if (data.success || data.ok) { showToast('Backup deleted', 'success'); loadBackups(); }
         else showToast('Delete failed: ' + data.error, 'error');
     } catch(e) { showToast('Delete failed', 'error'); }
 }
@@ -1902,6 +2176,384 @@ async function testOidcProvider() {
     } catch(e) {
         if (result) { result.textContent = 'Request failed'; result.style.color = 'var(--red)'; }
     }
+}
+
+let _agentWizId   = null;
+let _agentWizKey  = null;
+let _agentWizStep = 0;
+let _agentRestartMethod = '';
+let _agentCfgViewOnly = false;
+
+async function loadAgentsList() {
+    const body = document.getElementById('agentsListBody');
+    if (!body) return;
+    try {
+        const res  = await fetch('/api/agents');
+        const data = await res.json();
+        const agents = data.agents || [];
+        if (!agents.length) {
+            body.innerHTML = `<div class="text-center py-8" style="color:var(--muted)"><i class="ph-light ph-robot text-4xl block mb-2 opacity-30"></i><p class="text-xs font-medium mb-1">No agents configured</p><p class="text-xs">Add a remote agent to manage multiple Traefik instances from one TM.</p></div>`;
+            updateServerSwitcher(agents);
+            return;
+        }
+        body.innerHTML = agents.map(a => `
+            <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg mb-2" style="background:var(--bg);border:1px solid var(--border);">
+                <div style="flex:1;min-width:0;">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full flex-shrink-0" id="agent-dot-${a.id}" style="background:var(--muted)"></span>
+                        <span class="text-xs font-medium truncate" style="color:var(--text)">${_esc(a.name)}</span>
+                    </div>
+                    <div class="text-xs mt-0.5 truncate font-mono" style="color:var(--muted)">${_esc(a.url)}</div>
+                </div>
+                <div class="flex items-center gap-1 flex-shrink-0">
+                    <button onclick="openAgentSetup('${a.id}')" class="btn-icon" title="Setup commands"><i class="ph-bold ph-code text-xs"></i></button>
+                    <button onclick="deleteAgent('${a.id}','${_esc(a.name)}')" class="btn-icon" title="Remove" style="color:var(--red)"><i class="ph-bold ph-trash text-xs"></i></button>
+                </div>
+            </div>`).join('');
+        agents.forEach(a => pingAgent(a.id, a.url));
+        updateServerSwitcher(agents);
+    } catch(e) {
+        body.innerHTML = `<div class="text-center py-6 text-xs" style="color:var(--red)">Failed to load agents</div>`;
+    }
+}
+
+async function pingAgent(id, url) {
+    const dot = document.getElementById('agent-dot-' + id);
+    if (!dot) return;
+    try {
+        const res  = await fetch('/api/agents/' + id + '/health');
+        const data = await res.json();
+        dot.style.background = data.ok ? 'var(--green)' : 'var(--red)';
+    } catch(e) { if (dot) dot.style.background = 'var(--red)'; }
+}
+
+async function deleteAgent(id, name) {
+    if (!await _confirm(`Remove agent "${name}"? This only removes it from TM settings - the agent service on the remote server is unaffected.`, 'Remove Agent', 'Remove')) return;
+    try {
+        const res  = await fetch('/api/agents/' + id, { method: 'DELETE', headers: _csrfHeaders() });
+        const data = await res.json();
+        if (data.ok) { showToast('Agent removed', 'success'); loadAgentsList(); }
+        else showToast('Remove failed: ' + (data.error || 'Unknown'), 'error');
+    } catch(e) { showToast('Remove failed', 'error'); }
+}
+
+function startAddAgent() {
+    _agentWizId          = null;
+    _agentWizKey         = null;
+    _agentWizStep        = 1;
+    _agentCfgViewOnly    = false;
+    _agentRestartMethod  = '';
+    document.getElementById('agentListView').style.display   = 'none';
+    document.getElementById('agentWizardView').style.display = 'flex';
+    document.getElementById('agentWizardTitle').textContent  = 'Add Agent';
+    document.getElementById('agentWizardStepPills').style.display = '';
+    resetAgentWizard();
+    showAgentWizStep(1);
+}
+
+async function openAgentSetup(id) {
+    _agentCfgViewOnly = true;
+    _agentWizId = id;
+    _agentWizKey = null;
+    document.getElementById('agentListView').style.display   = 'none';
+    document.getElementById('agentWizardView').style.display = 'flex';
+    document.getElementById('agentWizardTitle').textContent  = 'Setup Commands';
+    document.getElementById('agentWizardStepPills').style.display = 'none';
+    document.getElementById('agentRotateKeyBanner').style.display = '';
+    document.getElementById('agentRotatedKeyDisplay').style.display = 'none';
+    document.getElementById('agentRotatedKeyText').textContent = '';
+    resetAgentWizardCfgFields();
+    showAgentWizStep(3);
+    document.getElementById('agentWizSaveBtn').style.display = 'inline-flex';
+    document.getElementById('agentWizKeyDisplay').textContent = '';
+    try {
+        const res  = await fetch('/api/agents');
+        const data = await res.json();
+        const a    = (data.agents || []).find(x => x.id === id);
+        if (a) {
+            if (a.traefik_api_url)    document.getElementById('agCfgTraefikUrl').value  = a.traefik_api_url;
+            const tlsEl = document.getElementById('agCfgInsecureTLS');
+            if (tlsEl) { tlsEl.classList.toggle('on', !!a.traefik_insecure_skip_verify); }
+            if (a.config_path)        document.getElementById('agCfgConfigPath').value  = a.config_path;
+            if (a.static_config_path) document.getElementById('agCfgStaticPath').value  = a.static_config_path;
+            if (a.backup_dir)         document.getElementById('agCfgBackupDir').value   = a.backup_dir;
+            if (a.acme_json_path)     document.getElementById('agCfgAcmePath').value    = a.acme_json_path;
+            if (a.access_log_path)    document.getElementById('agCfgLogPath').value     = a.access_log_path;
+            if (a.plugins_dir)        document.getElementById('agCfgPluginsDir').value  = a.plugins_dir;
+            if (a.docker_host)        document.getElementById('agCfgDockerHost').value  = a.docker_host;
+            if (a.signal_file_path)   document.getElementById('agCfgSignalFile').value  = a.signal_file_path;
+            if (a.crowdsec_lapi_url)  document.getElementById('agCfgCsUrl').value       = a.crowdsec_lapi_url;
+            if (a.restart_method)     selectRestartMethod(a.restart_method, null);
+            const container = a.traefik_container || '';
+            if (container) {
+                document.getElementById('agCfgContainer').value       = container;
+                document.getElementById('agCfgSocketContainer').value = container;
+            }
+            if (a.git_backup_enabled) {
+                document.getElementById('agCfgGitEnabled').checked = true;
+                document.getElementById('agentGitFields').style.display = 'block';
+                if (a.git_backup_repo)    document.getElementById('agCfgGitRepo').value   = a.git_backup_repo;
+                if (a.git_backup_branch)  document.getElementById('agCfgGitBranch').value = a.git_backup_branch;
+                if (a.git_backup_username) document.getElementById('agCfgGitUser').value  = a.git_backup_username;
+                document.getElementById('agCfgGitAutoPush').checked = a.git_backup_auto_push !== false;
+            }
+        }
+    } catch(e) {}
+    agentCfgChanged();
+}
+
+function cancelAddAgent() {
+    document.getElementById('agentWizardView').style.display = 'none';
+    document.getElementById('agentListView').style.display   = 'flex';
+}
+
+function resetAgentWizard() {
+    document.getElementById('agentWizName').value = '';
+    document.getElementById('agentWizUrl').value  = '';
+    document.getElementById('agentWizStep1Err').style.display = 'none';
+    resetAgentWizardCfgFields();
+}
+
+function resetAgentWizardCfgFields() {
+    document.getElementById('agCfgTraefikUrl').value  = 'http://traefik:8080';
+    document.getElementById('agCfgConfigPath').value  = '/app/config';
+    document.getElementById('agCfgStaticPath').value  = '';
+    document.getElementById('agCfgBackupDir').value   = '';
+    document.getElementById('agCfgAcmePath').value    = '';
+    document.getElementById('agCfgLogPath').value     = '';
+    document.getElementById('agCfgPluginsDir').value  = '';
+    document.getElementById('agCfgDockerHost').value  = '';
+    document.getElementById('agCfgContainer').value   = 'traefik';
+    document.getElementById('agCfgSignalFile').value  = '';
+    document.getElementById('agCfgSocketContainer').value = 'traefik';
+    document.getElementById('agCfgGitEnabled').checked = false;
+    document.getElementById('agentGitFields').style.display = 'none';
+    document.getElementById('agCfgGitRepo').value     = '';
+    document.getElementById('agCfgGitBranch').value   = 'main';
+    document.getElementById('agCfgGitUser').value     = '';
+    document.getElementById('agCfgGitToken').value    = '';
+    document.getElementById('agCfgGitAutoPush').checked = true;
+    document.getElementById('agCfgCsUrl').value       = '';
+    document.getElementById('agCfgCsKey').value       = '';
+    document.getElementById('agCfgInsecureTLS')?.classList.remove('on');
+    selectRestartMethod('', document.querySelector('#restartMethodChips .agent-chip'));
+}
+
+function showAgentWizStep(n) {
+    [1,2,3].forEach(i => {
+        const el = document.getElementById('agentWizStep' + i);
+        if (el) el.style.display = i === n ? '' : 'none';
+        const pill = document.getElementById('wiz-step-pill-' + i);
+        if (pill) {
+            pill.style.background = i === n ? 'var(--blue)' : (i < n ? 'var(--green)' : 'var(--border)');
+            pill.style.color      = i <= n ? '#fff' : 'var(--muted)';
+        }
+    });
+    _agentWizStep = n;
+    if (n === 3) { switchAgentCfgTab('traefik', document.querySelector('#agentCfgTabs .auth-sub-tab')); agentCfgChanged(); }
+}
+
+async function agentWizStep1Next() {
+    const name = document.getElementById('agentWizName').value.trim();
+    const url  = document.getElementById('agentWizUrl').value.trim();
+    const err  = document.getElementById('agentWizStep1Err');
+    if (!name || !url) { err.textContent = 'Name and URL are required.'; err.style.display = ''; return; }
+    const btn = document.getElementById('agentWizStep1Btn');
+    btn.disabled = true; btn.innerHTML = '<i class="ph-light ph-spinner-gap animate-spin text-xs"></i> Creating…';
+    try {
+        const res  = await fetch('/api/agents', { method: 'POST', headers: { ..._csrfHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ name, url }) });
+        const data = await res.json();
+        if (!data.ok) { err.textContent = data.error || 'Failed to create agent'; err.style.display = ''; return; }
+        _agentWizId  = data.agent.id;
+        _agentWizKey = data.agent.api_key_raw;
+        document.getElementById('agentWizKeyDisplay').textContent = _agentWizKey;
+        err.style.display = 'none';
+        showAgentWizStep(2);
+    } catch(e) { err.textContent = 'Request failed'; err.style.display = ''; }
+    finally { btn.disabled = false; btn.innerHTML = 'Continue <i class="ph-bold ph-caret-right text-xs"></i>'; }
+}
+
+function agentWizStep2Next() {
+    document.getElementById('agentRotateKeyBanner').style.display = 'none';
+    showAgentWizStep(3);
+}
+
+async function agentWizStep3Save() {
+    if (!_agentWizId) return;
+    const cfg = buildAgentCfgPayload();
+    try {
+        const res  = await fetch('/api/agents/' + _agentWizId, { method: 'PUT', headers: { ..._csrfHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
+        const data = await res.json();
+        if (data.ok) showToast('Agent config saved', 'success');
+        else showToast('Save failed: ' + (data.error || 'Unknown'), 'error');
+    } catch(e) { showToast('Save failed', 'error'); }
+}
+
+function agentWizDone() {
+    document.getElementById('agentWizardView').style.display = 'none';
+    document.getElementById('agentListView').style.display   = 'flex';
+    loadAgentsList();
+}
+
+function copyAgentKey() {
+    navigator.clipboard.writeText(_agentWizKey || '').then(() => showToast('Key copied', 'success'));
+}
+
+function copyAgentCompose() {
+    navigator.clipboard.writeText(document.getElementById('agentComposeOutput').textContent).then(() => showToast('Copied', 'success'));
+}
+
+function copyAgentRun() {
+    navigator.clipboard.writeText(document.getElementById('agentRunOutput').textContent).then(() => showToast('Copied', 'success'));
+}
+
+function copyRotatedKey() {
+    const key = document.getElementById('agentRotatedKeyText').textContent;
+    navigator.clipboard.writeText(key).then(() => showToast('Key copied', 'success'));
+}
+
+async function rotateAgentKey() {
+    const btn = document.getElementById('agentRotateKeyBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph-bold ph-spinner-gap animate-spin text-xs"></i>';
+    try {
+        const res = await fetch('/api/agents/' + _agentWizId + '/rotate-key', {
+            method: 'POST', headers: { ..._csrfHeaders() }
+        });
+        let data = {};
+        try { data = await res.json(); } catch(je) { throw new Error('HTTP ' + res.status + ' - invalid response'); }
+        if (!res.ok || !data.api_key_raw) throw new Error(data.error || ('HTTP ' + res.status));
+        _agentWizKey = data.api_key_raw;
+        document.getElementById('agentRotatedKeyText').textContent = _agentWizKey;
+        document.getElementById('agentRotatedKeyDisplay').style.display = '';
+        btn.innerHTML = '<i class="ph-bold ph-check text-xs"></i> Rotated';
+        agentCfgChanged();
+        showToast('API key rotated - update your agent', 'warning');
+    } catch(e) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ph-bold ph-arrows-clockwise text-xs"></i> Rotate Key';
+        showToast(e.message || 'Rotation failed', 'error');
+    }
+}
+
+function switchAgentCfgTab(id, btn) {
+    document.querySelectorAll('#agentCfgTabs .auth-sub-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('[id^="agentCfgPane-"]').forEach(p => { p.style.display = 'none'; });
+    if (btn) btn.classList.add('active');
+    const pane = document.getElementById('agentCfgPane-' + id);
+    if (pane) pane.style.display = id === 'restart' ? '' : 'flex';
+}
+
+function selectRestartMethod(method, btn) {
+    _agentRestartMethod = method;
+    document.querySelectorAll('#restartMethodChips .agent-chip').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    document.getElementById('restartProxyFields').style.display     = method === 'proxy'       ? '' : 'none';
+    document.getElementById('restartPoisonPillFields').style.display = method === 'poison-pill' ? '' : 'none';
+    document.getElementById('restartSocketFields').style.display    = method === 'socket'      ? '' : 'none';
+    agentCfgChanged();
+}
+
+document.getElementById('agCfgGitEnabled').addEventListener('change', function() {
+    document.getElementById('agentGitFields').style.display = this.checked ? 'block' : 'none';
+    agentCfgChanged();
+});
+
+function buildAgentCfgPayload() {
+    return {
+        traefik_api_url:          document.getElementById('agCfgTraefikUrl').value.trim(),
+        traefik_insecure_skip_verify: document.getElementById('agCfgInsecureTLS')?.classList.contains('on') || false,
+        config_path:        document.getElementById('agCfgConfigPath').value.trim(),
+        static_config_path: document.getElementById('agCfgStaticPath').value.trim(),
+        backup_dir:         document.getElementById('agCfgBackupDir').value.trim(),
+        acme_json_path:     document.getElementById('agCfgAcmePath').value.trim(),
+        access_log_path:    document.getElementById('agCfgLogPath').value.trim(),
+        plugins_dir:        document.getElementById('agCfgPluginsDir').value.trim(),
+        restart_method:     _agentRestartMethod,
+        traefik_container:  (document.getElementById('agCfgContainer').value || document.getElementById('agCfgSocketContainer').value || 'traefik').trim(),
+        docker_host:        document.getElementById('agCfgDockerHost').value.trim(),
+        signal_file_path:   document.getElementById('agCfgSignalFile').value.trim(),
+        crowdsec_lapi_url:  document.getElementById('agCfgCsUrl').value.trim(),
+        crowdsec_api_key:   document.getElementById('agCfgCsKey').value,
+        git_backup_enabled: document.getElementById('agCfgGitEnabled').checked,
+        git_backup_repo:    document.getElementById('agCfgGitRepo').value.trim(),
+        git_backup_branch:  document.getElementById('agCfgGitBranch').value.trim() || 'main',
+        git_backup_username:document.getElementById('agCfgGitUser').value.trim(),
+        git_backup_token:   document.getElementById('agCfgGitToken').value,
+        git_backup_auto_push: document.getElementById('agCfgGitAutoPush').checked,
+    };
+}
+
+function agentCfgChanged() {
+    const key       = _agentWizKey || 'YOUR_API_KEY';
+    const traefik   = document.getElementById('agCfgTraefikUrl').value.trim() || 'http://traefik:8080';
+    const configPath= document.getElementById('agCfgConfigPath').value.trim() || '/app/config';
+    const staticPath= document.getElementById('agCfgStaticPath').value.trim();
+    const backupDir = document.getElementById('agCfgBackupDir').value.trim();
+    const acmePath  = document.getElementById('agCfgAcmePath').value.trim();
+    const logPath   = document.getElementById('agCfgLogPath').value.trim();
+    const pluginsDir= document.getElementById('agCfgPluginsDir').value.trim();
+    const restart   = _agentRestartMethod;
+    const container = (document.getElementById('agCfgContainer').value || document.getElementById('agCfgSocketContainer').value || 'traefik').trim();
+    const dockerHost= document.getElementById('agCfgDockerHost').value.trim();
+    const signalFile= document.getElementById('agCfgSignalFile').value.trim();
+    const csUrl     = document.getElementById('agCfgCsUrl').value.trim();
+    const csKey     = document.getElementById('agCfgCsKey').value.trim();
+    const gitOn     = document.getElementById('agCfgGitEnabled').checked;
+    const gitRepo   = document.getElementById('agCfgGitRepo').value.trim();
+    const gitBranch = document.getElementById('agCfgGitBranch').value.trim() || 'main';
+    const gitUser   = document.getElementById('agCfgGitUser').value.trim();
+    const gitToken  = document.getElementById('agCfgGitToken').value.trim();
+    const gitAuto   = document.getElementById('agCfgGitAutoPush').checked;
+
+    const insecureTLS = document.getElementById('agCfgInsecureTLS')?.classList.contains('on');
+    const envLines = [`      - TMA_API_KEY=${key}`, `      - TRAEFIK_API_URL=${traefik}`, `      - CONFIG_PATH=${configPath}`];
+    if (insecureTLS) envLines.push(`      - TRAEFIK_INSECURE_SKIP_VERIFY=true`);
+    if (staticPath)  envLines.push(`      - STATIC_CONFIG_PATH=${staticPath}`);
+    if (restart)     envLines.push(`      - RESTART_METHOD=${restart}`);
+    if (restart && container) envLines.push(`      - TRAEFIK_CONTAINER=${container}`);
+    if (restart === 'proxy' && dockerHost)  envLines.push(`      - DOCKER_HOST=${dockerHost}`);
+    if (restart === 'poison-pill' && signalFile) envLines.push(`      - SIGNAL_FILE_PATH=${signalFile}`);
+    if (acmePath)    envLines.push(`      - ACME_JSON_PATH=${acmePath}`);
+    if (logPath)     envLines.push(`      - ACCESS_LOG_PATH=${logPath}`);
+    if (pluginsDir)  envLines.push(`      - PLUGINS_DIR=${pluginsDir}`);
+    if (backupDir)   envLines.push(`      - BACKUP_DIR=/app/backups`);
+    if (csUrl)       envLines.push(`      - CROWDSEC_LAPI_URL=${csUrl}`);
+    if (csKey)       envLines.push(`      - CROWDSEC_API_KEY=${csKey}`);
+    if (gitOn) {
+        envLines.push(`      - GIT_BACKUP_ENABLED=true`);
+        if (gitRepo)   envLines.push(`      - GIT_BACKUP_REPO=${gitRepo}`);
+        envLines.push(`      - GIT_BACKUP_BRANCH=${gitBranch}`);
+        if (gitUser)   envLines.push(`      - GIT_BACKUP_USERNAME=${gitUser}`);
+        if (gitToken)  envLines.push(`      - GIT_BACKUP_TOKEN=${gitToken}`);
+        envLines.push(`      - GIT_BACKUP_AUTO_PUSH=${gitAuto}`);
+    }
+
+    const volLines = [`      - ${configPath}:${configPath}`];
+    if (staticPath)  volLines.push(`      - ${staticPath}:${staticPath}`);
+    if (backupDir)   volLines.push(`      - ${backupDir}:/app/backups`);
+    if (acmePath)    volLines.push(`      - ${acmePath}:${acmePath}:ro`);
+    if (logPath)     volLines.push(`      - ${logPath}:${logPath}:ro`);
+    if (pluginsDir)  volLines.push(`      - ${pluginsDir}:${pluginsDir}:ro`);
+    if (restart === 'socket') volLines.push(`      - /var/run/docker.sock:/var/run/docker.sock:ro`);
+    if (restart === 'poison-pill') volLines.push(`      - traefik-signals:/signals`);
+
+    let compose = `services:\n  traefik-manager-agent:\n    image: ghcr.io/chr0nzz/traefik-manager-agent:latest\n    restart: unless-stopped\n    ports:\n      - "8090:8090"\n    environment:\n${envLines.join('\n')}\n    volumes:\n${volLines.join('\n')}`;
+    if (restart === 'poison-pill') compose += `\n\nvolumes:\n  traefik-signals:`;
+
+    const runParts = [`docker run -d \\`, `  --name traefik-manager-agent \\`, `  -p 8090:8090 \\`];
+    envLines.forEach(e => runParts.push(`  -e ${e.replace(/^\s+- /, '')} \\`));
+    volLines.forEach(v => runParts.push(`  -v ${v.replace(/^\s+- /, '')} \\`));
+    runParts.push(`  ghcr.io/chr0nzz/traefik-manager-agent:latest`);
+
+    const co = document.getElementById('agentComposeOutput');
+    const ro = document.getElementById('agentRunOutput');
+    if (co) co.textContent = compose;
+    if (ro) ro.textContent = runParts.join('\n');
+}
+
+function updateServerSwitcher(agents) {
+    if (typeof _updateServerSwitcherList === 'function') _updateServerSwitcherList(agents);
 }
 
 </script>

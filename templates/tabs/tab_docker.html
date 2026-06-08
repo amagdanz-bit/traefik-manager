@@ -37,9 +37,9 @@ async function refreshDockerTab() {
 
     try {
         const [routerRes, svcRes, mwRes] = await Promise.all([
-            fetch('/api/traefik/routers').then(r => r.json()),
-            fetch('/api/traefik/services').then(r => r.json()).catch(() => ({})),
-            fetch('/api/traefik/middlewares').then(r => r.json()).catch(() => ({})),
+            agentFetch('/api/traefik/routers').then(r => r.json()),
+            agentFetch('/api/traefik/services').then(r => r.json()).catch(() => ({})),
+            agentFetch('/api/traefik/middlewares').then(r => r.json()).catch(() => ({})),
         ]);
 
         const svcMap = {};
