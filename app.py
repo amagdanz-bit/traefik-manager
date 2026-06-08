@@ -98,6 +98,80 @@ def _save_agents(agents: list) -> list:
     return out
 
 
+def _parse_agent_dict(a: dict) -> dict:
+    return {
+        'id':         str(a['id']),
+        'name':       str(a['name'])[:100],
+        'url':        str(a['url']).strip().rstrip('/'),
+        'api_key':    _decrypt_otp_secret(str(a.get('api_key', ''))),
+        'created_at': str(a.get('created_at', '')),
+        'traefik_api_url':              str(a.get('traefik_api_url', 'http://traefik:8080')).strip(),
+        'traefik_insecure_skip_verify': bool(a.get('traefik_insecure_skip_verify', False)),
+        'config_path':                  str(a.get('config_path', '/app/config')).strip(),
+        'backup_dir':                   str(a.get('backup_dir', '')).strip(),
+        'static_config_path':           str(a.get('static_config_path', '')).strip(),
+        'acme_json_path':               str(a.get('acme_json_path', '')).strip(),
+        'access_log_path':              str(a.get('access_log_path', '')).strip(),
+        'plugins_dir':                  str(a.get('plugins_dir', '')).strip(),
+        'restart_method':               str(a.get('restart_method', '')).strip(),
+        'traefik_container':            str(a.get('traefik_container', 'traefik')).strip(),
+        'docker_host':                  str(a.get('docker_host', '')).strip(),
+        'signal_file_path':             str(a.get('signal_file_path', '')).strip(),
+        'crowdsec_lapi_url':            str(a.get('crowdsec_lapi_url', '')).strip(),
+        'crowdsec_api_key':             _decrypt_otp_secret(str(a.get('crowdsec_api_key', ''))),
+        'git_backup_enabled':           bool(a.get('git_backup_enabled', False)),
+        'git_backup_repo':              str(a.get('git_backup_repo', '')).strip(),
+        'git_backup_branch':            str(a.get('git_backup_branch', 'main')).strip() or 'main',
+        'git_backup_username':          str(a.get('git_backup_username', '')).strip(),
+        'git_backup_token':             _decrypt_otp_secret(str(a.get('git_backup_token', ''))),
+        'git_backup_auto_push':         bool(a.get('git_backup_auto_push', True)),
+        'git_backup_commit_message':    str(a.get('git_backup_commit_message', 'traefik-manager: {action} at {timestamp}')).strip() or 'traefik-manager: {action} at {timestamp}',
+    }
+
+
+def load_agents() -> list:
+    if os.path.exists(AGENTS_PATH):
+        try:
+            with open(AGENTS_PATH, 'r') as f:
+                raw = _yaml_safe.load(f) or {}
+            return [
+                _parse_agent_dict(a)
+                for a in (raw.get('agents', []) or [])
+                if isinstance(a, dict) and a.get('id') and a.get('name') and a.get('url')
+            ]
+        except Exception as e:
+            logger.warning(f"Could not load agents.yml: {e}")
+            return []
+
+    if os.path.exists(SETTINGS_PATH):
+        try:
+            with open(SETTINGS_PATH, 'r') as f:
+                data = _yaml_safe.load(f) or {}
+            raw_agents = data.get('agents', [])
+            if raw_agents and isinstance(raw_agents, list):
+                agents = [
+                    _parse_agent_dict(a)
+                    for a in raw_agents
+                    if isinstance(a, dict) and a.get('id') and a.get('name') and a.get('url')
+                ]
+                if agents:
+                    save_agents_file(agents)
+                    logger.info(f"Migrated {len(agents)} agent(s) from manager.yml to agents.yml")
+                return agents
+        except Exception as e:
+            logger.warning(f"Agent migration from manager.yml failed: {e}")
+
+    return []
+
+
+def save_agents_file(agents: list):
+    os.makedirs(os.path.dirname(AGENTS_PATH), exist_ok=True)
+    tmp = AGENTS_PATH + '.tmp'
+    with open(tmp, 'w') as f:
+        yaml.dump({'agents': _save_agents(agents)}, f)
+    os.replace(tmp, AGENTS_PATH)
+
+
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 app.config['SESSION_COOKIE_HTTPONLY']    = True
 app.config['SESSION_COOKIE_SAMESITE']    = 'Lax'
@@ -126,6 +200,7 @@ _CONFIG_DIR        = os.path.dirname(os.path.abspath(SETTINGS_PATH))
 GROUPS_CACHE_DIR   = os.path.join(_CONFIG_DIR, 'cache')
 GROUPS_CONFIG_FILE  = os.path.join(_CONFIG_DIR, 'dashboard.yml')
 NOTIFICATIONS_PATH  = os.path.join(_CONFIG_DIR, 'notifications.yml')
+AGENTS_PATH        = os.path.join(_CONFIG_DIR, 'agents.yml')
 os.makedirs(GROUPS_CACHE_DIR, exist_ok=True)
 
 _notifications     = deque(maxlen=200)
@@ -478,39 +553,7 @@ def load_settings() -> dict:
             merged['git_backup_commit_message'] = str(data['git_backup_commit_message']).strip() or 'traefik-manager: {action} at {timestamp}'
         if 'git_backup_auto_push' in data:
             merged['git_backup_auto_push'] = bool(data['git_backup_auto_push'])
-        if 'agents' in data and isinstance(data['agents'], list):
-            agents = []
-            for a in data['agents']:
-                if isinstance(a, dict) and a.get('id') and a.get('name') and a.get('url'):
-                    agents.append({
-                        'id':         str(a['id']),
-                        'name':       str(a['name'])[:100],
-                        'url':        str(a['url']).strip().rstrip('/'),
-                        'api_key':    _decrypt_otp_secret(str(a.get('api_key', ''))),
-                        'created_at': str(a.get('created_at', '')),
-                        'traefik_api_url':              str(a.get('traefik_api_url', 'http://traefik:8080')).strip(),
-                        'traefik_insecure_skip_verify': bool(a.get('traefik_insecure_skip_verify', False)),
-                        'config_path':                  str(a.get('config_path', '/app/config')).strip(),
-                        'backup_dir':                   str(a.get('backup_dir', '')).strip(),
-                        'static_config_path':    str(a.get('static_config_path', '')).strip(),
-                        'acme_json_path':        str(a.get('acme_json_path', '')).strip(),
-                        'access_log_path':       str(a.get('access_log_path', '')).strip(),
-                        'plugins_dir':           str(a.get('plugins_dir', '')).strip(),
-                        'restart_method':        str(a.get('restart_method', '')).strip(),
-                        'traefik_container':     str(a.get('traefik_container', 'traefik')).strip(),
-                        'docker_host':           str(a.get('docker_host', '')).strip(),
-                        'signal_file_path':      str(a.get('signal_file_path', '')).strip(),
-                        'crowdsec_lapi_url':     str(a.get('crowdsec_lapi_url', '')).strip(),
-                        'crowdsec_api_key':      _decrypt_otp_secret(str(a.get('crowdsec_api_key', ''))),
-                        'git_backup_enabled':    bool(a.get('git_backup_enabled', False)),
-                        'git_backup_repo':       str(a.get('git_backup_repo', '')).strip(),
-                        'git_backup_branch':     str(a.get('git_backup_branch', 'main')).strip() or 'main',
-                        'git_backup_username':   str(a.get('git_backup_username', '')).strip(),
-                        'git_backup_token':      _decrypt_otp_secret(str(a.get('git_backup_token', ''))),
-                        'git_backup_auto_push':  bool(a.get('git_backup_auto_push', True)),
-                        'git_backup_commit_message': str(a.get('git_backup_commit_message', 'traefik-manager: {action} at {timestamp}')).strip() or 'traefik-manager: {action} at {timestamp}',
-                    })
-            merged['agents'] = agents
+        merged['agents'] = load_agents()
         if 'agent_api_rate_limit' in data:
             try:
                 merged['agent_api_rate_limit'] = max(1, int(data['agent_api_rate_limit']))
@@ -543,7 +586,7 @@ def save_settings(domains, cert_resolver, traefik_api_url,
                   git_backup_branch=None, git_backup_username=None,
                   git_backup_token=None, git_backup_commit_message=None,
                   git_backup_auto_push=None,
-                  agents=None, agent_api_rate_limit=None):
+                  agent_api_rate_limit=None):
     if visible_tabs is None:
         visible_tabs = {t: False for t in OPTIONAL_TABS}
     _cur = load_settings()
@@ -613,8 +656,6 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         git_backup_commit_message = _cur.get('git_backup_commit_message', 'traefik-manager: {action} at {timestamp}')
     if git_backup_auto_push is None:
         git_backup_auto_push = _cur.get('git_backup_auto_push', True)
-    if agents is None:
-        agents = _cur.get('agents', [])
     if agent_api_rate_limit is None:
         agent_api_rate_limit = _cur.get('agent_api_rate_limit', int(os.environ.get('AGENT_API_RATE_LIMIT', 30)))
     otp_secret = _encrypt_otp_secret(otp_secret)
@@ -668,7 +709,6 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         'git_backup_token':          _encrypt_otp_secret(git_backup_token) if git_backup_token else '',
         'git_backup_commit_message': git_backup_commit_message,
         'git_backup_auto_push':      git_backup_auto_push,
-        'agents':                    _save_agents(agents),
         'agent_api_rate_limit':      agent_api_rate_limit,
     })
     with open(tmp, 'w') as f:
@@ -4418,7 +4458,6 @@ def api_agents_create():
     if not name or not url:
         return jsonify({'error': 'name and url are required'}), 400
     raw_key = secrets.token_urlsafe(32)
-    settings = load_settings()
     agent = {
         'id':         str(_uuid.uuid4()),
         'name':       name,
@@ -4445,12 +4484,9 @@ def api_agents_create():
         'git_backup_auto_push':  bool(data.get('git_backup_auto_push', True)),
         'git_backup_commit_message': str(data.get('git_backup_commit_message', 'traefik-manager: {action} at {timestamp}')).strip() or 'traefik-manager: {action} at {timestamp}',
     }
-    agents = list(settings.get('agents', []))
+    agents = load_agents()
     agents.append(agent)
-    save_settings(
-        settings['domains'], settings['cert_resolver'], settings['traefik_api_url'],
-        agents=agents,
-    )
+    save_agents_file(agents)
     result = _redact_agent(agent)
     result['api_key_raw'] = raw_key
     return jsonify({'ok': True, 'agent': result})
@@ -4460,10 +4496,9 @@ def api_agents_create():
 @csrf_protect
 @login_required
 def api_agents_update(agent_id):
-    data     = request.get_json(silent=True) or {}
-    settings = load_settings()
-    agents   = list(settings.get('agents', []))
-    updated  = False
+    data    = request.get_json(silent=True) or {}
+    agents  = load_agents()
+    updated = False
     for i, a in enumerate(agents):
         if a.get('id') == agent_id:
             updatable = [
@@ -4486,7 +4521,7 @@ def api_agents_update(agent_id):
             break
     if not updated:
         return jsonify({'error': 'Agent not found'}), 404
-    save_settings(settings['domains'], settings['cert_resolver'], settings['traefik_api_url'], agents=agents)
+    save_agents_file(agents)
     return jsonify({'ok': True})
 
 
@@ -4494,9 +4529,8 @@ def api_agents_update(agent_id):
 @csrf_protect
 @login_required
 def api_agents_delete(agent_id):
-    settings = load_settings()
-    agents   = [a for a in settings.get('agents', []) if a.get('id') != agent_id]
-    save_settings(settings['domains'], settings['cert_resolver'], settings['traefik_api_url'], agents=agents)
+    agents = [a for a in load_agents() if a.get('id') != agent_id]
+    save_agents_file(agents)
     return jsonify({'ok': True})
 
 
@@ -4505,15 +4539,14 @@ def api_agents_delete(agent_id):
 @login_required
 def api_agents_rotate_key(agent_id):
     try:
-        settings = load_settings()
-        agents   = list(settings.get('agents', []))
-        idx      = next((i for i, a in enumerate(agents) if a.get('id') == agent_id), None)
+        agents = load_agents()
+        idx    = next((i for i, a in enumerate(agents) if a.get('id') == agent_id), None)
         if idx is None:
             return jsonify({'error': 'Agent not found'}), 404
         raw_key = secrets.token_urlsafe(32)
         agents[idx] = dict(agents[idx])
         agents[idx]['api_key'] = raw_key
-        save_settings(settings['domains'], settings['cert_resolver'], settings['traefik_api_url'], agents=agents)
+        save_agents_file(agents)
         result = _redact_agent(agents[idx])
         result['api_key_raw'] = raw_key
         return jsonify({'ok': True, 'agent': result})

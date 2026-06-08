@@ -143,6 +143,12 @@ sudo systemctl enable --now tma
 | `TMA_PORT` | `8090` | Listening port |
 | `TMA_RATE_LIMIT` | `10` | Requests per minute per IP (0 = disabled) |
 
+## Storage
+
+Agent registrations (name, URL, encrypted API key, and configuration) are stored in `agents.yml` in the same config directory as `manager.yml` (default `/app/config/agents.yml`). The file is created automatically when the first agent is added. If you are upgrading from a version before v1.5.0, agents are migrated automatically from `manager.yml` to `agents.yml` on first start - no manual action required.
+
+Back up `agents.yml` alongside `manager.yml` to preserve agent registrations.
+
 ## Security
 
 - The API key is the only credential - keep it secret and use HTTPS between TM and TMA
