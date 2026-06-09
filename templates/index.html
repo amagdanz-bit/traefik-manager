@@ -4129,19 +4129,25 @@ async function refreshCrowdSecTab() {
     if (!decEl) return;
     const spinner = `<div class="text-center py-8" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-3xl block mb-2 animate-spin opacity-40"></i><p class="text-xs">Loading...</p></div>`;
     decEl.innerHTML = spinner;
-    altEl.innerHTML = spinner;
+    if (altEl) altEl.innerHTML = spinner;
     try {
-        const [decisions, alerts] = await Promise.all([
-            agentFetch('/api/crowdsec/decisions').then(r => r.json()),
-            agentFetch('/api/crowdsec/alerts').then(r => r.json()),
+        const [decRes, altRes] = await Promise.all([
+            agentFetch('/api/crowdsec/decisions'),
+            agentFetch('/api/crowdsec/alerts'),
         ]);
+        const decisions = decRes.ok ? await decRes.json() : [];
+        const alerts    = altRes.ok ? await altRes.json() : [];
         _csDecisions = Array.isArray(decisions) ? decisions : [];
         _csAlerts    = Array.isArray(alerts)    ? alerts    : [];
         _renderCsStats(_csDecisions, statsEl);
         _csApplyFilters();
+        if (altEl && !altRes.ok) {
+            altEl.innerHTML = `<div class="text-center py-8 text-xs" style="color:var(--muted)">Alerts unavailable - bouncer key may lack read:alerts permission</div>`;
+        }
     } catch(e) {
         const err = `<div class="text-center py-8 text-xs" style="color:var(--muted)">Could not reach CrowdSec LAPI</div>`;
-        decEl.innerHTML = err; altEl.innerHTML = err;
+        decEl.innerHTML = err;
+        if (altEl) altEl.innerHTML = err;
     }
 }
 

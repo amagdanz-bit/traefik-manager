@@ -1703,46 +1703,54 @@ def _cs_request(method: str, path: str, **kwargs):
 def api_cs_decisions():
     if not (_cs_lapi_url() and _cs_api_key()):
         return jsonify({'error': 'CrowdSec not configured'}), 503
-    all_decisions = []
-    page = 1
-    while True:
-        chunk = _cs_request('GET', f'/v1/decisions?limit=500&page={page}')
-        if not chunk:
-            break
-        all_decisions.extend(chunk)
-        if len(chunk) < 500:
-            break
-        page += 1
-    now = datetime.now(timezone.utc)
-    active = []
-    for d in all_decisions:
-        until = d.get('until')
-        if until:
-            try:
-                exp = datetime.fromisoformat(until.replace('Z', '+00:00'))
-                if exp < now:
-                    continue
-            except Exception:
-                pass
-        active.append(d)
-    return jsonify(active)
+    try:
+        all_decisions = []
+        page = 1
+        while True:
+            chunk = _cs_request('GET', f'/v1/decisions?limit=500&page={page}')
+            if not isinstance(chunk, list):
+                break
+            all_decisions.extend(chunk)
+            if len(chunk) < 500:
+                break
+            page += 1
+        now = datetime.now(timezone.utc)
+        active = []
+        for d in all_decisions:
+            until = d.get('until')
+            if until:
+                try:
+                    exp = datetime.fromisoformat(until.replace('Z', '+00:00'))
+                    if exp < now:
+                        continue
+                except Exception:
+                    pass
+            active.append(d)
+        return jsonify(active)
+    except Exception as e:
+        logger.exception("CrowdSec decisions error")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/crowdsec/alerts')
 @login_required
 def api_cs_alerts():
     if not (_cs_lapi_url() and _cs_api_key()):
         return jsonify({'error': 'CrowdSec not configured'}), 503
-    all_alerts = []
-    page = 1
-    while True:
-        chunk = _cs_request('GET', f'/v1/alerts?limit=200&page={page}')
-        if not chunk:
-            break
-        all_alerts.extend(chunk)
-        if len(chunk) < 200:
-            break
-        page += 1
-    return jsonify(all_alerts)
+    try:
+        all_alerts = []
+        page = 1
+        while True:
+            chunk = _cs_request('GET', f'/v1/alerts?limit=200&page={page}')
+            if not isinstance(chunk, list):
+                break
+            all_alerts.extend(chunk)
+            if len(chunk) < 200:
+                break
+            page += 1
+        return jsonify(all_alerts)
+    except Exception as e:
+        logger.exception("CrowdSec alerts error")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/crowdsec/decisions/<int:decision_id>', methods=['DELETE'])
 @csrf_protect
@@ -4508,10 +4516,38 @@ def api_agent_routes(agent_id):
         return jsonify({'error': 'Agent not found'}), 404
     try:
         all_configs = _agent_load_configs(agent)
+
+        try:
+            r_resp = _agent_request(agent, 'GET', '/api/traefik/routers')
+            s_resp = _agent_request(agent, 'GET', '/api/traefik/services')
+            all_routers  = r_resp.json()  if r_resp.ok  else {}
+            all_services = s_resp.json()  if s_resp.ok  else {}
+        except Exception:
+            all_routers  = {}
+            all_services = {}
+
+        svc_urls = _traefik_service_url_map(all_services)
+
+        combined_http, combined_tcp, combined_udp = {}, {}, {}
+        for config in all_configs.values():
+            for k, v in config.get('http', {}).get('services', {}).items():
+                combined_http.setdefault(k, v)
+            for k, v in config.get('tcp',  {}).get('services', {}).items():
+                combined_tcp.setdefault(k, v)
+            for k, v in config.get('udp',  {}).get('services', {}).items():
+                combined_udp.setdefault(k, v)
+
         apps, middlewares = [], []
         for fname, config in all_configs.items():
-            apps.extend(_build_apps(config, config_file=fname))
+            apps.extend(_build_apps(config, config_file=fname,
+                                    extra_http_svcs=combined_http,
+                                    extra_tcp_svcs=combined_tcp,
+                                    extra_udp_svcs=combined_udp,
+                                    api_svc_urls=svc_urls))
             middlewares.extend(_build_middlewares(config, config_file=fname))
+
+        apps.extend(_build_external_routes(all_routers, svc_urls))
+
         return jsonify({'apps': apps, 'middlewares': middlewares})
     except requests.exceptions.ConnectionError:
         return jsonify({'error': 'Cannot reach agent'}), 502
