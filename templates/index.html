@@ -1790,9 +1790,11 @@ function _onWildcardToggle(checked) {
     if (!mainEl || !sansEl) return;
     if (!checked) { mainEl.value = ''; sansEl.value = ''; return; }
     const domSel = document.getElementById('domainSelect');
-    let base = (domSel && domSel.value) ? domSel.value : '';
-    if (!base && window._domainChipSelected && window._domainChipSelected.size) {
+    let base = '';
+    if (window._domainChipSelected && window._domainChipSelected.size) {
         base = [...window._domainChipSelected][0];
+    } else if (domSel && domSel.value) {
+        base = domSel.value;
     }
     if (!base) base = (document.getElementById('singleDomain')?.textContent || '').trim();
     if (base) { mainEl.value = base; sansEl.value = '*.' + base; }
