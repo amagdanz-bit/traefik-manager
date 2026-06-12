@@ -4055,6 +4055,13 @@ def save_entry():
                     del old_routers[plain_original_id]
                 if old_svc and 'services' in s and old_svc in s['services']:
                     del s['services'][old_svc]
+            old_transport_name = f"{plain_original_id}-transport"
+            http_sec = old_config.get('http', {})
+            old_transports = http_sec.get('serversTransports', {})
+            if old_transport_name in old_transports:
+                del old_transports[old_transport_name]
+                if not old_transports:
+                    del http_sec['serversTransports']
             if agent:
                 _agent_write_config(agent, orig_cfg_file, old_config)
             elif orig_target_path:
