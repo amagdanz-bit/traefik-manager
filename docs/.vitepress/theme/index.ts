@@ -12,6 +12,7 @@ import MobileScreenshots from './components/MobileScreenshots.vue'
 import ComposeUpgrader from './components/ComposeUpgrader.vue'
 import ShowcaseMockup from './components/ShowcaseMockup.vue'
 import InstallSection from './components/InstallSection.vue'
+import FeaturesSection from './components/FeaturesSection.vue'
 import KoFiButton from './components/KoFiButton.vue'
 import './style.css'
 
@@ -32,7 +33,7 @@ export default {
     return h(DefaultTheme.Layout, null, {
       'nav-bar-content-after': () => [h(KoFiButton), h(GitHubStars)],
       'home-features-before': () => [h(InstallSection), h(ShowcaseMockup)],
-      'home-features-after': () => null,
+      'home-features-after': () => h(FeaturesSection),
     })
   },
   enhanceApp({ app }: { app: any }) {
@@ -45,5 +46,6 @@ export default {
     app.component('ComposeUpgrader', ComposeUpgrader)
     app.component('ShowcaseMockup', ShowcaseMockup)
     app.component('InstallSection', InstallSection)
+    app.component('FeaturesSection', FeaturesSection)
   },
 }
