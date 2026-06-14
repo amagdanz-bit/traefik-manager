@@ -11,14 +11,15 @@ TMA is a lightweight Go daemon that runs alongside Traefik on a remote server. I
 
 When a remote agent is active:
 
-- **Routes and Middlewares** - All data tabs show that server's data. You can add, edit, delete, and toggle routes and middlewares on the remote server exactly as you would locally - changes are written to the agent's config files via the agent API. The config file selector in the Add/Edit modals shows the agent's config files (fetched live from the agent), not the local TM's files. If the agent has **Domains** configured (Settings - Agents - Traefik tab), the Add/Edit Route modal shows those domains as a selector chip - the same experience as local TM. Without domains configured, the Subdomain field becomes a free-form **Hostname** field where you enter the full hostname (e.g. `app.example.com`).
-- **Route Map** - The route map diagram shows the agent's routes and services.
-- **Tab visibility** - Provider and monitoring tab toggles (Docker, Kubernetes, Certs, Plugins, etc.) are per-server. Changes to tab visibility when on an agent are stored locally in the browser and do not affect local TM or other agents.
-- **Static Config** (Settings - Static Config) - If the agent has `STATIC_CONFIG_PATH` configured, the static config editor becomes available. Raw YAML editing is supported; section-based editing (entrypoints, cert resolvers, etc.) requires local TM. Restart Traefik works if the agent has a `RESTART_METHOD` set.
-- **Backups** (Settings - Backups) - Dynamic Config and Git backup tabs show the agent's backups. All backup, restore, and git history operations are proxied through the agent. Git backup configuration fields are hidden for agents (managed via `GIT_BACKUP_*` env vars). The Static Config backup sub-tab is not shown for agents.
-- **Route Monitoring** (Settings - Route Monitoring) - Tab visibility toggles for provider tabs (Docker, Kubernetes, Swarm, etc.) are available for agents so you can customise which tabs are shown per remote server.
-- **System Monitoring** (Settings - System Monitoring) - Tab visibility toggles for Certs, Logs, Plugins, and CrowdSec are available for agents.
-- **Authentication, Connection, Notifications** (Settings) - These panels are hidden when an agent is active as they only apply to the local TM instance.
+- **Routes** - The Routes tab shows the agent's routes fetched live from the remote Traefik instance. You can add, edit, delete, and toggle routes exactly as you would locally - changes are written to the agent's config files and a `.bak` backup is created before every write. The Config File selector in the Add/Edit Route modal lists the agent's actual config files (fetched live), not the local TM files. If the agent has **Domains** configured (Settings - Agents - Traefik tab), the Add/Edit Route modal shows domain chip selectors - the same experience as local TM. Without domains configured, the Subdomain field becomes a free-form **Hostname** field (enter the full hostname, e.g. `app.example.com`). Entrypoints in the route form are fetched live from the agent's Traefik instance.
+- **Middlewares** - The Middlewares tab shows only middlewares managed by TM - those in config files under `CONFIG_PATH` with the `@file` provider suffix. Traefik built-in and other provider middlewares are excluded from the badge count and the chip selector. You can add and edit middlewares on the agent exactly as you would locally.
+- **Services** - Shows the agent's services from the remote Traefik API.
+- **Route Map** - The route map diagram renders the agent's routes and services.
+- **Tab visibility** - Provider and monitoring tab toggles (Docker, Kubernetes, Certs, Plugins, etc.) are stored per-server in the browser. Changes made while on an agent do not affect local TM or other agents.
+- **Static Config** (Settings - Static Config) - Available if the agent has `STATIC_CONFIG_PATH` set. Raw YAML editing is supported; section-based editing (entrypoints, cert resolvers, etc.) is available only on local TM. Traefik restart works if the agent has `RESTART_METHOD` configured.
+- **Backups** (Settings - Backups) - Shows the agent's local `.bak` backup files. The agent creates a `.bak` automatically before every config write; you can also create a manual backup at any time. Restore, delete, and git history operations all proxy through the agent. Git backup configuration fields are hidden (managed via `GIT_BACKUP_*` env vars on the agent). The Static Config backup sub-tab is not shown for agents.
+- **CrowdSec** - If the agent has `CROWDSEC_LAPI_URL` and `CROWDSEC_API_KEY` configured, the CrowdSec tab shows that server's decisions and alerts.
+- **Settings sidebar** - When an agent is active, only agent-relevant Settings panels are shown: Backups, Route Monitoring tab toggles, Static Config (if configured), and System Monitoring tab toggles. Authentication, Connection, Notifications, and Templates are hidden - they only apply to the local TM instance.
 
 ## Install via installer script
 
@@ -117,6 +118,7 @@ sudo systemctl enable --now tma
 | `ACME_JSON_PATH` | - | Path to `acme.json` - enables cert info reads |
 | `ACCESS_LOG_PATH` | - | Path to Traefik access log file |
 | `PLUGINS_DIR` | - | Path to Traefik plugins directory |
+| `BACKUP_DIR` | `/app/backups` | Directory where local `.bak` backup files are stored |
 
 ### Traefik restart
 
@@ -193,7 +195,7 @@ When `GIT_BACKUP_ENABLED=true`, the agent handles its own git backup cycle auton
 
 When an agent is active in the TM server switcher, Settings - Backups shows the agent's backup data:
 
-- **Dynamic Config tab** - lists and restores the agent's local backups
+- **Dynamic Config tab** - lists and restores the agent's local `.bak` backups. The agent automatically creates a `.bak` file before every config write (route or middleware save), so changes can always be rolled back. Manual "Create Backup" backs up all config files at once. Backup files are named `filename.YYYYMMDD_HHMMSS.bak` and stored in `BACKUP_DIR`.
 - **Git tab** - shows the agent's git history, status, and allows manual push and git restore; git configuration fields are hidden (managed by env vars on the agent)
 - **Static Config tab** - not shown for agents (static config is part of the regular backup)
 
