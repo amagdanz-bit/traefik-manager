@@ -1320,6 +1320,20 @@ async function saveMwAjax(event) {
     event.preventDefault();
     const mwMode = document.getElementById('mwCurrentMode')?.value;
     if (mwMode === 'wizard') {
+        const tpl = document.getElementById('mwTemplate')?.value || '';
+        if (tpl === 'basicAuth' || tpl === 'digestAuth') {
+            const usersEl = document.getElementById(tpl === 'basicAuth' ? 'wizBaUsers' : 'wizDaUsers');
+            const users = (usersEl?.value || '').trim().split('\n').map(l => l.trim()).filter(Boolean);
+            if (!users.length) { showToast('Add at least one user before saving', 'error'); return; }
+        }
+        if (['forwardAuth','forwardAuthAuthentik','forwardAuthAuthelia'].includes(tpl)) {
+            const addr = (document.getElementById('wizFaAddress')?.value || '').trim();
+            if (!addr) { showToast('Forward auth address is required', 'error'); return; }
+        }
+        if (tpl === 'forwardAuthGatekeeper') {
+            const url = (document.getElementById('wizGkUrl')?.value || '').trim();
+            if (!url) { showToast('Gatekeeper URL is required', 'error'); return; }
+        }
         buildYamlFromWizard();
     } else if (_mwMonacoEditor) {
         document.getElementById('middlewareContent').value = _mwMonacoEditor.getValue();
