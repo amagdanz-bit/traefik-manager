@@ -144,6 +144,10 @@ func (a *App) router(w http.ResponseWriter, r *http.Request) {
 		a.traefikProxy(w, r, "/api/entrypoints")
 	case p == "/api/traefik/version" && m == http.MethodGet:
 		a.traefikProxy(w, r, "/api/version")
+	case p == "/api/traefik/logs" && m == http.MethodGet:
+		a.logsHandler(w, r)
+	case p == "/api/traefik/certs" && m == http.MethodGet:
+		a.certsHandler(w, r)
 
 	case p == "/api/configs" && m == http.MethodGet:
 		a.configsReadHandler(w, r)
@@ -199,6 +203,13 @@ func (a *App) router(w http.ResponseWriter, r *http.Request) {
 		a.keysCreateHandler(w, r)
 	case strings.HasPrefix(p, "/api/keys/") && m == http.MethodDelete:
 		a.keysDeleteHandler(w, r, strings.TrimPrefix(p, "/api/keys/"))
+
+	case strings.HasPrefix(p, "/api/routes/") && strings.HasSuffix(p, "/raw") && m == http.MethodGet:
+		id := strings.TrimSuffix(strings.TrimPrefix(p, "/api/routes/"), "/raw")
+		a.routeRawGetHandler(w, r, id)
+	case strings.HasPrefix(p, "/api/routes/") && strings.HasSuffix(p, "/raw") && m == http.MethodPost:
+		id := strings.TrimSuffix(strings.TrimPrefix(p, "/api/routes/"), "/raw")
+		a.routeRawSaveHandler(w, r, id)
 
 	default:
 		jsonError(w, "not found", http.StatusNotFound)

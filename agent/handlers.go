@@ -3,7 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log"
@@ -16,6 +19,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // ---- helpers ----------------------------------------------------------------
@@ -828,6 +833,347 @@ func (a *App) gitRestoreHandler(w http.ResponseWriter, r *http.Request, sha stri
 		}
 	}
 	jsonOK(w, map[string]any{"ok": true})
+}
+
+func (a *App) certsHandler(w http.ResponseWriter, r *http.Request) {
+	if a.cfg.ACMEJSONPath == "" {
+		jsonOK(w, map[string]any{"certs": []any{}, "error": "ACME_JSON_PATH not configured"})
+		return
+	}
+	data, err := os.ReadFile(a.cfg.ACMEJSONPath)
+	if err != nil {
+		jsonOK(w, map[string]any{"certs": []any{}, "error": "acme.json not found at " + a.cfg.ACMEJSONPath})
+		return
+	}
+	var acme map[string]any
+	if err := json.Unmarshal(data, &acme); err != nil {
+		jsonOK(w, map[string]any{"certs": []any{}, "error": "failed to parse acme.json"})
+		return
+	}
+	type certEntry struct {
+		Resolver string   `json:"resolver"`
+		Main     string   `json:"main"`
+		Sans     []string `json:"sans"`
+		NotAfter *string  `json:"not_after"`
+	}
+	var certs []certEntry
+	for resolverName, resolverData := range acme {
+		rd, ok := resolverData.(map[string]any)
+		if !ok {
+			continue
+		}
+		rawCerts, _ := rd["Certificates"].([]any)
+		if rawCerts == nil {
+			rawCerts, _ = rd["certificates"].([]any)
+		}
+		for _, rc := range rawCerts {
+			c, ok := rc.(map[string]any)
+			if !ok {
+				continue
+			}
+			domainMap, _ := c["domain"].(map[string]any)
+			main, _ := domainMap["main"].(string)
+			sans := []string{}
+			if sv, ok := domainMap["sans"].([]any); ok {
+				for _, s := range sv {
+					if str, ok := s.(string); ok {
+						sans = append(sans, str)
+					}
+				}
+			}
+			var notAfter *string
+			if certB64, ok := c["certificate"].(string); ok && certB64 != "" {
+				if na := parseCertExpiry(certB64); na != "" {
+					notAfter = &na
+				}
+			}
+			certs = append(certs, certEntry{Resolver: resolverName, Main: main, Sans: sans, NotAfter: notAfter})
+		}
+	}
+	if certs == nil {
+		certs = []certEntry{}
+	}
+	jsonOK(w, map[string]any{"certs": certs})
+}
+
+func parseCertExpiry(b64pem string) string {
+	pemBytes, err := base64.StdEncoding.DecodeString(b64pem)
+	if err != nil {
+		return ""
+	}
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return ""
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return ""
+	}
+	return cert.NotAfter.UTC().Format("2006-01-02T15:04:05Z")
+}
+
+func (a *App) configFiles() []string {
+	cfgPath := a.cfg.ConfigPath
+	info, err := os.Stat(cfgPath)
+	if err != nil {
+		return nil
+	}
+	if !info.IsDir() {
+		return []string{cfgPath}
+	}
+	entries, _ := os.ReadDir(cfgPath)
+	var files []string
+	for _, e := range entries {
+		n := e.Name()
+		if !e.IsDir() && (strings.HasSuffix(n, ".yml") || strings.HasSuffix(n, ".yaml")) {
+			files = append(files, filepath.Join(cfgPath, n))
+		}
+	}
+	return files
+}
+
+func (a *App) routeRawGetHandler(w http.ResponseWriter, r *http.Request, routeID string) {
+	var rname, cf string
+	if idx := strings.Index(routeID, "::"); idx >= 0 {
+		cf = routeID[:idx]
+		rname = routeID[idx+2:]
+	} else {
+		rname = routeID
+	}
+
+	var scanPaths []string
+	if cf != "" {
+		scanPaths = []string{filepath.Join(a.cfg.ConfigPath, cf)}
+	} else {
+		scanPaths = a.configFiles()
+	}
+
+	for _, p := range scanPaths {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		var config map[string]any
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			continue
+		}
+		for _, proto := range []string{"http", "tcp", "udp"} {
+			protoMap, _ := config[proto].(map[string]any)
+			if protoMap == nil {
+				continue
+			}
+			routers, _ := protoMap["routers"].(map[string]any)
+			router, ok := routers[rname]
+			if !ok {
+				continue
+			}
+			routerMap, _ := router.(map[string]any)
+			svcName := rname
+			if sn, ok := routerMap["service"].(string); ok && sn != "" {
+				svcName = sn
+			}
+			out := map[string]any{proto: map[string]any{"routers": map[string]any{rname: router}}}
+			services, _ := protoMap["services"].(map[string]any)
+			if svc, ok := services[svcName]; ok {
+				out[proto].(map[string]any)["services"] = map[string]any{svcName: svc}
+			}
+			raw, err := yaml.Marshal(out)
+			if err != nil {
+				jsonError(w, "failed to marshal YAML", http.StatusInternalServerError)
+				return
+			}
+			jsonOK(w, map[string]any{"raw": string(raw), "configFile": filepath.Base(p), "proto": proto})
+			return
+		}
+	}
+	jsonError(w, "Route not found", http.StatusNotFound)
+}
+
+func (a *App) routeRawSaveHandler(w http.ResponseWriter, r *http.Request, routeID string) {
+	var body struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Content) == "" {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	var rname, cf string
+	if idx := strings.Index(routeID, "::"); idx >= 0 {
+		cf = routeID[:idx]
+		rname = routeID[idx+2:]
+	} else {
+		rname = routeID
+	}
+
+	var newData map[string]any
+	if err := yaml.Unmarshal([]byte(body.Content), &newData); err != nil {
+		jsonError(w, "invalid YAML: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var targetPath string
+	if cf != "" {
+		targetPath = filepath.Join(a.cfg.ConfigPath, cf)
+	} else {
+		for _, p := range a.configFiles() {
+			data, err := os.ReadFile(p)
+			if err != nil {
+				continue
+			}
+			var cfg map[string]any
+			if err := yaml.Unmarshal(data, &cfg); err != nil {
+				continue
+			}
+			for _, proto := range []string{"http", "tcp", "udp"} {
+				protoMap, _ := cfg[proto].(map[string]any)
+				routers, _ := protoMap["routers"].(map[string]any)
+				if _, ok := routers[rname]; ok {
+					targetPath = p
+					break
+				}
+			}
+			if targetPath != "" {
+				break
+			}
+		}
+	}
+	if targetPath == "" {
+		jsonError(w, "Route not found", http.StatusNotFound)
+		return
+	}
+
+	data, _ := os.ReadFile(targetPath)
+	var config map[string]any
+	yaml.Unmarshal(data, &config)
+	if config == nil {
+		config = map[string]any{}
+	}
+
+	for _, proto := range []string{"http", "tcp", "udp"} {
+		protoMap, _ := config[proto].(map[string]any)
+		if protoMap == nil {
+			continue
+		}
+		routers, _ := protoMap["routers"].(map[string]any)
+		if router, ok := routers[rname]; ok {
+			routerMap, _ := router.(map[string]any)
+			svcName := rname
+			if sn, ok := routerMap["service"].(string); ok && sn != "" {
+				svcName = sn
+			}
+			delete(routers, rname)
+			if services, ok := protoMap["services"].(map[string]any); ok {
+				delete(services, svcName)
+			}
+		}
+	}
+
+	for _, proto := range []string{"http", "tcp", "udp"} {
+		newProto, _ := newData[proto].(map[string]any)
+		if newProto == nil {
+			continue
+		}
+		section, _ := config[proto].(map[string]any)
+		if section == nil {
+			section = map[string]any{}
+			config[proto] = section
+		}
+		if newRouters, ok := newProto["routers"].(map[string]any); ok {
+			existing, _ := section["routers"].(map[string]any)
+			if existing == nil {
+				existing = map[string]any{}
+			}
+			for k, v := range newRouters {
+				existing[k] = v
+			}
+			section["routers"] = existing
+		}
+		if newServices, ok := newProto["services"].(map[string]any); ok {
+			existing, _ := section["services"].(map[string]any)
+			if existing == nil {
+				existing = map[string]any{}
+			}
+			for k, v := range newServices {
+				existing[k] = v
+			}
+			section["services"] = existing
+		}
+	}
+
+	if err := a.createFileBak(targetPath, filepath.Base(targetPath)); err != nil {
+		log.Printf("pre-write backup failed: %v", err)
+	}
+	out, err := yaml.Marshal(config)
+	if err != nil {
+		jsonError(w, "failed to marshal YAML", http.StatusInternalServerError)
+		return
+	}
+	if err := atomicWrite(targetPath, out); err != nil {
+		jsonError(w, "write failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if a.cfg.GitBackupEnabled && a.cfg.GitBackupAutoPush && a.cfg.GitBackupRepo != "" {
+		go func() {
+			if err := a.gitPush("route raw save"); err != nil {
+				log.Printf("git auto-push failed: %v", err)
+			}
+		}()
+	}
+	jsonOK(w, map[string]any{"ok": true})
+}
+
+func (a *App) logsHandler(w http.ResponseWriter, r *http.Request) {
+	if a.cfg.AccessLogPath == "" {
+		jsonOK(w, map[string]any{"error": "ACCESS_LOG_PATH not configured", "lines": []any{}})
+		return
+	}
+	linesReq := 100
+	if v := r.URL.Query().Get("lines"); v != "" {
+		fmt.Sscanf(v, "%d", &linesReq)
+		if linesReq > 1000 {
+			linesReq = 1000
+		}
+	}
+	f, err := os.Open(a.cfg.AccessLogPath)
+	if err != nil {
+		jsonOK(w, map[string]any{"error": "Access log not found at " + a.cfg.AccessLogPath, "lines": []any{}})
+		return
+	}
+	defer f.Close()
+
+	info, _ := f.Stat()
+	size := info.Size()
+	const bufSize = 8192
+	var collected []string
+	remaining := size
+	partial := []byte{}
+	for remaining > 0 && len(collected) < linesReq {
+		chunk := int64(bufSize)
+		if chunk > remaining {
+			chunk = remaining
+		}
+		remaining -= chunk
+		buf := make([]byte, chunk)
+		f.Seek(remaining, io.SeekStart)
+		f.Read(buf)
+		data := append(buf, partial...)
+		parts := bytes.Split(data, []byte("\n"))
+		partial = parts[0]
+		for i := len(parts) - 1; i >= 1; i-- {
+			line := strings.TrimSpace(string(parts[i]))
+			if line != "" {
+				collected = append([]string{line}, collected...)
+				if len(collected) >= linesReq {
+					break
+				}
+			}
+		}
+	}
+	if len(collected) > linesReq {
+		collected = collected[len(collected)-linesReq:]
+	}
+	jsonOK(w, map[string]any{"lines": collected})
 }
 
 func (a *App) gitResetHandler(w http.ResponseWriter, r *http.Request) {

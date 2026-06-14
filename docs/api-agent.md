@@ -29,6 +29,8 @@ Requests are rate-limited per IP using `TMA_RATE_LIMIT` (default: 300 requests/m
 | GET | `/api/traefik/middlewares` | Middlewares across all protocols - returns `{"http":[...],"tcp":[...]}` |
 | GET | `/api/traefik/entrypoints` | Entrypoints |
 | GET | `/api/traefik/version` | Traefik version |
+| GET | `/api/traefik/logs` | Last N access log lines (requires `ACCESS_LOG_PATH`) - `?lines=100` |
+| GET | `/api/traefik/certs` | Certificates from acme.json (requires `ACME_JSON_PATH`) |
 | GET | `/api/configs` | Read dynamic config file(s) |
 | POST | `/api/configs` | Write a dynamic config file (creates a `.bak` before writing) |
 | GET | `/api/static` | Read static config (requires `STATIC_CONFIG_PATH`) |
@@ -49,6 +51,8 @@ Requests are rate-limited per IP using `TMA_RATE_LIMIT` (default: 300 requests/m
 | GET | `/api/backup/git/commit/<sha>/diff` | Per-file diff for a commit |
 | POST | `/api/backup/git/restore/<sha>` | Restore configs from a git commit |
 | DELETE | `/api/backup/git/repo` | Reset (delete) local git repo clone |
+| GET | `/api/routes/<id>/raw` | Raw YAML for a single route (router + service block) - `id` is the route name or `configFile::routeName` |
+| POST | `/api/routes/<id>/raw` | Save raw YAML for a route - body: `{"content": "<yaml>"}` |
 | GET | `/api/keys` | List API keys |
 | POST | `/api/keys` | Create an API key |
 | DELETE | `/api/keys/<id>` | Delete an API key |

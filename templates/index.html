@@ -5330,7 +5330,7 @@ async function openRouteYamlEditor(id) {
     const title = document.getElementById('routeYamlPopoutTitle');
     if (title) title.textContent = `Raw YAML - ${name}`;
     try {
-        const res  = await fetch(`/api/routes/${encodeURIComponent(id)}/raw`);
+        const res  = await agentFetch(`/api/routes/${encodeURIComponent(id)}/raw`);
         const data = await res.json();
         if (data.error) { showToast(data.error, 'error'); return; }
         const overlay = document.getElementById('routeYamlPopout');
@@ -5349,7 +5349,7 @@ function closeRouteYamlEditor() {
 async function saveRouteYaml() {
     const content = _routeYamlMonaco ? _routeYamlMonaco.getValue() : _routeYamlContent;
     try {
-        const res = await fetch(`/api/routes/${encodeURIComponent(_routeYamlId)}/raw`, {
+        const res = await agentFetch(`/api/routes/${encodeURIComponent(_routeYamlId)}/raw`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
             body: JSON.stringify({ content }),
