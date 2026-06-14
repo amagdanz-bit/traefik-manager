@@ -140,12 +140,6 @@ window.rmEnsureData = async function() {
     _rmDataLoaded = true;
 };
 
-window.rmInvalidateData = function() {
-    _rmDataLoaded = false;
-    _rmDrawn = false;
-    if (typeof window.rmInvalidateDashboard === 'function') window.rmInvalidateDashboard();
-};
-
 (function() {
 
 const _rmEps = r => Array.isArray(r.entryPoints) ? r.entryPoints : r.entryPoints ? [r.entryPoints] : [];
@@ -1197,6 +1191,12 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && _rmPopupOpen) window.rmClosePopup();
 });
+
+window.rmInvalidateData = function() {
+    _rmDataLoaded = false;
+    _rmDrawn = false;
+    if (typeof window.rmInvalidateDashboard === 'function') window.rmInvalidateDashboard();
+};
 
 })();
 </script>
