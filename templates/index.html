@@ -2318,7 +2318,10 @@ async function loadOverviewStats() {
             document.getElementById('cmpHttpErr').textContent      = hc.e;
             renderDonut('donutHttp', hc.s, hc.w, hc.e);
             renderBar('barHttpRouters', hc.s, hc.w, hc.e);
-            document.getElementById('countRoutes').textContent = http.length + tcpAll.length;
+            const _isFile = r => (r.provider || (r.name||'').split('@')[1]||'') === 'file';
+            const _countHttp   = _activeAgent ? http.filter(_isFile).length   : http.length;
+            const _countTcpAll = _activeAgent ? tcpAll.filter(_isFile).length : tcpAll.length;
+            document.getElementById('countRoutes').textContent = _countHttp + _countTcpAll;
 
             const dockerCount = [...http, ...tcpAll].filter(r => (r.provider || (r.name||'').split('@')[1]||'') === 'docker').length;
             document.getElementById('dockerTabCount').textContent = dockerCount || '-';
