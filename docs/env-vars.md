@@ -60,7 +60,9 @@ Variables marked ✅ **override** the corresponding `manager.yml` field on every
 | `ACME_JSON_PATH` | `/app/acme.json` | - | Path to `acme.json` for the Certificates tab |
 | `ACCESS_LOG_PATH` | `/app/logs/access.log` | - | Path to access log for the Logs tab |
 | `CROWDSEC_LAPI_URL` | _(unset)_ | ✅ `crowdsec_lapi_url` | CrowdSec LAPI base URL (e.g. `http://crowdsec:8080`) |
-| `CROWDSEC_API_KEY` | _(unset)_ | ✅ `crowdsec_api_key` | CrowdSec bouncer API key (stored encrypted) |
+| `CROWDSEC_API_KEY` | _(unset)_ | ✅ `crowdsec_api_key` | CrowdSec bouncer API key, reads decisions (stored encrypted) |
+| `CROWDSEC_MACHINE_ID` | _(unset)_ | ✅ `crowdsec_machine_id` | CrowdSec machine login, enables the Alerts view and unban |
+| `CROWDSEC_MACHINE_PASSWORD` | _(unset)_ | ✅ `crowdsec_machine_password` | Password for the machine login (stored encrypted) |
 
 ### Agents
 
@@ -549,7 +551,7 @@ Environment=CROWDSEC_LAPI_URL=http://crowdsec:8080
 **Default:** _(unset)_  
 **Overrides:** `crowdsec_api_key` in `manager.yml` (stored encrypted)
 
-CrowdSec bouncer API key. Generate one with `cscli bouncers add traefik-manager` inside the CrowdSec container. The settings field value takes priority over this env var.
+CrowdSec bouncer API key, used to read decisions. Generate one with `cscli bouncers add traefik-manager` inside the CrowdSec container. The settings field value takes priority over this env var.
 
 :::tabs
 == Docker / Podman
@@ -562,6 +564,31 @@ environment:
 Environment=CROWDSEC_API_KEY=your-bouncer-key
 ```
 :::
+
+---
+
+### `CROWDSEC_MACHINE_ID` / `CROWDSEC_MACHINE_PASSWORD`
+
+**Default:** _(unset)_  
+**Overrides:** `crowdsec_machine_id` / `crowdsec_machine_password` in `manager.yml` (password stored encrypted)
+
+CrowdSec machine credentials. Required to read **alerts** and to **unban** (delete decisions) from the CrowdSec tab - bouncer keys get `403 access forbidden` on those endpoints. Decisions only need `CROWDSEC_API_KEY`. Create a machine with `cscli machines add traefik-manager --auto` and copy the `login` / `password` from `local_api_credentials.yaml`. The settings field values take priority over these env vars.
+
+:::tabs
+== Docker / Podman
+```yaml
+environment:
+  - CROWDSEC_MACHINE_ID=traefik-manager
+  - CROWDSEC_MACHINE_PASSWORD=your-machine-password
+```
+== Linux (systemd)
+```ini
+Environment=CROWDSEC_MACHINE_ID=traefik-manager
+Environment=CROWDSEC_MACHINE_PASSWORD=your-machine-password
+```
+:::
+
+> If the password contains a `$`, escape it as `$$` in `docker-compose.yml`.
 
 ---
 

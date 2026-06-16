@@ -297,9 +297,17 @@
                             </div>
                             <div>
                                 <span class="settings-section-label">API Key</span>
-                                <div class="text-xs mb-2" style="color:var(--muted)">Bouncer API key. Stored encrypted. Leave blank to use the <code class="font-mono">CROWDSEC_API_KEY</code> env var.</div>
+                                <div class="text-xs mb-2" style="color:var(--muted)">Bouncer API key, used to read <strong>decisions</strong>. Stored encrypted. Leave blank to use the <code class="font-mono">CROWDSEC_API_KEY</code> env var.</div>
                                 <input type="password" id="settingsCrowdSecKey" class="input-field" placeholder="••••••••" autocomplete="new-password" onblur="saveSettings()">
                                 <div id="crowdsecKeySetHint" class="mt-1 text-xs hidden" style="color:var(--green)"><i class="ph-bold ph-check-circle"></i> API key configured</div>
+                            </div>
+                            <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+                                <span class="settings-section-label">Machine Credentials <span style="color:var(--muted);font-weight:400">(optional)</span></span>
+                                <div class="text-xs mb-2" style="color:var(--muted)">Required to read <strong>alerts</strong> and to unban (delete decisions) - bouncer keys cannot access those endpoints. Create one with <code class="font-mono">cscli machines add traefik-manager --auto</code> and copy the values from <code class="font-mono">local_api_credentials.yaml</code>.</div>
+                                <input type="text" id="settingsCrowdSecMachineId" class="input-field mb-2" placeholder="machine id" autocomplete="off" onblur="saveSettings()">
+                                <input type="password" id="settingsCrowdSecMachinePassword" class="input-field" placeholder="••••••••" autocomplete="new-password" onblur="saveSettings()">
+                                <div id="crowdsecMachineSetHint" class="mt-1 text-xs hidden" style="color:var(--green)"><i class="ph-bold ph-check-circle"></i> Machine password configured</div>
+                                <div class="text-xs mt-1" style="color:var(--muted)">Leave blank to use the <code class="font-mono">CROWDSEC_MACHINE_ID</code> / <code class="font-mono">CROWDSEC_MACHINE_PASSWORD</code> env vars.</div>
                             </div>
                             <div id="crowdsecSavedNotice" class="hidden text-xs px-3 py-2 rounded-md" style="background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.3);color:var(--green)">
                                 <i class="ph-bold ph-check-circle mr-1"></i>CrowdSec credentials saved
@@ -1013,7 +1021,17 @@
                                     </div>
                                     <div>
                                         <label class="settings-section-label">API Key <span style="color:var(--muted)">(optional)</span></label>
+                                        <div class="text-xs mb-1" style="color:var(--muted)">Bouncer key, reads decisions.</div>
                                         <input id="agCfgCsKey" type="password" class="input-field text-xs" placeholder="bouncer-api-key" oninput="agentCfgChanged()">
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Machine ID <span style="color:var(--muted)">(optional)</span></label>
+                                        <div class="text-xs mb-1" style="color:var(--muted)">Machine login enables the Alerts view and unban. Create with <code class="font-mono">cscli machines add traefik-manager --auto</code>.</div>
+                                        <input id="agCfgCsMachineId" type="text" class="input-field text-xs" placeholder="traefik-manager" oninput="agentCfgChanged()">
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Machine Password <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgCsMachinePassword" type="password" class="input-field text-xs" placeholder="machine-password" oninput="agentCfgChanged()">
                                     </div>
                                 </div>
 
@@ -1611,6 +1629,10 @@ async function openSettingsModal(panel) {
         document.getElementById('settingsCrowdSecUrl').value      = data.crowdsec_lapi_url || '';
         const csKeyHint = document.getElementById('crowdsecKeySetHint');
         if (csKeyHint) csKeyHint.classList.toggle('hidden', !data.crowdsec_api_key_set);
+        const csMidEl = document.getElementById('settingsCrowdSecMachineId');
+        if (csMidEl) csMidEl.value = data.crowdsec_machine_id || '';
+        const csMachineHint = document.getElementById('crowdsecMachineSetHint');
+        if (csMachineHint) csMachineHint.classList.toggle('hidden', !data.crowdsec_machine_password_set);
         const whEl = document.getElementById('webhookUrlInput');
         if (whEl) whEl.value = data.webhook_url || '';
         const whType = document.getElementById('webhookTypeSelect');
@@ -1767,6 +1789,8 @@ async function saveSettings() {
     const webhookPassword   = document.getElementById('webhookPassword')?.value || '';
     const crowdsecLapiUrl     = document.getElementById('settingsCrowdSecUrl')?.value.trim() || '';
     const crowdsecApiKey      = document.getElementById('settingsCrowdSecKey')?.value || '';
+    const crowdsecMachineId       = document.getElementById('settingsCrowdSecMachineId')?.value.trim() || '';
+    const crowdsecMachinePassword = document.getElementById('settingsCrowdSecMachinePassword')?.value || '';
     const traefikApiUser      = document.getElementById('settingsApiUser')?.value.trim() || '';
     const traefikApiPassword  = document.getElementById('settingsApiPassword')?.value || '';
     if (!domains.length) return;
@@ -1774,7 +1798,7 @@ async function saveSettings() {
         const res  = await fetch('/api/settings', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfHeaders()['X-CSRF-Token']},
-            body: JSON.stringify({ domains, cert_resolver: resolver, traefik_api_url: apiUrl, acme_json_path: acmeJsonPath, access_log_path: accessLogPath, static_config_path: staticConfigPath, webhook_url: webhookUrl, webhook_type: webhookType, webhook_username: webhookUsername, webhook_password: webhookPassword, crowdsec_lapi_url: crowdsecLapiUrl, crowdsec_api_key: crowdsecApiKey, traefik_api_user: traefikApiUser, traefik_api_password: traefikApiPassword })
+            body: JSON.stringify({ domains, cert_resolver: resolver, traefik_api_url: apiUrl, acme_json_path: acmeJsonPath, access_log_path: accessLogPath, static_config_path: staticConfigPath, webhook_url: webhookUrl, webhook_type: webhookType, webhook_username: webhookUsername, webhook_password: webhookPassword, crowdsec_lapi_url: crowdsecLapiUrl, crowdsec_api_key: crowdsecApiKey, crowdsec_machine_id: crowdsecMachineId, crowdsec_machine_password: crowdsecMachinePassword, traefik_api_user: traefikApiUser, traefik_api_password: traefikApiPassword })
         });
         const data = await res.json();
         if (data.success) {
@@ -1786,6 +1810,10 @@ async function saveSettings() {
             if (crowdsecApiKey) {
                 document.getElementById('settingsCrowdSecKey').value = '';
                 document.getElementById('crowdsecKeySetHint')?.classList.remove('hidden');
+            }
+            if (crowdsecMachinePassword) {
+                document.getElementById('settingsCrowdSecMachinePassword').value = '';
+                document.getElementById('crowdsecMachineSetHint')?.classList.remove('hidden');
             }
             if (traefikApiPassword) {
                 document.getElementById('settingsApiPassword').value = '';
@@ -1811,6 +1839,11 @@ async function resetCrowdSecConfig() {
     document.getElementById('settingsCrowdSecUrl').value = '';
     document.getElementById('settingsCrowdSecKey').value = '';
     document.getElementById('crowdsecKeySetHint')?.classList.add('hidden');
+    const csMid = document.getElementById('settingsCrowdSecMachineId');
+    if (csMid) csMid.value = '';
+    const csMpw = document.getElementById('settingsCrowdSecMachinePassword');
+    if (csMpw) csMpw.value = '';
+    document.getElementById('crowdsecMachineSetHint')?.classList.add('hidden');
     await saveSettings();
 }
 

@@ -441,6 +441,8 @@ def load_settings() -> dict:
         'webhook_password':     '',
         'crowdsec_lapi_url':    '',
         'crowdsec_api_key':     '',
+        'crowdsec_machine_id':       '',
+        'crowdsec_machine_password': '',
         'traefik_api_user':          os.environ.get('TRAEFIK_API_USER', ''),
         'traefik_api_password':      os.environ.get('TRAEFIK_API_PASSWORD', ''),
         'git_backup_enabled':        False,
@@ -565,6 +567,10 @@ def load_settings() -> dict:
             merged['crowdsec_lapi_url'] = str(data['crowdsec_lapi_url']).strip()
         if 'crowdsec_api_key' in data:
             merged['crowdsec_api_key'] = _decrypt_otp_secret(str(data['crowdsec_api_key']))
+        if 'crowdsec_machine_id' in data:
+            merged['crowdsec_machine_id'] = str(data['crowdsec_machine_id']).strip()
+        if 'crowdsec_machine_password' in data:
+            merged['crowdsec_machine_password'] = _decrypt_otp_secret(str(data['crowdsec_machine_password']))
         if 'traefik_api_user' in data:
             merged['traefik_api_user'] = str(data['traefik_api_user']).strip()
         if 'traefik_api_password' in data:
@@ -611,6 +617,7 @@ def save_settings(domains, cert_resolver, traefik_api_url,
                   oidc_groups_claim=None, webhook_url=None, webhook_type=None,
                   webhook_username=None, webhook_password=None,
                   crowdsec_lapi_url=None, crowdsec_api_key=None,
+                  crowdsec_machine_id=None, crowdsec_machine_password=None,
                   traefik_api_user=None, traefik_api_password=None,
                   git_backup_enabled=None, git_backup_repo=None,
                   git_backup_branch=None, git_backup_username=None,
@@ -668,6 +675,10 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         crowdsec_lapi_url = _cur.get('crowdsec_lapi_url', '')
     if crowdsec_api_key is None:
         crowdsec_api_key = _cur.get('crowdsec_api_key', '')
+    if crowdsec_machine_id is None:
+        crowdsec_machine_id = _cur.get('crowdsec_machine_id', '')
+    if crowdsec_machine_password is None:
+        crowdsec_machine_password = _cur.get('crowdsec_machine_password', '')
     if traefik_api_user is None:
         traefik_api_user = _cur.get('traefik_api_user', '')
     if traefik_api_password is None:
@@ -730,6 +741,8 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         'webhook_password':     _encrypt_otp_secret(webhook_password) if webhook_password else '',
         'crowdsec_lapi_url':    crowdsec_lapi_url,
         'crowdsec_api_key':     _encrypt_otp_secret(crowdsec_api_key) if crowdsec_api_key else '',
+        'crowdsec_machine_id':       crowdsec_machine_id,
+        'crowdsec_machine_password': _encrypt_otp_secret(crowdsec_machine_password) if crowdsec_machine_password else '',
         'traefik_api_user':          traefik_api_user,
         'traefik_api_password':      _encrypt_otp_secret(traefik_api_password) if traefik_api_password else '',
         'git_backup_enabled':        git_backup_enabled,
@@ -1687,6 +1700,65 @@ def _cs_api_key() -> str:
     s = load_settings()
     return s.get('crowdsec_api_key', '').strip() or os.environ.get('CROWDSEC_API_KEY', '').strip()
 
+def _cs_machine_id() -> str:
+    s = load_settings()
+    return s.get('crowdsec_machine_id', '').strip() or os.environ.get('CROWDSEC_MACHINE_ID', '').strip()
+
+def _cs_machine_password() -> str:
+    s = load_settings()
+    return s.get('crowdsec_machine_password', '').strip() or os.environ.get('CROWDSEC_MACHINE_PASSWORD', '').strip()
+
+def _cs_has_machine() -> bool:
+    return bool(_cs_machine_id() and _cs_machine_password())
+
+_cs_jwt_cache = {'token': '', 'expiry': None}
+
+def _cs_jwt(lapi: str = None) -> str:
+    if lapi is None:
+        lapi = _cs_lapi_url()
+    lapi = lapi.rstrip('/')
+    mid  = _cs_machine_id()
+    pw   = _cs_machine_password()
+    if not (lapi and mid and pw):
+        return ''
+    now = datetime.now(timezone.utc)
+    if _cs_jwt_cache['token'] and _cs_jwt_cache['expiry'] and now < _cs_jwt_cache['expiry']:
+        return _cs_jwt_cache['token']
+    try:
+        resp = requests.post(f"{lapi}/v1/watchers/login",
+                             json={'machine_id': mid, 'password': pw, 'scenarios': []},
+                             timeout=5)
+        resp.raise_for_status()
+        body  = resp.json() or {}
+        token = body.get('token', '')
+        if not token:
+            return ''
+        _cs_jwt_cache['token'] = token
+        try:
+            exp = datetime.fromisoformat(str(body.get('expire', '')).replace('Z', '+00:00'))
+            _cs_jwt_cache['expiry'] = exp - timedelta(minutes=2)
+        except Exception:
+            _cs_jwt_cache['expiry'] = now + timedelta(minutes=58)
+        return token
+    except Exception as e:
+        logger.warning(f"CrowdSec machine login failed: {e}")
+        return ''
+
+def _cs_machine_request(method: str, path: str, **kwargs):
+    lapi  = _cs_lapi_url().rstrip('/')
+    token = _cs_jwt(lapi)
+    if not (lapi and token):
+        return None
+    try:
+        resp = requests.request(method, f"{lapi}{path}",
+                                headers={'Authorization': f'Bearer {token}', 'Accept': 'application/json'},
+                                timeout=5, **kwargs)
+        resp.raise_for_status()
+        return resp.json() if resp.content else {}
+    except Exception as e:
+        logger.warning(f"CrowdSec machine request error {method} {path}: {e}")
+        return None
+
 def _cs_request(method: str, path: str, lapi: str = None, key: str = None, **kwargs):
     if lapi is None:
         lapi = _cs_lapi_url()
@@ -1745,13 +1817,19 @@ def api_cs_decisions():
 @login_required
 def api_cs_alerts():
     lapi = _cs_lapi_url()
-    key  = _cs_api_key()
-    if not (lapi and key):
+    if not (lapi and (_cs_api_key() or _cs_has_machine())):
         return jsonify({'error': 'CrowdSec not configured'}), 503
     try:
+        if _cs_has_machine():
+            token = _cs_jwt(lapi)
+            if not token:
+                return jsonify({'error': 'CrowdSec machine login failed - check CROWDSEC_MACHINE_ID / CROWDSEC_MACHINE_PASSWORD'}), 502
+            headers = {'Authorization': f'Bearer {token}', 'Accept': 'application/json'}
+        else:
+            headers = {'X-Api-Key': _cs_api_key(), 'Accept': 'application/json'}
         resp = requests.get(
             f"{lapi.rstrip('/')}/v1/alerts?limit=200",
-            headers={'X-Api-Key': key, 'Accept': 'application/json'},
+            headers=headers,
             timeout=5,
         )
         if not resp.ok:
@@ -1798,7 +1876,10 @@ def api_cs_add_decision():
         'source': {'ip': ip, 'scope': 'Ip', 'value': ip},
         'start_at': now, 'stop_at': now,
     }]
-    result = _cs_request('POST', '/v1/alerts', lapi=lapi, key=key, json=payload)
+    if _cs_has_machine():
+        result = _cs_machine_request('POST', '/v1/alerts', json=payload)
+    else:
+        result = _cs_request('POST', '/v1/alerts', lapi=lapi, key=key, json=payload)
     if result is None:
         return jsonify({'error': 'Failed to add decision - check LAPI permissions'}), 502
     return jsonify({'ok': True})
@@ -1807,9 +1888,12 @@ def api_cs_add_decision():
 @csrf_protect
 @login_required
 def api_cs_unban(decision_id):
-    if not (_cs_lapi_url() and _cs_api_key()):
+    if not (_cs_lapi_url() and (_cs_api_key() or _cs_has_machine())):
         return jsonify({'error': 'CrowdSec not configured'}), 503
-    result = _cs_request('DELETE', f'/v1/decisions/{decision_id}')
+    if _cs_has_machine():
+        result = _cs_machine_request('DELETE', f'/v1/decisions/{decision_id}')
+    else:
+        result = _cs_request('DELETE', f'/v1/decisions/{decision_id}')
     if result is None:
         return jsonify({'error': 'Failed to delete decision'}), 500
     add_notification('success', f'Decision {decision_id} deleted (IP unbanned)')
@@ -3004,6 +3088,7 @@ def api_get_settings():
     s.pop('oidc_client_secret', None)
     s.pop('webhook_password', None)
     s.pop('crowdsec_api_key', None)
+    s.pop('crowdsec_machine_password', None)
     s.pop('traefik_api_password', None)
     s['traefik_api_password_set'] = bool(load_settings().get('traefik_api_password', ''))
     s['auth_enabled']             = _auth_enabled()
@@ -3011,6 +3096,7 @@ def api_get_settings():
     s['auth_env_forced']        = os.environ.get('AUTH_ENABLED', '').strip().lower() in ('false', '0', 'no')
     s['oidc_client_secret_set'] = bool(load_settings().get('oidc_client_secret', ''))
     s['crowdsec_api_key_set']   = bool(_cs_api_key())
+    s['crowdsec_machine_password_set'] = bool(_cs_machine_password())
     s['crowdsec_enabled']       = bool(_cs_lapi_url() and _cs_api_key())
     s['git_backup_token_set']   = bool(s.get('git_backup_token', ''))
     s.pop('git_backup_token', None)
@@ -3039,6 +3125,8 @@ def api_save_settings():
         webhook_password     = str(data.get('webhook_password', ''))
         crowdsec_lapi_url    = str(data.get('crowdsec_lapi_url', '')).strip()
         crowdsec_api_key     = str(data.get('crowdsec_api_key', ''))
+        crowdsec_machine_id       = str(data.get('crowdsec_machine_id', '')).strip()
+        crowdsec_machine_password = str(data.get('crowdsec_machine_password', ''))
         traefik_api_user          = str(data.get('traefik_api_user', '')).strip()
         traefik_api_password      = str(data.get('traefik_api_password', ''))
         git_backup_enabled        = bool(data['git_backup_enabled'])        if 'git_backup_enabled'        in data else None
@@ -3053,6 +3141,8 @@ def api_save_settings():
             webhook_password = existing.get('webhook_password', '')
         if not crowdsec_api_key:
             crowdsec_api_key = existing.get('crowdsec_api_key', '')
+        if not crowdsec_machine_password:
+            crowdsec_machine_password = existing.get('crowdsec_machine_password', '')
         if not traefik_api_password:
             traefik_api_password = existing.get('traefik_api_password', '')
         if not git_backup_token:
@@ -3070,6 +3160,8 @@ def api_save_settings():
                       webhook_password=webhook_password,
                       crowdsec_lapi_url=crowdsec_lapi_url,
                       crowdsec_api_key=crowdsec_api_key,
+                      crowdsec_machine_id=crowdsec_machine_id,
+                      crowdsec_machine_password=crowdsec_machine_password,
                       traefik_api_user=traefik_api_user,
                       traefik_api_password=traefik_api_password,
                       git_backup_enabled=git_backup_enabled,
@@ -3083,6 +3175,7 @@ def api_save_settings():
         result.pop('password_hash', None)
         result.pop('oidc_client_secret', None)
         result.pop('crowdsec_api_key', None)
+        result.pop('crowdsec_machine_password', None)
         result.pop('traefik_api_password', None)
         result.pop('git_backup_token', None)
         return jsonify({'success': True, 'settings': result})

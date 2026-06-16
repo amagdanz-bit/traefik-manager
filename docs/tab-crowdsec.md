@@ -74,12 +74,22 @@ Go to **Settings → System Monitoring** and enable the CrowdSec toggle.
 
 Settings fields take priority over environment variables.
 
+CrowdSec's LAPI uses **two different credentials** depending on the operation:
+
+| Operation | Credential | Why |
+|---|---|---|
+| **Decisions** (active bans/captchas/bypasses) | Bouncer API key | Bouncers read the decisions stream |
+| **Alerts** + **unban** (delete decision) | Machine login | Bouncer keys get `403 access forbidden` on these endpoints |
+
+The Decisions view works with just the bouncer key. To also see **Alerts** and to unban from the UI, add CrowdSec **machine credentials**. Without them the Alerts section shows `403 access forbidden`.
+
 ### Option 1 - Settings UI
 
 Go to **Settings → System Monitoring → CrowdSec** and fill in:
 
 - **LAPI URL** - the base URL of your CrowdSec LAPI (e.g. `http://crowdsec:8080`)
-- **API key** - a bouncer API key (see below)
+- **API key** - a bouncer API key, reads decisions (see below)
+- **Machine Credentials** (optional) - machine ID + password, enables the Alerts view and unban
 
 Values are stored encrypted in `manager.yml`.
 
@@ -88,6 +98,9 @@ Values are stored encrypted in `manager.yml`.
 ```bash
 CROWDSEC_LAPI_URL=http://crowdsec:8080
 CROWDSEC_API_KEY=your-bouncer-api-key
+# Optional - enables the Alerts view and unban:
+CROWDSEC_MACHINE_ID=traefik-manager
+CROWDSEC_MACHINE_PASSWORD=your-machine-password
 ```
 
 ### Generating a bouncer API key
@@ -98,10 +111,19 @@ docker exec <crowdsec-container> cscli bouncers add traefik-manager
 
 Copy the key that is printed - it is only shown once.
 
-::: warning Alerts permission
-Bouncer keys created with `cscli bouncers add` have read access to decisions but not alerts by default. If the Alerts section shows a permissions error, you need a key with `read:alerts` scope or use the CrowdSec console to generate a key with full read permissions.
+### Generating machine credentials (for Alerts and unban)
 
-On a [remote agent](agent.md#crowdsec), alerts and unban are instead handled with CrowdSec machine credentials (`CROWDSEC_MACHINE_ID` / `CROWDSEC_MACHINE_PASSWORD`) alongside the bouncer key, since the agent reads decisions with the bouncer key and alerts with the machine login.
+```bash
+cscli machines add traefik-manager --auto
+cat /etc/crowdsec/local_api_credentials.yaml
+```
+
+Copy the `login` and `password` from that file into the Machine Credentials fields (or the `CROWDSEC_MACHINE_ID` / `CROWDSEC_MACHINE_PASSWORD` env vars). If the machine shows as unvalidated, run `cscli machines validate traefik-manager`.
+
+> **Compose gotcha**: if the machine password contains a `$`, escape it as `$$` in `docker-compose.yml` - Docker Compose treats a single `$` as a variable reference. No escaping is needed in the Settings UI.
+
+::: tip Why two credentials?
+This mirrors CrowdSec's own auth model: `cscli decisions list` uses the bouncer/LAPI path while `cscli alerts list` uses the machine credential. Traefik Manager reads decisions with the bouncer key and alerts with the machine login, so both must be set for the full tab.
 :::
 
 ## Docker Compose example
