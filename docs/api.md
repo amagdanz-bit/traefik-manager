@@ -280,23 +280,23 @@ Serve a cached app icon by slug (e.g. `plex`, `grafana`). Fetches from the selfh
 
 Get current application settings. Password hash is never included.
 
-| Field | Description |
-|---|---|
-| `domains` | Allowed domains list |
-| `cert_resolver` | Default ACME resolver name(s) |
-| `traefik_api_url` | Traefik API base URL |
-| `acme_json_path` | Path to `acme.json` inside the container |
-| `access_log_path` | Path to Traefik access log |
-| `static_config_path` | Path to `traefik.yml` |
-| `auth_enabled` | Password auth on/off |
-| `oidc_enabled` | OIDC on/off |
-| `visible_tabs` | Tab visibility map |
-| `webhook_url` | Notification webhook URL |
-| `traefik_api_user` | Traefik API username for basic auth |
-| `traefik_api_password_set` | `true` if a Traefik API password is saved |
-| `crowdsec_lapi_url` | CrowdSec LAPI URL |
-| `crowdsec_api_key_set` | `true` if a CrowdSec API key is saved |
-| `crowdsec_enabled` | `true` if both LAPI URL and API key are configured |
+| Field                      | Description                                        |
+| ----------------------------| ----------------------------------------------------|
+| `domains`                  | Allowed domains list                               |
+| `cert_resolver`            | Default ACME resolver name(s)                      |
+| `traefik_api_url`          | Traefik API base URL                               |
+| `acme_json_path`           | Path to `acme.json` inside the container           |
+| `access_log_path`          | Path to Traefik access log                         |
+| `static_config_path`       | Path to `traefik.yml`                              |
+| `auth_enabled`             | Password auth on/off                               |
+| `oidc_enabled`             | OIDC on/off                                        |
+| `visible_tabs`             | Tab visibility map                                 |
+| `webhook_url`              | Notification webhook URL                           |
+| `traefik_api_user`         | Traefik API username for basic auth                |
+| `traefik_api_password_set` | `true` if a Traefik API password is saved          |
+| `crowdsec_lapi_url`        | CrowdSec LAPI URL                                  |
+| `crowdsec_api_key_set`     | `true` if a CrowdSec API key is saved              |
+| `crowdsec_enabled`         | `true` if both LAPI URL and API key are configured |
 
 ---
 
@@ -764,6 +764,101 @@ Unban / remove a decision by ID.
 ```
 
 Returns `{ "ok": false, "error": "..." }` if the deletion fails or CrowdSec is not reachable.
+
+---
+
+## Agents
+
+Manage remote TMA agents registered in TM.
+
+### `GET /api/agents`
+
+List all registered agents. API keys are redacted in the response.
+
+**Response**
+
+```json
+{
+  "agents": [
+    {
+      "id": "uuid",
+      "name": "Server 2",
+      "url": "https://server2.example.com:8090",
+      "api_key": "***",
+      "created_at": "2026-01-01T00:00:00+00:00",
+      "traefik_api_url": "http://traefik:8080",
+      "config_path": "/app/config"
+    }
+  ]
+}
+```
+
+---
+
+### `POST /api/agents`
+
+Register a new agent. TM generates the API key and returns it once in the response. Store it immediately - it cannot be retrieved again.
+
+**Request body**
+
+```json
+{
+  "name": "Server 2",
+  "url": "https://server2.example.com:8090"
+}
+```
+
+**Response**
+
+```json
+{
+  "ok": true,
+  "agent": {
+    "id": "uuid",
+    "name": "Server 2",
+    "url": "https://server2.example.com:8090",
+    "api_key_raw": "the-plaintext-key-shown-once",
+    "api_key": "***"
+  }
+}
+```
+
+---
+
+### `PUT /api/agents/{id}`
+
+Update an agent's config fields (name, URL, paths, restart method, CrowdSec, git backup). Pass only the fields you want to change.
+
+---
+
+### `DELETE /api/agents/{id}`
+
+Remove an agent from TM. Does not stop the agent service on the remote server.
+
+---
+
+### `GET /api/agents/{id}/health`
+
+Check connectivity to an agent.
+
+**Response**
+
+```json
+{ "ok": true, "latency_ms": 12, "version": "1.5.0", "status": 200 }
+```
+
+Returns `"ok": false` if the agent is unreachable.
+
+---
+
+### `GET /api/agents/proxy/{id}/{path}`
+### `POST /api/agents/proxy/{id}/{path}`
+
+Proxy a request to the agent's API. TM injects the `X-Api-Key` header automatically.
+
+For example, `GET /api/agents/proxy/abc123/traefik/routers` proxies to `GET https://agent-host:8090/api/traefik/routers`.
+
+See [Agent API Reference](api-agent.md) for all available agent endpoints.
 
 ---
 

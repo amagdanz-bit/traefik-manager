@@ -6,7 +6,7 @@ LABEL org.opencontainers.image.title="Traefik Manager" \
       org.opencontainers.image.source="https://github.com/chr0nzz/traefik-manager" \
       org.opencontainers.image.licenses="GPL-3.0"
 
-RUN apk add --no-cache curl tar
+RUN apk add --no-cache curl tar git tzdata
 
 WORKDIR /app
 
@@ -87,4 +87,4 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:5000/ || exit 1
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--log-level", "info", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--log-level", "info", "app:app"]

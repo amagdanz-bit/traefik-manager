@@ -15,23 +15,17 @@
             </div>
 
             <div class="px-5 py-4 space-y-4">
-                {% if multi_config or config_dir_set %}
-                <div>
+                <div id="mwConfigFileSelectWrap" {% if not multi_config and not config_dir_set %}style="display:none"{% endif %}>
                     <label>Config File</label>
                     <select id="mwConfigFileSelect" class="input-field" onchange="onMwConfigFileChange(this)">
                         <option value="">Select a file...</option>
-                        {% if config_dir_set %}
-                        <option value="__new__">+ New file...</option>
-                        {% endif %}
+                        <option value="__new__" id="mwCfNewFileOpt" {% if not config_dir_set %}style="display:none"{% endif %}>+ New file...</option>
                         {% for cp in config_paths_list %}
                         <option value="{{ cp.label }}">{{ cp.label }}</option>
                         {% endfor %}
                     </select>
-                    {% if config_dir_set %}
                     <input type="text" id="newMwFileName" class="input-field mt-2" placeholder="middlewares-myauth.yml" style="display:none" oninput="document.getElementById('mwConfigFile').value=this.value">
-                    {% endif %}
                 </div>
-                {% endif %}
                 <input type="hidden" id="mwCurrentMode" value="yaml">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -73,6 +67,7 @@
                                 <option value="chain">Middleware Chain</option>
                                 <option value="inFlightReq">In-Flight Limit</option>
                             </optgroup>
+                            <optgroup label="My Templates" id="mwCustomOptgroup" style="display:none"></optgroup>
                         </select>
                     </div>
                 </div>

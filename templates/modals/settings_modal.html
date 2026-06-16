@@ -21,7 +21,7 @@
                     <span style="display:flex;align-items:center;gap:12px;"><i class="ph-bold ph-sliders" style="color:var(--muted)"></i>Interface</span>
                     <i class="ph-bold ph-caret-right" style="color:var(--muted)"></i>
                 </button>
-                <button class="settings-mobile-row" onclick="switchSettingsPanel('auth')">
+                <button class="settings-mobile-row" id="msb-auth-mobile" onclick="switchSettingsPanel('auth')">
                     <span style="display:flex;align-items:center;gap:12px;"><i class="ph-bold ph-lock-key" style="color:var(--muted)"></i>Authentication</span>
                     <i class="ph-bold ph-caret-right" style="color:var(--muted)"></i>
                 </button>
@@ -29,24 +29,32 @@
                     <span style="display:flex;align-items:center;gap:12px;"><i class="ph-bold ph-sliders-horizontal" style="color:var(--muted)"></i>Static Config</span>
                     <i class="ph-bold ph-caret-right" style="color:var(--muted)"></i>
                 </button>
-                <button class="settings-mobile-row" onclick="switchSettingsPanel('backups'); loadBackups()">
+                <button class="settings-mobile-row" id="msb-backups-mobile" onclick="switchSettingsPanel('backups'); loadBackups()">
                     <span style="display:flex;align-items:center;gap:12px;"><i class="ph-bold ph-clock-counter-clockwise" style="color:var(--muted)"></i>Backups</span>
                     <i class="ph-bold ph-caret-right" style="color:var(--muted)"></i>
                 </button>
-                <button class="settings-mobile-row" onclick="switchSettingsPanel('system')">
+                <button class="settings-mobile-row" id="msb-system-mobile" onclick="switchSettingsPanel('system')">
                     <span style="display:flex;align-items:center;gap:12px;"><i class="ph-bold ph-monitor" style="color:var(--muted)"></i>System Monitoring</span>
                     <i class="ph-bold ph-caret-right" style="color:var(--muted)"></i>
                 </button>
-                <button class="settings-mobile-row" onclick="switchSettingsPanel('routes')">
+                <button class="settings-mobile-row" id="msb-routes-mobile" onclick="switchSettingsPanel('routes')">
                     <span style="display:flex;align-items:center;gap:12px;"><i class="ph-bold ph-path" style="color:var(--muted)"></i>Route Monitoring</span>
                     <i class="ph-bold ph-caret-right" style="color:var(--muted)"></i>
                 </button>
-                <button class="settings-mobile-row" onclick="switchSettingsPanel('connection')">
+                <button class="settings-mobile-row" id="msb-connection-mobile" onclick="switchSettingsPanel('connection')">
                     <span style="display:flex;align-items:center;gap:12px;"><i class="ph-bold ph-plugs-connected" style="color:var(--muted)"></i>Connection</span>
                     <i class="ph-bold ph-caret-right" style="color:var(--muted)"></i>
                 </button>
-                <button class="settings-mobile-row" onclick="switchSettingsPanel('notifications')">
+                <button class="settings-mobile-row" id="msb-notifications-mobile" onclick="switchSettingsPanel('notifications')">
                     <span style="display:flex;align-items:center;gap:12px;"><i class="ph-bold ph-bell" style="color:var(--muted)"></i>Notifications</span>
+                    <i class="ph-bold ph-caret-right" style="color:var(--muted)"></i>
+                </button>
+                <button class="settings-mobile-row" onclick="switchSettingsPanel('agents'); loadAgentsList()">
+                    <span style="display:flex;align-items:center;gap:12px;"><i class="ph-bold ph-robot" style="color:var(--muted)"></i>Agents</span>
+                    <i class="ph-bold ph-caret-right" style="color:var(--muted)"></i>
+                </button>
+                <button class="settings-mobile-row" id="msb-agent-keys-mobile" style="display:none" onclick="switchSettingsPanel('agent-keys'); loadActiveAgentKeys()">
+                    <span style="display:flex;align-items:center;gap:12px;"><i class="ph-bold ph-key" style="color:var(--muted)"></i>API Keys</span>
                     <i class="ph-bold ph-caret-right" style="color:var(--muted)"></i>
                 </button>
                 <button class="settings-mobile-row" onclick="switchSettingsPanel('about')">
@@ -79,6 +87,15 @@
                 </button>
                 <button class="modal-sidebar-btn" id="msb-notifications" onclick="switchSettingsPanel('notifications', this)">
                     <i class="ph-bold ph-bell"></i> Notifications
+                </button>
+                <button class="modal-sidebar-btn" id="msb-agents" onclick="switchSettingsPanel('agents', this); loadAgentsList()">
+                    <i class="ph-bold ph-robot"></i> Agents
+                </button>
+                <button class="modal-sidebar-btn" id="msb-agent-keys" style="display:none" onclick="switchSettingsPanel('agent-keys', this); loadActiveAgentKeys()">
+                    <i class="ph-bold ph-key"></i> API Keys
+                </button>
+                <button class="modal-sidebar-btn" id="msb-templates" onclick="switchSettingsPanel('templates', this); loadTemplatesList()">
+                    <i class="ph-bold ph-puzzle-piece"></i> Templates
                 </button>
                 <button class="modal-sidebar-btn" id="msb-about" onclick="switchSettingsPanel('about', this)">
                     <i class="ph-bold ph-info"></i> About
@@ -280,12 +297,25 @@
                             </div>
                             <div>
                                 <span class="settings-section-label">API Key</span>
-                                <div class="text-xs mb-2" style="color:var(--muted)">Bouncer API key. Stored encrypted. Leave blank to use the <code class="font-mono">CROWDSEC_API_KEY</code> env var.</div>
+                                <div class="text-xs mb-2" style="color:var(--muted)">Bouncer API key, used to read <strong>decisions</strong>. Stored encrypted. Leave blank to use the <code class="font-mono">CROWDSEC_API_KEY</code> env var.</div>
                                 <input type="password" id="settingsCrowdSecKey" class="input-field" placeholder="••••••••" autocomplete="new-password" onblur="saveSettings()">
                                 <div id="crowdsecKeySetHint" class="mt-1 text-xs hidden" style="color:var(--green)"><i class="ph-bold ph-check-circle"></i> API key configured</div>
                             </div>
+                            <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+                                <span class="settings-section-label">Machine Credentials <span style="color:var(--muted);font-weight:400">(optional)</span></span>
+                                <div class="text-xs mb-2" style="color:var(--muted)">Required to read <strong>alerts</strong> and to unban (delete decisions) - bouncer keys cannot access those endpoints. Create one with <code class="font-mono">cscli machines add traefik-manager --auto</code> and copy the values from <code class="font-mono">local_api_credentials.yaml</code>.</div>
+                                <input type="text" id="settingsCrowdSecMachineId" class="input-field mb-2" placeholder="machine id" autocomplete="off" onblur="saveSettings()">
+                                <input type="password" id="settingsCrowdSecMachinePassword" class="input-field" placeholder="••••••••" autocomplete="new-password" onblur="saveSettings()">
+                                <div id="crowdsecMachineSetHint" class="mt-1 text-xs hidden" style="color:var(--green)"><i class="ph-bold ph-check-circle"></i> Machine password configured</div>
+                                <div class="text-xs mt-1" style="color:var(--muted)">Leave blank to use the <code class="font-mono">CROWDSEC_MACHINE_ID</code> / <code class="font-mono">CROWDSEC_MACHINE_PASSWORD</code> env vars.</div>
+                            </div>
                             <div id="crowdsecSavedNotice" class="hidden text-xs px-3 py-2 rounded-md" style="background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.3);color:var(--green)">
                                 <i class="ph-bold ph-check-circle mr-1"></i>CrowdSec credentials saved
+                            </div>
+                            <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+                                <button onclick="resetCrowdSecConfig()" class="btn-secondary text-xs py-1 px-2.5" style="color:var(--red);border-color:var(--red)">
+                                    <i class="ph-bold ph-trash mr-1"></i>Remove CrowdSec configuration
+                                </button>
                             </div>
                         </div>
 
@@ -479,17 +509,21 @@
 
                 <div class="modal-panel" id="mpanel-backups" style="gap:0;padding:0;overflow:hidden;">
                     <div style="display:flex;flex-direction:column;flex:1;min-height:0;">
-                        <div style="display:flex;gap:2px;padding:12px 16px 0;border-bottom:1px solid var(--border);flex-shrink:0;">
+                        <div style="display:flex;gap:2px;padding:12px 16px 0;border-bottom:1px solid var(--border);flex-shrink:0;align-items:flex-end;">
                             <button class="auth-sub-tab active" id="backup-tab-routes" onclick="switchBackupTab('routes', this)">
-                                <i class="ph-bold ph-path"></i> Routes
+                                <i class="ph-bold ph-path"></i> Dynamic Config
                             </button>
                             <button class="auth-sub-tab" id="backup-tab-static" onclick="switchBackupTab('static', this)">
                                 <i class="ph-bold ph-sliders-horizontal"></i> Static Config
                             </button>
+                            <button class="auth-sub-tab" id="backup-tab-git" onclick="switchBackupTab('git', this)">
+                                <i class="ph-bold ph-git-branch"></i> Git
+                            </button>
+                            <span id="backupRemoteChip" style="display:none;margin-left:auto;margin-bottom:6px;font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;background:rgba(36,161,222,0.12);border:1px solid rgba(36,161,222,0.25);color:var(--blue)"></span>
                         </div>
                         <div id="backup-sub-routes" class="auth-sub-panel" style="display:flex;flex-direction:column;gap:0;">
                             <div class="flex items-center justify-between mb-3" style="flex-shrink:0;">
-                                <span class="settings-section-label" style="margin:0;">Route Config Backups</span>
+                                <span class="settings-section-label" style="margin:0;">Dynamic Config Backups</span>
                                 <button onclick="createAndLoadBackups()" class="nav-btn text-xs">
                                     <i class="ph-bold ph-plus"></i> Create Backup
                                 </button>
@@ -520,6 +554,87 @@
                                 <div class="text-center py-8" style="color:var(--muted)">
                                     <i class="ph-light ph-spinner-gap text-2xl animate-spin block mb-2"></i>
                                     Loading...
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="backup-sub-git" class="auth-sub-panel" style="display:none;flex-direction:column;gap:0;overflow-y:auto;">
+                            <div style="flex-shrink:0;">
+                                <div class="flex items-center justify-between mb-3">
+                                    <span class="settings-section-label" style="margin:0;">Git Repository Backup</span>
+                                    <div class="flex gap-1.5">
+                                        <button onclick="gitTestConnection()" id="gitTestBtn" class="btn-secondary text-xs py-1 px-2.5">
+                                            <i class="ph-bold ph-plugs-connected text-xs"></i> Test
+                                        </button>
+                                        <button onclick="gitResetRepo()" id="gitResetBtn" class="btn-secondary text-xs py-1 px-2.5" style="color:var(--red);border-color:rgba(248,81,73,0.3);">
+                                            <i class="ph-bold ph-trash text-xs"></i> Reset
+                                        </button>
+                                        <button onclick="gitPushNow()" id="gitPushBtn" class="nav-btn text-xs">
+                                            <i class="ph-bold ph-cloud-arrow-up text-xs"></i> Push Now
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div id="gitStatusLine" class="text-xs mb-3 px-3 py-2 rounded-lg" style="background:var(--bg);border:1px solid var(--border);color:var(--muted);display:none;"></div>
+
+                                <div id="gitEnvNote" style="display:none;background:rgba(36,161,222,0.06);border:1px solid rgba(36,161,222,0.2);color:var(--muted)" class="text-xs mb-3 px-3 py-2 rounded-lg">
+                                    <i class="ph-bold ph-info" style="color:var(--blue)"></i> Git backup on this agent is configured via environment variables (<code>GIT_BACKUP_*</code>).
+                                </div>
+                                <div id="gitConfigForm" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background:var(--bg);border:1px solid var(--border);">
+                                        <div>
+                                            <div class="text-xs font-medium">Enable Git Backup</div>
+                                            <div class="text-xs" style="color:var(--muted)">Automatically push config changes to your repository</div>
+                                        </div>
+                                        <div class="toggle-switch" id="toggle-git-backup" onclick="toggleGitBackupEnabled()"><div class="toggle-knob"></div></div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-medium block mb-1">Repository URL</label>
+                                        <input id="gitBackupRepo" type="text" class="input-field" placeholder="https://github.com/user/traefik-backups.git">
+                                    </div>
+                                    <div style="display:flex;gap:8px;">
+                                        <div style="flex:1;">
+                                            <label class="text-xs font-medium block mb-1">Branch</label>
+                                            <input id="gitBackupBranch" type="text" class="input-field" placeholder="main">
+                                        </div>
+                                        <div style="flex:1;">
+                                            <label class="text-xs font-medium block mb-1">Username</label>
+                                            <input id="gitBackupUsername" type="text" class="input-field" placeholder="git username">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-medium block mb-1">Token / Password</label>
+                                        <input id="gitBackupToken" type="password" class="input-field" placeholder="Leave blank to keep existing">
+                                        <div id="gitTokenSet" class="text-xs mt-1" style="color:var(--muted);display:none;"><i class="ph-bold ph-check-circle" style="color:var(--green)"></i> Token is set</div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-medium block mb-1">Commit Message Template</label>
+                                        <input id="gitBackupCommitMsg" type="text" class="input-field" placeholder="traefik-manager: {action} at {timestamp}">
+                                        <div class="text-xs mt-1" style="color:var(--muted)">Use <code>{action}</code> and <code>{timestamp}</code> as placeholders</div>
+                                    </div>
+                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background:var(--bg);border:1px solid var(--border);">
+                                        <div>
+                                            <div class="text-xs font-medium">Auto-push on save</div>
+                                            <div class="text-xs" style="color:var(--muted)">Push after every route, middleware, or static config change</div>
+                                        </div>
+                                        <div class="toggle-switch" id="toggle-git-autopush" onclick="toggleGitAutoPush()"><div class="toggle-knob"></div></div>
+                                    </div>
+                                </div>
+                                <button id="gitSaveSettingsBtn" onclick="saveGitBackupSettings()" class="nav-btn text-xs w-full justify-center mb-4">
+                                    <i class="ph-bold ph-floppy-disk"></i> Save Git Settings
+                                </button>
+
+                                <div class="flex items-center justify-between mb-2" style="flex-shrink:0;">
+                                    <span class="settings-section-label" style="margin:0;">Git History</span>
+                                    <button onclick="loadGitCommits()" class="btn-secondary text-xs py-1 px-2.5">
+                                        <i class="ph-bold ph-arrows-clockwise text-xs"></i> Refresh
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="gitCommitsList">
+                                <div class="text-center py-6" style="color:var(--muted)">
+                                    <i class="ph-light ph-git-commit text-3xl block mb-2 opacity-30"></i>
+                                    <p class="text-xs">No commits yet - push your first backup to see history</p>
                                 </div>
                             </div>
                         </div>
@@ -707,6 +822,343 @@
                     </div>
                 </div>
 
+                <div class="modal-panel" id="mpanel-agents" style="gap:0;padding:0;overflow:hidden;">
+                    <div id="agentListView" style="display:flex;flex-direction:column;height:100%;">
+                        <div class="flex items-center justify-between px-4 py-3" style="border-bottom:1px solid var(--border);flex-shrink:0;">
+                            <div class="font-semibold text-sm" style="color:var(--text)">Remote Agents</div>
+                            <button onclick="startAddAgent()" class="btn-secondary text-xs py-1 px-2.5">
+                                <i class="ph-bold ph-plus text-xs"></i> Add Agent
+                            </button>
+                        </div>
+                        <div id="agentsListBody" style="flex:1;overflow-y:auto;padding:16px;">
+                            <div class="text-center py-8" style="color:var(--muted)">
+                                <i class="ph-light ph-robot text-4xl block mb-2 opacity-30"></i>
+                                <p class="text-xs">Loading agents…</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="agentWizardView" style="display:none;flex-direction:column;height:100%;">
+                        <div class="flex items-center gap-2 px-4 py-3" style="border-bottom:1px solid var(--border);flex-shrink:0;">
+                            <button onclick="cancelAddAgent()" class="btn-icon" style="margin-right:4px"><i class="ph-bold ph-caret-left text-sm"></i></button>
+                            <div class="font-semibold text-sm" id="agentWizardTitle" style="color:var(--text)">Add Agent</div>
+                            <div class="ml-auto flex items-center gap-1.5" id="agentWizardStepPills" style="color:var(--muted);font-size:11px;">
+                                <span id="wiz-step-pill-1" style="padding:2px 8px;border-radius:9999px;background:var(--blue);color:#fff;">1</span>
+                                <span id="wiz-step-pill-2" style="padding:2px 8px;border-radius:9999px;background:var(--border);color:var(--muted);">2</span>
+                                <span id="wiz-step-pill-3" style="padding:2px 8px;border-radius:9999px;background:var(--border);color:var(--muted);">3</span>
+                            </div>
+                        </div>
+                        <div style="flex:1;overflow-y:auto;padding:16px;">
+                            <div id="agentWizStep1">
+                                <p class="text-xs mb-4" style="color:var(--muted)">Enter the name and URL for this remote agent. The URL is where TMA is reachable from this Traefik Manager instance.</p>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="settings-section-label">Agent Name</label>
+                                        <input id="agentWizName" type="text" class="input-field text-xs" placeholder="e.g. Server 2" maxlength="100">
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Agent URL</label>
+                                        <input id="agentWizUrl" type="url" class="input-field text-xs" placeholder="https://server2.example.com:8090">
+                                        <p class="text-xs mt-1" style="color:var(--muted)">The public address where TMA is running on the remote server.</p>
+                                    </div>
+                                </div>
+                                <div id="agentWizStep1Err" class="text-xs mt-3 px-3 py-2 rounded" style="display:none;background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.3);color:var(--red)"></div>
+                                <div class="flex justify-end mt-5">
+                                    <button onclick="agentWizStep1Next()" class="btn-primary text-xs py-1.5 px-4" id="agentWizStep1Btn">Continue <i class="ph-bold ph-caret-right text-xs"></i></button>
+                                </div>
+                            </div>
+
+                            <div id="agentWizStep2" style="display:none;">
+                                <div class="px-3 py-2.5 rounded-lg mb-4 text-xs" style="background:rgba(240,136,62,0.1);border:1px solid rgba(240,136,62,0.3);color:var(--orange);">
+                                    <i class="ph-bold ph-warning mr-1"></i> Save this API key - it will not be shown again.
+                                </div>
+                                <div class="flex items-center gap-2 px-3 py-2.5 rounded-lg mb-4" style="background:var(--input-bg);border:1px solid var(--border);">
+                                    <code id="agentWizKeyDisplay" class="text-xs font-mono flex-1 break-all" style="color:var(--text)"></code>
+                                    <button onclick="copyAgentKey()" class="btn-icon flex-shrink-0" title="Copy"><i class="ph-bold ph-copy text-sm"></i></button>
+                                </div>
+                                <p class="text-xs mb-5" style="color:var(--muted)">Set <code style="color:var(--blue)">TMA_API_KEY</code> to this value in your agent's environment. The key is stored encrypted in TM settings.</p>
+                                <div class="flex justify-end">
+                                    <button onclick="agentWizStep2Next()" class="btn-primary text-xs py-1.5 px-4">I've saved the key <i class="ph-bold ph-caret-right text-xs"></i></button>
+                                </div>
+                            </div>
+
+                            <div id="agentWizStep3" style="display:none;">
+                                <p class="text-xs mb-3" style="color:var(--muted)">Configure paths and options, then copy the generated install commands to your remote server.</p>
+                                <div class="mb-3">
+                                    <label class="settings-section-label">Domains <span style="color:var(--muted)">(optional, comma-separated)</span></label>
+                                    <input id="agCfgDomains" type="text" class="input-field text-xs" placeholder="example.com, other.net" oninput="agentCfgChanged()">
+                                    <p class="text-xs mt-1" style="color:var(--muted)">Domains for route creation on this agent - lets you pick a domain chip instead of typing the full hostname.</p>
+                                </div>
+                                <div class="flex gap-1 mb-4 flex-wrap" id="agentCfgTabs">
+                                    <button class="auth-sub-tab active text-xs" onclick="switchAgentCfgTab('traefik',this)">Traefik</button>
+                                    <button class="auth-sub-tab text-xs" onclick="switchAgentCfgTab('paths',this)">Paths</button>
+                                    <button class="auth-sub-tab text-xs" onclick="switchAgentCfgTab('restart',this)">Restart</button>
+                                    <button class="auth-sub-tab text-xs" onclick="switchAgentCfgTab('git',this)">Git Backup</button>
+                                    <button class="auth-sub-tab text-xs" onclick="switchAgentCfgTab('crowdsec',this)">CrowdSec</button>
+                                </div>
+
+                                <div id="agentCfgPane-traefik" class="auth-sub-panel space-y-3" style="display:flex;flex-direction:column;">
+                                    <div>
+                                        <label class="settings-section-label">Traefik API URL</label>
+                                        <input id="agCfgTraefikUrl" type="text" class="input-field text-xs" value="http://traefik:8080" oninput="agentCfgChanged()">
+                                        <p class="text-xs mt-1" style="color:var(--muted)">Internal Traefik API - typically <code>http://traefik:8080</code> (not the public dashboard URL)</p>
+                                    </div>
+                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;background:var(--input-bg);border:1px solid var(--border)">
+                                        <div>
+                                            <div class="text-sm font-medium">Skip TLS Verification</div>
+                                            <div class="text-xs" style="color:var(--muted)">Disable cert check for HTTPS Traefik API URLs (use if self-signed or Cloudflare Origin cert)</div>
+                                        </div>
+                                        <div class="toggle-switch" id="agCfgInsecureTLS" onclick="this.classList.toggle('on');agentCfgChanged()"><div class="toggle-knob"></div></div>
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Dynamic Config Path</label>
+                                        <input id="agCfgConfigPath" type="text" class="input-field text-xs" value="/app/config" oninput="agentCfgChanged()">
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Static Config Path <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgStaticPath" type="text" class="input-field text-xs" placeholder="/etc/traefik/traefik.yml" oninput="agentCfgChanged()">
+                                    </div>
+                                    <div style="display:flex;gap:8px;">
+                                        <div style="flex:1">
+                                            <label class="settings-section-label">Port <span style="color:var(--muted)">(default 8090)</span></label>
+                                            <input id="agCfgPort" type="number" class="input-field text-xs" placeholder="8090" oninput="agentCfgChanged()">
+                                        </div>
+                                        <div style="flex:1">
+                                            <label class="settings-section-label">Rate Limit <span style="color:var(--muted)">(req/min, default 300)</span></label>
+                                            <input id="agCfgRateLimit" type="number" class="input-field text-xs" placeholder="300" oninput="agentCfgChanged()">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="agentCfgPane-paths" class="auth-sub-panel space-y-3" style="display:none;flex-direction:column;">
+                                    <div>
+                                        <label class="settings-section-label">Backup Dir</label>
+                                        <input id="agCfgBackupDir" type="text" class="input-field text-xs" placeholder="/app/backups" oninput="agentCfgChanged()">
+                                        <p class="text-xs mt-1" style="color:var(--muted)">Where the agent stores local backup zips. Defaults to <code>/app/backups</code> - set a host path here to persist backups across container restarts.</p>
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">ACME / Certs Path <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgAcmePath" type="text" class="input-field text-xs" placeholder="/etc/traefik/acme.json" oninput="agentCfgChanged()">
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Access Log Path <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgLogPath" type="text" class="input-field text-xs" placeholder="/var/log/traefik/access.log" oninput="agentCfgChanged()">
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Plugins Dir <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgPluginsDir" type="text" class="input-field text-xs" placeholder="/etc/traefik/plugins" oninput="agentCfgChanged()">
+                                    </div>
+                                </div>
+
+                                <div id="agentCfgPane-restart" class="auth-sub-panel" style="display:none;">
+                                    <label class="settings-section-label mb-2">Restart Method</label>
+                                    <div class="flex gap-2 flex-wrap mb-3" id="restartMethodChips">
+                                        <button class="agent-chip active" onclick="selectRestartMethod('',this)">None</button>
+                                        <button class="agent-chip" onclick="selectRestartMethod('proxy',this)">Socket Proxy</button>
+                                        <button class="agent-chip" onclick="selectRestartMethod('poison-pill',this)">Poison Pill</button>
+                                        <button class="agent-chip" onclick="selectRestartMethod('socket',this)">Direct Socket</button>
+                                    </div>
+                                    <div id="restartProxyFields" class="space-y-2" style="display:none;">
+                                        <div>
+                                            <label class="settings-section-label">Docker Host</label>
+                                            <input id="agCfgDockerHost" type="text" class="input-field text-xs" placeholder="tcp://socket-proxy:2375" oninput="agentCfgChanged()">
+                                        </div>
+                                        <div>
+                                            <label class="settings-section-label">Container Name</label>
+                                            <input id="agCfgContainer" type="text" class="input-field text-xs" value="traefik" oninput="agentCfgChanged()">
+                                        </div>
+                                    </div>
+                                    <div id="restartPoisonPillFields" class="space-y-2" style="display:none;">
+                                        <div>
+                                            <label class="settings-section-label">Signal File Path</label>
+                                            <input id="agCfgSignalFile" type="text" class="input-field text-xs" placeholder="/signals/restart.sig" oninput="agentCfgChanged()">
+                                        </div>
+                                    </div>
+                                    <div id="restartSocketFields" style="display:none;">
+                                        <div>
+                                            <label class="settings-section-label">Container Name</label>
+                                            <input id="agCfgSocketContainer" type="text" class="input-field text-xs" value="traefik" oninput="agentCfgChanged()">
+                                        </div>
+                                        <p class="text-xs mt-1" style="color:var(--muted)">Requires <code>/var/run/docker.sock:/var/run/docker.sock:ro</code> volume.</p>
+                                    </div>
+                                </div>
+
+                                <div id="agentCfgPane-git" class="auth-sub-panel space-y-3" style="display:none;flex-direction:column;">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="agCfgGitEnabled" onchange="agentCfgChanged()">
+                                        <span class="text-xs font-medium" style="color:var(--text)">Enable Git Backup</span>
+                                    </label>
+                                    <div id="agentGitFields" class="space-y-2" style="display:none;">
+                                        <div>
+                                            <label class="settings-section-label">Repository URL</label>
+                                            <input id="agCfgGitRepo" type="text" class="input-field text-xs" placeholder="https://github.com/you/traefik-configs" oninput="agentCfgChanged()">
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <div style="flex:1">
+                                                <label class="settings-section-label">Branch</label>
+                                                <input id="agCfgGitBranch" type="text" class="input-field text-xs" value="main" oninput="agentCfgChanged()">
+                                            </div>
+                                            <div style="flex:1">
+                                                <label class="settings-section-label">Username</label>
+                                                <input id="agCfgGitUser" type="text" class="input-field text-xs" oninput="agentCfgChanged()">
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="settings-section-label">Access Token</label>
+                                            <input id="agCfgGitToken" type="password" class="input-field text-xs" placeholder="ghp_..." oninput="agentCfgChanged()">
+                                        </div>
+                                        <label class="flex items-center gap-2 cursor-pointer">
+                                            <input type="checkbox" id="agCfgGitAutoPush" checked onchange="agentCfgChanged()">
+                                            <span class="text-xs" style="color:var(--text)">Auto-push on config change</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div id="agentCfgPane-crowdsec" class="auth-sub-panel space-y-3" style="display:none;flex-direction:column;">
+                                    <div>
+                                        <label class="settings-section-label">LAPI URL <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgCsUrl" type="text" class="input-field text-xs" placeholder="http://crowdsec:8080" oninput="agentCfgChanged()">
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">API Key <span style="color:var(--muted)">(optional)</span></label>
+                                        <div class="text-xs mb-1" style="color:var(--muted)">Bouncer key, reads decisions.</div>
+                                        <input id="agCfgCsKey" type="password" class="input-field text-xs" placeholder="bouncer-api-key" oninput="agentCfgChanged()">
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Machine ID <span style="color:var(--muted)">(optional)</span></label>
+                                        <div class="text-xs mb-1" style="color:var(--muted)">Machine login enables the Alerts view and unban. Create with <code class="font-mono">cscli machines add traefik-manager --auto</code>.</div>
+                                        <input id="agCfgCsMachineId" type="text" class="input-field text-xs" placeholder="traefik-manager" oninput="agentCfgChanged()">
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Machine Password <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgCsMachinePassword" type="password" class="input-field text-xs" placeholder="machine-password" oninput="agentCfgChanged()">
+                                    </div>
+                                </div>
+
+                                <div id="agentRotateKeyBanner" style="display:none;" class="mt-4">
+                                    <div class="px-3 py-2.5 rounded-lg text-xs flex items-center gap-3" style="background:rgba(36,161,222,0.08);border:1px solid rgba(36,161,222,0.25);color:var(--muted)">
+                                        <i class="ph-bold ph-key flex-shrink-0" style="color:var(--blue)"></i>
+                                        <span style="flex:1">API key is hidden after first creation. Use the key already in your running agent compose - do not rotate unless you want to invalidate the old key and reconfigure your agent.</span>
+                                        <button id="agentRotateKeyBtn" onclick="rotateAgentKey()" class="btn-secondary text-xs py-1 px-2.5 flex-shrink-0" style="white-space:nowrap"><i class="ph-bold ph-arrows-clockwise text-xs"></i> Rotate Key</button>
+                                    </div>
+                                    <div id="agentRotatedKeyDisplay" style="display:none;" class="mt-2">
+                                        <div class="px-3 py-2 rounded-lg text-xs" style="background:rgba(248,81,73,0.08);border:1px solid rgba(248,81,73,0.3);color:var(--orange)"><i class="ph-bold ph-warning mr-1"></i> Save this new key - it will not be shown again. Your agent will stop working until you update it.</div>
+                                        <div class="flex items-center gap-2 px-3 py-2.5 rounded-lg mt-2" style="background:var(--input-bg);border:1px solid var(--border);">
+                                            <code id="agentRotatedKeyText" class="text-xs font-mono flex-1 break-all" style="color:var(--text)"></code>
+                                            <button onclick="copyRotatedKey()" class="btn-icon flex-shrink-0" title="Copy"><i class="ph-bold ph-copy text-sm"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-5 space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <div class="text-xs font-semibold" style="color:var(--muted)">Docker Compose</div>
+                                        <button onclick="copyAgentCompose()" class="btn-icon" title="Copy"><i class="ph-bold ph-copy text-xs"></i></button>
+                                    </div>
+                                    <pre id="agentComposeOutput" style="font-size:10px;line-height:1.5;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;color:var(--text);white-space:pre;margin:0;max-height:220px;overflow-y:auto;"></pre>
+                                    <div class="flex items-center justify-between mt-3">
+                                        <div class="text-xs font-semibold" style="color:var(--muted)">Docker Run</div>
+                                        <button onclick="copyAgentRun()" class="btn-icon" title="Copy"><i class="ph-bold ph-copy text-xs"></i></button>
+                                    </div>
+                                    <pre id="agentRunOutput" style="font-size:10px;line-height:1.5;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;color:var(--text);white-space:pre;margin:0;max-height:160px;overflow-y:auto;"></pre>
+                                </div>
+
+                                <div class="flex justify-between mt-5">
+                                    <button onclick="agentWizStep3Save()" class="btn-secondary text-xs py-1.5 px-4" id="agentWizSaveBtn">
+                                        <i class="ph-bold ph-floppy-disk text-xs"></i> Save Config
+                                    </button>
+                                    <button onclick="agentWizDone()" class="btn-primary text-xs py-1.5 px-4">Done <i class="ph-bold ph-check text-xs"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="agentKeysView" style="display:none;flex-direction:column;height:100%;">
+                        <div class="flex items-center gap-2 px-4 py-3" style="border-bottom:1px solid var(--border);flex-shrink:0;">
+                            <button onclick="closeAgentKeys()" class="btn-icon" style="margin-right:4px"><i class="ph-bold ph-caret-left text-sm"></i></button>
+                            <div class="font-semibold text-sm" id="agentKeysTitle" style="color:var(--text)">API Keys</div>
+                            <button onclick="showAddKeyForm()" class="btn-secondary text-xs py-1 px-2.5 ml-auto"><i class="ph-bold ph-plus text-xs"></i> Add Key</button>
+                        </div>
+                        <div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;">
+                            <div id="agentKeysAddForm" style="display:none;flex-direction:column;gap:8px;padding:12px;border-radius:8px;border:1px solid var(--blue)" class="mb-1">
+                                <div class="text-xs font-medium" style="color:var(--text)">New API Key</div>
+                                <input id="agentKeyNameInput" type="text" class="input-field text-xs" placeholder="e.g. Mobile App" maxlength="80">
+                                <div id="agentKeyNewDisplay" style="display:none;flex-direction:column;gap:6px;">
+                                    <div class="text-xs px-2 py-1.5 rounded" style="background:rgba(240,136,62,0.1);border:1px solid rgba(240,136,62,0.3);color:var(--orange)"><i class="ph-bold ph-warning text-xs mr-1"></i>Save this key - it will not be shown again.</div>
+                                    <div class="flex items-center gap-2 px-3 py-2 rounded-lg" style="background:var(--input-bg);border:1px solid var(--border);">
+                                        <code id="agentKeyNewValue" class="text-xs font-mono flex-1 break-all" style="color:var(--text)"></code>
+                                        <button onclick="copyNewAgentKey()" class="btn-icon flex-shrink-0" title="Copy"><i class="ph-bold ph-copy text-sm"></i></button>
+                                    </div>
+                                </div>
+                                <div id="agentKeyCreateErr" class="text-xs" style="display:none;color:var(--red)"></div>
+                                <div class="flex gap-2">
+                                    <button id="agentKeyCreateBtn" onclick="createAgentKey()" class="btn-primary text-xs py-1 px-3">Create</button>
+                                    <button onclick="hideAddKeyForm()" class="btn-secondary text-xs py-1 px-3">Cancel</button>
+                                </div>
+                            </div>
+                            <div id="agentKeysList"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-panel" id="mpanel-agent-keys" style="gap:0;padding:0;overflow:hidden;flex-direction:column;">
+                    <div class="flex items-center justify-between px-4 py-3" style="border-bottom:1px solid var(--border);flex-shrink:0;">
+                        <div>
+                            <div class="font-semibold text-sm" style="color:var(--text)">API Keys</div>
+                            <div class="text-xs mt-0.5" id="agentKeysSubtitle" style="color:var(--muted)"></div>
+                        </div>
+                        <button onclick="showActiveAgentAddKeyForm()" class="btn-secondary text-xs py-1 px-2.5"><i class="ph-bold ph-plus text-xs"></i> Add Key</button>
+                    </div>
+                    <div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;">
+                        <div id="activeAgentKeysAddForm" style="display:none;flex-direction:column;gap:8px;padding:12px;border-radius:8px;border:1px solid var(--blue)" class="mb-1">
+                            <div class="text-xs font-medium" style="color:var(--text)">New API Key</div>
+                            <input id="activeAgentKeyNameInput" type="text" class="input-field text-xs" placeholder="e.g. Mobile App" maxlength="80">
+                            <div id="activeAgentKeyNewDisplay" style="display:none;flex-direction:column;gap:6px;">
+                                <div class="text-xs px-2 py-1.5 rounded" style="background:rgba(240,136,62,0.1);border:1px solid rgba(240,136,62,0.3);color:var(--orange)"><i class="ph-bold ph-warning text-xs mr-1"></i>Save this key - it will not be shown again.</div>
+                                <div class="flex items-center gap-2 px-3 py-2 rounded-lg" style="background:var(--input-bg);border:1px solid var(--border);">
+                                    <code id="activeAgentKeyNewValue" class="text-xs font-mono flex-1 break-all" style="color:var(--text)"></code>
+                                    <button onclick="copyActiveAgentKey()" class="btn-icon flex-shrink-0" title="Copy"><i class="ph-bold ph-copy text-sm"></i></button>
+                                </div>
+                            </div>
+                            <div id="activeAgentKeyCreateErr" class="text-xs" style="display:none;color:var(--red)"></div>
+                            <div class="flex gap-2">
+                                <button id="activeAgentKeyCreateBtn" onclick="createActiveAgentKey()" class="btn-primary text-xs py-1 px-3">Create</button>
+                                <button onclick="hideActiveAgentAddKeyForm()" class="btn-secondary text-xs py-1 px-3">Cancel</button>
+                            </div>
+                        </div>
+                        <div id="activeAgentKeysList"></div>
+                    </div>
+                </div>
+
+                <div class="modal-panel" id="mpanel-templates" style="gap:0;padding:0;overflow:hidden;">
+                    <div class="flex items-center justify-between px-4 py-3" style="border-bottom:1px solid var(--border);flex-shrink:0;">
+                        <div class="font-semibold text-sm" style="color:var(--text)">Middleware Templates</div>
+                        <button onclick="openTemplateEditor(null)" class="btn-secondary text-xs py-1 px-2.5">
+                            <i class="ph-bold ph-plus text-xs"></i> Add Template
+                        </button>
+                    </div>
+                    <div id="templateListView" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;"></div>
+                    <div id="templateEditorView" style="display:none;flex-direction:column;flex:1;overflow-y:auto;">
+                        <div class="flex items-center justify-between px-4 py-3" style="border-bottom:1px solid var(--border);flex-shrink:0;">
+                            <div class="font-semibold text-sm" id="templateEditorTitle" style="color:var(--text)">Add Template</div>
+                        </div>
+                        <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+                            <div>
+                                <label class="text-xs font-medium mb-1 block" style="color:var(--muted)">Name</label>
+                                <input id="tplName" type="text" class="input-field text-sm" placeholder="e.g. Secure Headers">
+                            </div>
+                            <div>
+                                <label class="text-xs font-medium mb-1 block" style="color:var(--muted)">YAML</label>
+                                <textarea id="tplYaml" class="input-field text-xs font-mono" rows="12" placeholder="headers:&#10;  sslRedirect: true&#10;  forceSTSHeader: true&#10;  stsSeconds: 315360000" style="resize:vertical;"></textarea>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="saveTemplate()" class="btn-primary text-xs py-1.5 px-4">Save</button>
+                                <button onclick="closeTemplateEditor()" class="btn-secondary text-xs py-1.5 px-4">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="modal-panel" id="mpanel-about">
                     <div class="space-y-4">
 
@@ -782,7 +1234,16 @@
 
 <script>
 
+function _backupFetch(path, opts) {
+    if (typeof agentFetch === 'function') return agentFetch(path, opts);
+    return fetch(path, opts);
+}
+
 async function createAndLoadStaticBackup() {
+    if (typeof _activeAgent !== 'undefined' && _activeAgent) {
+        showToast('Static config backup is included in the dynamic config backup for remote agents', 'info');
+        return;
+    }
     const btn = document.querySelector('[onclick="createAndLoadStaticBackup()"]');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph-light ph-spinner-gap animate-spin"></i> Creating…'; }
     try {
@@ -801,12 +1262,246 @@ async function createAndLoadStaticBackup() {
 }
 
 function switchBackupTab(id, btn) {
+    const isAgent = typeof _activeAgent !== 'undefined' && !!_activeAgent;
+    const staticTabBtn = document.getElementById('backup-tab-static');
+    if (staticTabBtn) staticTabBtn.style.display = isAgent ? 'none' : '';
+    const chip = document.getElementById('backupRemoteChip');
+    if (chip) { chip.textContent = isAgent ? _activeAgent.name : ''; chip.style.display = isAgent ? '' : 'none'; }
+    if (isAgent && id === 'static') id = 'routes';
     document.querySelectorAll('#mpanel-backups .auth-sub-tab').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('#mpanel-backups .auth-sub-panel').forEach(p => p.style.display = 'none');
-    if (btn) btn.classList.add('active');
+    if (btn && id !== 'static') btn.classList.add('active');
+    const activeTabBtn = document.getElementById('backup-tab-' + id);
+    if (activeTabBtn && isAgent && id !== 'static') activeTabBtn.classList.add('active');
     const panel = document.getElementById('backup-sub-' + id);
     if (panel) panel.style.display = 'flex';
+    if (id === 'git') loadGitTab();
 }
+
+let _gitBackupEnabled  = false;
+let _gitAutoPushEnabled = true;
+
+function toggleGitBackupEnabled() {
+    _gitBackupEnabled = !_gitBackupEnabled;
+    const el = document.getElementById('toggle-git-backup');
+    if (el) el.classList.toggle('on', _gitBackupEnabled);
+}
+
+function toggleGitAutoPush() {
+    _gitAutoPushEnabled = !_gitAutoPushEnabled;
+    const el = document.getElementById('toggle-git-autopush');
+    if (el) el.classList.toggle('on', _gitAutoPushEnabled);
+}
+
+async function loadGitTab() {
+    const isAgent = typeof _activeAgent !== 'undefined' && !!_activeAgent;
+    const configForm    = document.getElementById('gitConfigForm');
+    const saveBtn       = document.getElementById('gitSaveSettingsBtn');
+    const resetBtn      = document.getElementById('gitResetBtn');
+    const envNote       = document.getElementById('gitEnvNote');
+    if (configForm) configForm.style.display = isAgent ? 'none' : 'flex';
+    if (saveBtn)    saveBtn.style.display    = isAgent ? 'none' : '';
+    if (resetBtn)   resetBtn.style.display   = isAgent ? 'none' : '';
+    if (envNote)    envNote.style.display    = isAgent ? '' : 'none';
+    if (!isAgent) {
+        try {
+            const res  = await fetch('/api/settings');
+            const data = await res.json();
+            _gitBackupEnabled  = bool(data.git_backup_enabled);
+            _gitAutoPushEnabled = bool(data.git_backup_auto_push !== false);
+            const tog1 = document.getElementById('toggle-git-backup');
+            const tog2 = document.getElementById('toggle-git-autopush');
+            if (tog1) tog1.classList.toggle('on', _gitBackupEnabled);
+            if (tog2) tog2.classList.toggle('on', _gitAutoPushEnabled);
+            _setVal('gitBackupRepo',      data.git_backup_repo || '');
+            _setVal('gitBackupBranch',    data.git_backup_branch || 'main');
+            _setVal('gitBackupUsername',  data.git_backup_username || '');
+            _setVal('gitBackupCommitMsg', data.git_backup_commit_message || 'traefik-manager: {action} at {timestamp}');
+            const tokenSet = document.getElementById('gitTokenSet');
+            if (tokenSet) tokenSet.style.display = data.git_backup_token_set ? '' : 'none';
+        } catch(e) {}
+    }
+    loadGitStatus();
+    loadGitCommits();
+}
+
+async function loadGitStatus() {
+    try {
+        const res  = await _backupFetch('/api/backup/git/status');
+        const data = await res.json();
+        const line = document.getElementById('gitStatusLine');
+        if (!line) return;
+        if (data.last_sha) {
+            line.style.display = '';
+            line.innerHTML = `<i class="ph-bold ph-check-circle" style="color:var(--green)"></i> Last push: <span class="font-mono">${data.last_sha}</span> &middot; ${data.last_push || ''}`;
+        } else {
+            line.style.display = 'none';
+        }
+    } catch(e) {}
+}
+
+async function loadGitCommits() {
+    const list = document.getElementById('gitCommitsList');
+    if (!list) return;
+    list.innerHTML = `<div class="text-center py-4" style="color:var(--muted)"><i class="ph-light ph-spinner-gap animate-spin text-xl block mb-1"></i></div>`;
+    try {
+        const res     = await _backupFetch('/api/backup/git/commits');
+        const commits = await res.json();
+        if (!commits.length) {
+            list.innerHTML = `<div class="text-center py-6" style="color:var(--muted)"><i class="ph-light ph-git-commit text-3xl block mb-2 opacity-30"></i><p class="text-xs">No commits yet</p></div>`;
+            return;
+        }
+        list.innerHTML = commits.map(c => `
+            <div class="flex items-center justify-between py-2.5 px-3 mb-2 rounded-lg" style="background:var(--bg);border:1px solid var(--border)">
+                <div style="min-width:0;flex:1;">
+                    <div class="flex items-center gap-1.5">
+                        <span class="font-mono text-xs px-1.5 py-0.5 rounded" style="background:var(--input-bg);color:var(--muted);flex-shrink:0;">${c.sha_short}</span>
+                        <span class="text-xs truncate" style="color:var(--text)">${_esc(c.message)}</span>
+                    </div>
+                    <div class="text-xs mt-0.5" style="color:var(--muted)">${c.timestamp}</div>
+                </div>
+                <div class="flex gap-1 ml-2 flex-shrink-0">
+                    <button onclick="gitViewDiff('${c.sha}')" class="btn-secondary text-xs py-1 px-2" title="View diff">
+                        <i class="ph-bold ph-code text-xs"></i>
+                    </button>
+                    <button onclick="gitRestoreCommit('${c.sha}', '${c.sha_short}')" class="btn-secondary text-xs py-1 px-2.5">
+                        <i class="ph-bold ph-arrow-counter-clockwise text-xs"></i> Restore
+                    </button>
+                </div>
+            </div>`).join('');
+    } catch(e) {
+        list.innerHTML = `<p class="text-xs" style="color:var(--red)">Failed to load commits</p>`;
+    }
+}
+
+async function saveGitBackupSettings() {
+    const btn = document.querySelector('[onclick="saveGitBackupSettings()"]');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph-light ph-spinner-gap animate-spin"></i> Saving…'; }
+    try {
+        const settings = await (await fetch('/api/settings')).json();
+        const token    = document.getElementById('gitBackupToken')?.value || '';
+        const payload  = {
+            ...settings,
+            git_backup_enabled:        _gitBackupEnabled,
+            git_backup_repo:           document.getElementById('gitBackupRepo')?.value.trim() || '',
+            git_backup_branch:         document.getElementById('gitBackupBranch')?.value.trim() || 'main',
+            git_backup_username:       document.getElementById('gitBackupUsername')?.value.trim() || '',
+            git_backup_commit_message: document.getElementById('gitBackupCommitMsg')?.value.trim() || 'traefik-manager: {action} at {timestamp}',
+            git_backup_auto_push:      _gitAutoPushEnabled,
+        };
+        if (token) payload.git_backup_token = token;
+        const res  = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json', ..._csrfHeaders() }, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Git settings saved', 'success');
+            document.getElementById('gitBackupToken').value = '';
+            const tokenSet = document.getElementById('gitTokenSet');
+            if (tokenSet && token) tokenSet.style.display = '';
+        } else {
+            showToast('Save failed: ' + (data.error || 'Unknown'), 'error');
+        }
+    } catch(e) { showToast('Save failed', 'error'); }
+    finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph-bold ph-floppy-disk"></i> Save Git Settings'; }
+    }
+}
+
+async function gitTestConnection() {
+    const btn = document.getElementById('gitTestBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph-light ph-spinner-gap animate-spin text-xs"></i> Testing…'; }
+    try {
+        const isAgent = typeof _activeAgent !== 'undefined' && !!_activeAgent;
+        const payload = isAgent ? {} : {
+            repo_url: document.getElementById('gitBackupRepo')?.value.trim() || '',
+            username: document.getElementById('gitBackupUsername')?.value.trim() || '',
+        };
+        const token = !isAgent && document.getElementById('gitBackupToken')?.value || '';
+        if (token) payload.token = token;
+        const res  = await _backupFetch('/api/backup/git/test', { method: 'POST', headers: { 'Content-Type': 'application/json', ..._csrfHeaders() }, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('Connection successful', 'success');
+        } else {
+            showToast('Connection failed: ' + (data.error || 'Could not reach repository'), 'error');
+        }
+    } catch(e) {
+        showToast('Connection test failed', 'error');
+    }
+    finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph-bold ph-plugs-connected text-xs"></i> Test'; }
+    }
+}
+
+async function gitPushNow() {
+    const btn = document.getElementById('gitPushBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph-light ph-spinner-gap animate-spin text-xs"></i> Pushing…'; }
+    try {
+        const res  = await _backupFetch('/api/backup/git/push', { method: 'POST', headers: _csrfHeaders() });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('Pushed successfully', 'success');
+            loadGitStatus();
+            loadGitCommits();
+        } else {
+            showToast('Push failed: ' + (data.error || 'Unknown'), 'error');
+        }
+        if (typeof fetchNotifications === 'function') fetchNotifications();
+    } catch(e) {
+        showToast('Push failed', 'error');
+    }
+    finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph-bold ph-cloud-arrow-up text-xs"></i> Push Now'; }
+    }
+}
+
+async function gitResetRepo() {
+    if (!await _confirm('This will delete the local git repository clone. TM will re-initialize it on the next push.\n\nThis does NOT affect your remote repository or any commits.', 'Reset Git Repository', 'Reset')) return;
+    const btn = document.getElementById('gitResetBtn');
+    if (btn) { btn.disabled = true; }
+    try {
+        const res  = await _backupFetch('/api/backup/git/repo', { method: 'DELETE', headers: _csrfHeaders() });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('Repository reset - push again to re-initialize', 'success');
+            loadGitStatus();
+            loadGitCommits();
+            if (typeof fetchNotifications === 'function') fetchNotifications();
+        } else {
+            showToast('Reset failed: ' + (data.error || 'Unknown'), 'error');
+        }
+    } catch(e) { showToast('Reset failed', 'error'); }
+    finally {
+        if (btn) { btn.disabled = false; }
+    }
+}
+
+async function gitRestoreCommit(sha, shaShort) {
+    if (!await _confirm(`Restore config from commit ${shaShort}? Local backups will be created first.`, 'Git Restore', 'Restore')) return;
+    try {
+        const res  = await _backupFetch(`/api/backup/git/restore/${sha}`, { method: 'POST', headers: _csrfHeaders() });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('Restored successfully', 'success');
+            closeSettingsModal();
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('Restore failed: ' + (data.error || 'Unknown'), 'error');
+        }
+    } catch(e) { showToast('Restore failed', 'error'); }
+}
+
+async function gitViewDiff(sha) {
+    try {
+        const res  = await _backupFetch(`/api/backup/git/commit/${sha}/diff`);
+        const data = await res.json();
+        if (data.error) { showToast('Diff error: ' + data.error, 'error'); return; }
+        if (!data.files || !data.files.length) { showToast('No changes in this commit', 'info'); return; }
+        if (typeof openGitDiffPopout === 'function') openGitDiffPopout(sha, data.files);
+    } catch(e) { showToast('Failed to load diff: ' + (e.message || e), 'error'); }
+}
+
+function bool(v) { return v === true || v === 1 || v === 'true'; }
+function _setVal(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
 
 let _staticSettingsLoaded = false;
 function openStaticSettingsPanel() {
@@ -841,6 +1536,32 @@ function switchSystemTab(id, btn) {
     if (panel) panel.style.display = 'flex';
 }
 
+function _updateSettingsSidebarForAgent(active) {
+    const localOnly = ['auth', 'connection', 'notifications'];
+    localOnly.forEach(id => {
+        const btn = document.getElementById('msb-' + id);
+        if (btn) btn.style.display = active ? 'none' : '';
+        const mob = document.getElementById('msb-' + id + '-mobile');
+        if (mob) mob.style.display = active ? 'none' : '';
+    });
+    const staticBtn = document.getElementById('msb-static');
+    if (staticBtn && active) staticBtn.style.display = 'none';
+    const staticMob = document.getElementById('msb-static-mobile');
+    if (staticMob && active) staticMob.style.display = 'none';
+    const keysBtn = document.getElementById('msb-agent-keys');
+    if (keysBtn) keysBtn.style.display = active ? '' : 'none';
+    const keysMob = document.getElementById('msb-agent-keys-mobile');
+    if (keysMob) keysMob.style.display = active ? '' : 'none';
+    const csTab = document.getElementById('system-tab-crowdsec');
+    if (csTab) {
+        csTab.style.display = active ? 'none' : '';
+        if (active && csTab.classList.contains('active')) {
+            const firstTab = document.querySelector('#mpanel-system .auth-sub-tab:not([style*="display: none"])');
+            if (firstTab) firstTab.click();
+        }
+    }
+}
+
 function switchSettingsPanel(id, btn) {
     document.querySelectorAll('.modal-sidebar-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.modal-panel').forEach(p => p.classList.remove('active'));
@@ -848,7 +1569,7 @@ function switchSettingsPanel(id, btn) {
     if (activeBtn) activeBtn.classList.add('active');
     document.getElementById('mpanel-' + id).classList.add('active');
     if (window.innerWidth < 640) {
-        const titles = {connection:'Connection',routes:'Route Monitoring',system:'System Monitoring',auth:'Authentication',backups:'Backups',static:'Static Config',ui:'Interface',notifications:'Notifications',about:'About'};
+        const titles = {connection:'Connection',routes:'Route Monitoring',system:'System Monitoring',auth:'Authentication',backups:'Backups',static:'Static Config',ui:'Interface',notifications:'Notifications',about:'About','agent-keys':'API Keys'};
         document.getElementById('settingsModalTitle').textContent = titles[id] || 'Settings';
         document.getElementById('settingsGearIcon').style.display = 'none';
         document.getElementById('settingsMobileRoot').style.display = 'none';
@@ -879,7 +1600,9 @@ async function openSettingsModal(panel) {
 
     document.getElementById('settingsModal').style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    if (window.innerWidth < 640 && !panel) {
+    _updateSettingsSidebarForAgent(!!_activeAgent);
+
+    if (window.innerWidth < 768 && !panel) {
         document.getElementById('settingsMobileRoot').style.display = 'flex';
         document.getElementById('settingsPanelWrapper').style.display = 'none';
         document.getElementById('settingsMobileBack').style.display = 'none';
@@ -906,6 +1629,10 @@ async function openSettingsModal(panel) {
         document.getElementById('settingsCrowdSecUrl').value      = data.crowdsec_lapi_url || '';
         const csKeyHint = document.getElementById('crowdsecKeySetHint');
         if (csKeyHint) csKeyHint.classList.toggle('hidden', !data.crowdsec_api_key_set);
+        const csMidEl = document.getElementById('settingsCrowdSecMachineId');
+        if (csMidEl) csMidEl.value = data.crowdsec_machine_id || '';
+        const csMachineHint = document.getElementById('crowdsecMachineSetHint');
+        if (csMachineHint) csMachineHint.classList.toggle('hidden', !data.crowdsec_machine_password_set);
         const whEl = document.getElementById('webhookUrlInput');
         if (whEl) whEl.value = data.webhook_url || '';
         const whType = document.getElementById('webhookTypeSelect');
@@ -914,7 +1641,10 @@ async function openSettingsModal(panel) {
         if (whUser) whUser.value = data.webhook_username || '';
         onWebhookTypeChange();
 
-        if (data.visible_tabs) _visibleTabsCache = data.visible_tabs;
+        if (data.visible_tabs) {
+            _localTabsCache = data.visible_tabs;
+            if (!_activeAgent) _visibleTabsCache = data.visible_tabs;
+        }
         loadTabTogglesIntoModal();
         loadUiTogglesIntoModal();
         _applyTraefikBadgeVisibility();
@@ -1059,6 +1789,8 @@ async function saveSettings() {
     const webhookPassword   = document.getElementById('webhookPassword')?.value || '';
     const crowdsecLapiUrl     = document.getElementById('settingsCrowdSecUrl')?.value.trim() || '';
     const crowdsecApiKey      = document.getElementById('settingsCrowdSecKey')?.value || '';
+    const crowdsecMachineId       = document.getElementById('settingsCrowdSecMachineId')?.value.trim() || '';
+    const crowdsecMachinePassword = document.getElementById('settingsCrowdSecMachinePassword')?.value || '';
     const traefikApiUser      = document.getElementById('settingsApiUser')?.value.trim() || '';
     const traefikApiPassword  = document.getElementById('settingsApiPassword')?.value || '';
     if (!domains.length) return;
@@ -1066,7 +1798,7 @@ async function saveSettings() {
         const res  = await fetch('/api/settings', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfHeaders()['X-CSRF-Token']},
-            body: JSON.stringify({ domains, cert_resolver: resolver, traefik_api_url: apiUrl, acme_json_path: acmeJsonPath, access_log_path: accessLogPath, static_config_path: staticConfigPath, webhook_url: webhookUrl, webhook_type: webhookType, webhook_username: webhookUsername, webhook_password: webhookPassword, crowdsec_lapi_url: crowdsecLapiUrl, crowdsec_api_key: crowdsecApiKey, traefik_api_user: traefikApiUser, traefik_api_password: traefikApiPassword })
+            body: JSON.stringify({ domains, cert_resolver: resolver, traefik_api_url: apiUrl, acme_json_path: acmeJsonPath, access_log_path: accessLogPath, static_config_path: staticConfigPath, webhook_url: webhookUrl, webhook_type: webhookType, webhook_username: webhookUsername, webhook_password: webhookPassword, crowdsec_lapi_url: crowdsecLapiUrl, crowdsec_api_key: crowdsecApiKey, crowdsec_machine_id: crowdsecMachineId, crowdsec_machine_password: crowdsecMachinePassword, traefik_api_user: traefikApiUser, traefik_api_password: traefikApiPassword })
         });
         const data = await res.json();
         if (data.success) {
@@ -1078,6 +1810,10 @@ async function saveSettings() {
             if (crowdsecApiKey) {
                 document.getElementById('settingsCrowdSecKey').value = '';
                 document.getElementById('crowdsecKeySetHint')?.classList.remove('hidden');
+            }
+            if (crowdsecMachinePassword) {
+                document.getElementById('settingsCrowdSecMachinePassword').value = '';
+                document.getElementById('crowdsecMachineSetHint')?.classList.remove('hidden');
             }
             if (traefikApiPassword) {
                 document.getElementById('settingsApiPassword').value = '';
@@ -1096,6 +1832,19 @@ async function saveSettings() {
     } catch(e) {
         showToast('Failed to save settings', 'error');
     }
+}
+
+async function resetCrowdSecConfig() {
+    if (!confirm('Remove the saved CrowdSec LAPI URL and API key?')) return;
+    document.getElementById('settingsCrowdSecUrl').value = '';
+    document.getElementById('settingsCrowdSecKey').value = '';
+    document.getElementById('crowdsecKeySetHint')?.classList.add('hidden');
+    const csMid = document.getElementById('settingsCrowdSecMachineId');
+    if (csMid) csMid.value = '';
+    const csMpw = document.getElementById('settingsCrowdSecMachinePassword');
+    if (csMpw) csMpw.value = '';
+    document.getElementById('crowdsecMachineSetHint')?.classList.add('hidden');
+    await saveSettings();
 }
 
 async function testTraefikApi() {
@@ -1151,21 +1900,34 @@ function _renderBackupList(containerId, backups) {
 }
 
 async function loadBackups() {
+    const isAgent    = typeof _activeAgent !== 'undefined' && !!_activeAgent;
+    const staticTab  = document.getElementById('backup-tab-static');
+    if (staticTab)  staticTab.style.display = isAgent ? 'none' : '';
+    const chip = document.getElementById('backupRemoteChip');
+    if (chip) { chip.textContent = isAgent ? _activeAgent.name : ''; chip.style.display = isAgent ? '' : 'none'; }
     const routesList  = document.getElementById('sm-backups-list');
     const staticList  = document.getElementById('sm-static-backups-list');
     const spinner = `<div class="text-center py-8" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-2xl animate-spin block mb-2"></i>Loading…</div>`;
     if (routesList) routesList.innerHTML = spinner;
     if (staticList) staticList.innerHTML = spinner;
     try {
-        const res     = await fetch('/api/backups');
-        const backups = await res.json();
-        const routes  = backups.filter(b => b.kind !== 'static');
+        const res  = await _backupFetch('/api/backups');
+        const raw  = await res.json();
+        if (!res.ok) {
+            const msg = raw.error || `Error ${res.status}`;
+            if (routesList) routesList.innerHTML = `<p class="text-sm px-1" style="color:var(--red)">${_esc(msg)}</p>`;
+            if (staticList) staticList.innerHTML = '';
+            return;
+        }
+        const rawArr  = Array.isArray(raw) ? raw : (raw.backups || []);
+        const backups = rawArr.map(b => ({ ...b, modified: b.modified || b.date || '' }));
+        const routes  = isAgent ? backups : backups.filter(b => b.kind !== 'static');
         const statics = backups.filter(b => b.kind === 'static');
         _renderBackupList('sm-backups-list', routes);
-        _renderBackupList('sm-static-backups-list', statics);
+        if (!isAgent) _renderBackupList('sm-static-backups-list', statics);
     } catch (e) {
-        if (routesList) routesList.innerHTML = `<p class="text-sm" style="color:var(--red)">Failed to load backups</p>`;
-        if (staticList) staticList.innerHTML = `<p class="text-sm" style="color:var(--red)">Failed to load backups</p>`;
+        if (routesList) routesList.innerHTML = `<p class="text-sm px-1" style="color:var(--red)">Failed to load backups</p>`;
+        if (staticList) staticList.innerHTML = `<p class="text-sm px-1" style="color:var(--red)">Failed to load backups</p>`;
     }
 }
 
@@ -1173,9 +1935,9 @@ async function createAndLoadBackups() {
     const btn = document.querySelector('[onclick="createAndLoadBackups()"]');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph-light ph-spinner-gap animate-spin"></i> Creating…'; }
     try {
-        const res  = await fetch('/api/backup/create', { method: 'POST', headers: _csrfHeaders() });
+        const res  = await _backupFetch('/api/backup/create', { method: 'POST', headers: _csrfHeaders() });
         const data = await res.json();
-        if (data.success) {
+        if (data.success || data.ok) {
             const n = data.count || 1;
             showToast(`Backup created (${n} file${n > 1 ? 's' : ''})`, 'success');
             loadBackups();
@@ -1191,9 +1953,9 @@ async function createAndLoadBackups() {
 async function restoreBackup(name) {
     if (!await _confirm(`Restore backup "${name}"? Your current config will be backed up first.`, 'Restore Backup', 'Restore')) return;
     try {
-        const res  = await fetch(`/api/restore/${encodeURIComponent(name)}`, { method: 'POST', headers: _csrfHeaders() });
+        const res  = await _backupFetch(`/api/restore/${encodeURIComponent(name)}`, { method: 'POST', headers: _csrfHeaders() });
         const data = await res.json();
-        if (data.success) {
+        if (data.success || data.ok) {
             showToast('Backup restored successfully!', 'success');
             closeSettingsModal();
             setTimeout(() => location.reload(), 1500);
@@ -1208,9 +1970,9 @@ async function restoreBackup(name) {
 async function deleteBackup(name) {
     if (!await _confirm(`Delete backup "${name}"?`, 'Delete Backup', 'Delete')) return;
     try {
-        const res  = await fetch(`/api/backup/delete/${encodeURIComponent(name)}`, { method: 'POST', headers: _csrfHeaders() });
+        const res  = await _backupFetch(`/api/backup/delete/${encodeURIComponent(name)}`, { method: 'POST', headers: _csrfHeaders() });
         const data = await res.json();
-        if (data.success) { showToast('Backup deleted', 'success'); loadBackups(); }
+        if (data.success || data.ok) { showToast('Backup deleted', 'success'); loadBackups(); }
         else showToast('Delete failed: ' + data.error, 'error');
     } catch(e) { showToast('Delete failed', 'error'); }
 }
@@ -1607,6 +2369,745 @@ async function testOidcProvider() {
     } catch(e) {
         if (result) { result.textContent = 'Request failed'; result.style.color = 'var(--red)'; }
     }
+}
+
+let _agentWizId   = null;
+let _agentWizKey  = null;
+let _agentWizStep = 0;
+let _agentRestartMethod = '';
+let _agentCfgViewOnly = false;
+
+async function loadAgentsList() {
+    const body = document.getElementById('agentsListBody');
+    if (!body) return;
+    document.getElementById('agentListView').style.display    = 'flex';
+    document.getElementById('agentWizardView').style.display  = 'none';
+    document.getElementById('agentKeysView').style.display    = 'none';
+    try {
+        const res  = await fetch('/api/agents');
+        const data = await res.json();
+        const agents = data.agents || [];
+        if (!agents.length) {
+            body.innerHTML = `<div class="text-center py-8" style="color:var(--muted)"><i class="ph-light ph-robot text-4xl block mb-2 opacity-30"></i><p class="text-xs font-medium mb-1">No agents configured</p><p class="text-xs">Add a remote agent to manage multiple Traefik instances from one TM.</p></div>`;
+            updateServerSwitcher(agents);
+            return;
+        }
+        body.innerHTML = agents.map(a => `
+            <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg mb-2" data-agent-id="${a.id}" style="background:var(--bg);border:1px solid var(--border);">
+                <div style="flex:1;min-width:0;">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full flex-shrink-0" id="agent-dot-${a.id}" style="background:var(--muted)"></span>
+                        <span class="agent-name-label text-xs font-medium truncate" style="color:var(--text)">${_esc(a.name)}</span>
+                    </div>
+                    <div class="flex items-center gap-1 mt-0.5">
+                        <span class="agent-url-label text-xs truncate font-mono" style="color:var(--muted)">${_esc(a.url)}</span>
+                        <button onclick="inlineEditAgent('${a.id}','url','${_esc(a.url)}')" class="btn-icon agent-url-btn flex-shrink-0" title="Edit URL" style="opacity:0.5;padding:0 2px;"><i class="ph-bold ph-pencil-simple" style="font-size:10px;"></i></button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1 flex-shrink-0">
+                    <button onclick="openAgentKeys('${a.id}','${_esc(a.name)}')" class="btn-icon" title="API Keys"><i class="ph-bold ph-key text-xs"></i></button>
+                    <button onclick="inlineEditAgent('${a.id}','name','${_esc(a.name)}')" class="btn-icon agent-rename-btn" title="Rename"><i class="ph-bold ph-pencil-simple text-xs"></i></button>
+                    <button onclick="openAgentSetup('${a.id}')" class="btn-icon" title="Edit Settings"><i class="ph-bold ph-gear text-xs"></i></button>
+                    <button onclick="deleteAgent('${a.id}','${_esc(a.name)}')" class="btn-icon" title="Remove" style="color:var(--red)"><i class="ph-bold ph-trash text-xs"></i></button>
+                </div>
+            </div>`).join('');
+        agents.forEach(a => pingAgent(a.id, a.url));
+        updateServerSwitcher(agents);
+    } catch(e) {
+        body.innerHTML = `<div class="text-center py-6 text-xs" style="color:var(--red)">Failed to load agents</div>`;
+    }
+}
+
+let _keysAgentId = null;
+
+function openAgentKeys(agentId, agentName) {
+    _keysAgentId = agentId;
+    document.getElementById('agentKeysTitle').textContent = _esc(agentName) + ' - API Keys';
+    document.getElementById('agentListView').style.display   = 'none';
+    document.getElementById('agentWizardView').style.display = 'none';
+    document.getElementById('agentKeysView').style.display   = 'flex';
+    hideAddKeyForm();
+    loadAgentKeys();
+}
+
+function closeAgentKeys() {
+    document.getElementById('agentKeysView').style.display  = 'none';
+    document.getElementById('agentListView').style.display  = 'flex';
+}
+
+async function loadAgentKeys() {
+    const list = document.getElementById('agentKeysList');
+    if (!list || !_keysAgentId) return;
+    list.innerHTML = '<div class="text-xs" style="color:var(--muted)">Loading...</div>';
+    try {
+        const res  = await fetch('/api/agents/proxy/' + _keysAgentId + '/keys', { headers: _csrfHeaders() });
+        const data = await res.json();
+        const keys = data.keys || [];
+        if (!keys.length) {
+            list.innerHTML = '<div class="text-center py-6 text-xs" style="color:var(--muted)">No API keys yet. Add one to allow external clients like the mobile app to connect to this agent.</div>';
+            return;
+        }
+        list.innerHTML = keys.map(k => `
+            <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg" style="background:var(--bg);border:1px solid var(--border);">
+                <i class="ph-bold ph-key text-xs flex-shrink-0" style="color:var(--muted)"></i>
+                <div style="flex:1;min-width:0;">
+                    <div class="text-xs font-medium" style="color:var(--text)">${_esc(k.name)}</div>
+                    <div class="text-xs" style="color:var(--muted)">Created ${new Date(k.created_at).toLocaleDateString()}${k.last_used_at ? ' &middot; Last used ' + new Date(k.last_used_at).toLocaleDateString() : ''}</div>
+                </div>
+                <button onclick="deleteAgentKey('${_keysAgentId}','${k.id}','${_esc(k.name)}')" class="btn-icon flex-shrink-0" title="Revoke" style="color:var(--red)"><i class="ph-bold ph-trash text-xs"></i></button>
+            </div>`).join('');
+    } catch(e) {
+        list.innerHTML = '<div class="text-xs" style="color:var(--red)">Failed to load keys</div>';
+    }
+}
+
+function showAddKeyForm() {
+    const form = document.getElementById('agentKeysAddForm');
+    if (form) { form.style.display = 'flex'; }
+    document.getElementById('agentKeyNameInput').value = '';
+    document.getElementById('agentKeyNewDisplay').style.display = 'none';
+    document.getElementById('agentKeyCreateErr').style.display  = 'none';
+    document.getElementById('agentKeyCreateBtn').textContent = 'Create';
+    setTimeout(() => document.getElementById('agentKeyNameInput').focus(), 50);
+}
+
+function hideAddKeyForm() {
+    const form = document.getElementById('agentKeysAddForm');
+    if (form) form.style.display = 'none';
+}
+
+async function createAgentKey() {
+    const name = document.getElementById('agentKeyNameInput').value.trim();
+    const errEl = document.getElementById('agentKeyCreateErr');
+    if (!name) { errEl.textContent = 'Enter a name for this key'; errEl.style.display = ''; return; }
+    const btn = document.getElementById('agentKeyCreateBtn');
+    btn.disabled = true; btn.textContent = 'Creating...';
+    errEl.style.display = 'none';
+    try {
+        const res  = await fetch('/api/agents/proxy/' + _keysAgentId + '/keys', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+            body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (!data.ok) { errEl.textContent = data.error || 'Failed to create key'; errEl.style.display = ''; btn.disabled = false; btn.textContent = 'Create'; return; }
+        document.getElementById('agentKeyNewValue').textContent = data.key;
+        document.getElementById('agentKeyNewDisplay').style.display = 'flex';
+        btn.textContent = 'Done';
+        btn.onclick = () => { hideAddKeyForm(); loadAgentKeys(); btn.onclick = createAgentKey; };
+        btn.disabled = false;
+    } catch(e) {
+        errEl.textContent = 'Request failed'; errEl.style.display = '';
+        btn.disabled = false; btn.textContent = 'Create';
+    }
+}
+
+function copyNewAgentKey() {
+    const val = document.getElementById('agentKeyNewValue').textContent;
+    navigator.clipboard.writeText(val).then(() => showToast('Key copied', 'success')).catch(() => {});
+}
+
+async function deleteAgentKey(agentId, keyId, keyName) {
+    if (!await _confirm(`Revoke key "${keyName}"? Any client using it will lose access immediately.`, 'Revoke Key', 'Revoke')) return;
+    try {
+        const res  = await fetch('/api/agents/proxy/' + agentId + '/keys/' + keyId, { method: 'DELETE', headers: _csrfHeaders() });
+        const data = await res.json();
+        if (data.ok) { showToast('Key revoked', 'success'); loadAgentKeys(); }
+        else showToast('Revoke failed: ' + (data.error || 'Unknown'), 'error');
+    } catch(e) { showToast('Revoke failed', 'error'); }
+}
+
+async function loadActiveAgentKeys() {
+    if (!_activeAgent) return;
+    const sub = document.getElementById('agentKeysSubtitle');
+    if (sub) sub.textContent = _activeAgent.name;
+    hideActiveAgentAddKeyForm();
+    const list = document.getElementById('activeAgentKeysList');
+    if (!list) return;
+    list.innerHTML = '<div class="text-xs" style="color:var(--muted)">Loading...</div>';
+    try {
+        const res  = await fetch('/api/agents/proxy/' + _activeAgent.id + '/keys', { headers: _csrfHeaders() });
+        const data = await res.json();
+        const keys = data.keys || [];
+        if (!keys.length) {
+            list.innerHTML = '<div class="text-center py-6 text-xs" style="color:var(--muted)">No API keys yet.<br>Add one to let external clients like the mobile app connect directly to this agent.</div>';
+            return;
+        }
+        list.innerHTML = keys.map(k => `
+            <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg" style="background:var(--bg);border:1px solid var(--border);">
+                <i class="ph-bold ph-key text-xs flex-shrink-0" style="color:var(--muted)"></i>
+                <div style="flex:1;min-width:0;">
+                    <div class="text-xs font-medium" style="color:var(--text)">${_esc(k.name)}</div>
+                    <div class="text-xs" style="color:var(--muted)">Created ${new Date(k.created_at).toLocaleDateString()}${k.last_used_at ? ' &middot; Last used ' + new Date(k.last_used_at).toLocaleDateString() : ''}</div>
+                </div>
+                <button onclick="deleteActiveAgentKey('${k.id}','${_esc(k.name)}')" class="btn-icon flex-shrink-0" title="Revoke" style="color:var(--red)"><i class="ph-bold ph-trash text-xs"></i></button>
+            </div>`).join('');
+    } catch(e) {
+        list.innerHTML = '<div class="text-xs" style="color:var(--red)">Failed to load keys</div>';
+    }
+}
+
+function showActiveAgentAddKeyForm() {
+    const form = document.getElementById('activeAgentKeysAddForm');
+    if (form) form.style.display = 'flex';
+    document.getElementById('activeAgentKeyNameInput').value = '';
+    document.getElementById('activeAgentKeyNewDisplay').style.display = 'none';
+    document.getElementById('activeAgentKeyCreateErr').style.display  = 'none';
+    const btn = document.getElementById('activeAgentKeyCreateBtn');
+    btn.textContent = 'Create'; btn.onclick = createActiveAgentKey;
+    setTimeout(() => document.getElementById('activeAgentKeyNameInput').focus(), 50);
+}
+
+function hideActiveAgentAddKeyForm() {
+    const form = document.getElementById('activeAgentKeysAddForm');
+    if (form) form.style.display = 'none';
+}
+
+async function createActiveAgentKey() {
+    if (!_activeAgent) return;
+    const name = document.getElementById('activeAgentKeyNameInput').value.trim();
+    const errEl = document.getElementById('activeAgentKeyCreateErr');
+    if (!name) { errEl.textContent = 'Enter a name for this key'; errEl.style.display = ''; return; }
+    const btn = document.getElementById('activeAgentKeyCreateBtn');
+    btn.disabled = true; btn.textContent = 'Creating...';
+    errEl.style.display = 'none';
+    try {
+        const res  = await fetch('/api/agents/proxy/' + _activeAgent.id + '/keys', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+            body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (!data.ok) { errEl.textContent = data.error || 'Failed'; errEl.style.display = ''; btn.disabled = false; btn.textContent = 'Create'; return; }
+        document.getElementById('activeAgentKeyNewValue').textContent = data.key;
+        document.getElementById('activeAgentKeyNewDisplay').style.display = 'flex';
+        btn.textContent = 'Done'; btn.disabled = false;
+        btn.onclick = () => { hideActiveAgentAddKeyForm(); loadActiveAgentKeys(); btn.onclick = createActiveAgentKey; };
+    } catch(e) {
+        errEl.textContent = 'Request failed'; errEl.style.display = '';
+        btn.disabled = false; btn.textContent = 'Create';
+    }
+}
+
+function copyActiveAgentKey() {
+    const val = document.getElementById('activeAgentKeyNewValue').textContent;
+    navigator.clipboard.writeText(val).then(() => showToast('Key copied', 'success')).catch(() => {});
+}
+
+async function deleteActiveAgentKey(keyId, keyName) {
+    if (!_activeAgent) return;
+    if (!await _confirm(`Revoke key "${keyName}"? Any client using it will lose access immediately.`, 'Revoke Key', 'Revoke')) return;
+    try {
+        const res  = await fetch('/api/agents/proxy/' + _activeAgent.id + '/keys/' + keyId, { method: 'DELETE', headers: _csrfHeaders() });
+        const data = await res.json();
+        if (data.ok) { showToast('Key revoked', 'success'); loadActiveAgentKeys(); }
+        else showToast('Revoke failed: ' + (data.error || 'Unknown'), 'error');
+    } catch(e) { showToast('Revoke failed', 'error'); }
+}
+
+async function pingAgent(id, url) {
+    const dot = document.getElementById('agent-dot-' + id);
+    if (!dot) return;
+    try {
+        const res  = await fetch('/api/agents/' + id + '/health');
+        const data = await res.json();
+        dot.style.background = data.ok ? 'var(--green)' : 'var(--red)';
+    } catch(e) { if (dot) dot.style.background = 'var(--red)'; }
+}
+
+function inlineEditAgent(id, field, currentValue) {
+    const card = document.querySelector(`[data-agent-id="${id}"]`);
+    if (!card) return;
+    const isName = field === 'name';
+    const labelEl  = card.querySelector(isName ? '.agent-name-label' : '.agent-url-label');
+    const pencilBtn = card.querySelector(isName ? '.agent-rename-btn' : '.agent-url-btn');
+    if (!labelEl || !pencilBtn) return;
+    const input = document.createElement('input');
+    input.type = isName ? 'text' : 'url';
+    input.value = currentValue;
+    input.className = 'input-field text-xs';
+    input.style.cssText = isName ? 'padding:2px 6px;height:24px;width:120px;' : 'padding:2px 6px;height:24px;width:200px;';
+    labelEl.replaceWith(input);
+    pencilBtn.innerHTML = '<i class="ph-bold ph-check text-xs"></i>';
+    pencilBtn.style.color = 'var(--green)';
+    pencilBtn.style.opacity = '1';
+    input.focus();
+    input.select();
+    let _done = false;
+    const submit = async () => {
+        if (_done) return;
+        _done = true;
+        const newVal = input.value.trim();
+        if (!newVal || newVal === currentValue) { loadAgentsList(); return; }
+        try {
+            const res  = await fetch('/api/agents/' + id, { method: 'PUT', headers: { ..._csrfHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ [field]: newVal }) });
+            const data = await res.json();
+            if (data.ok) { showToast(`Agent ${isName ? 'renamed' : 'URL updated'}`, 'success'); loadAgentsList(); updateServerSwitcher(); }
+            else { _done = false; showToast(`Update failed: ${data.error || 'Unknown'}`, 'error'); loadAgentsList(); }
+        } catch(e) { _done = false; showToast('Update failed', 'error'); loadAgentsList(); }
+    };
+    pencilBtn.onclick = submit;
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') loadAgentsList(); });
+    input.addEventListener('blur', () => setTimeout(submit, 150));
+}
+
+async function deleteAgent(id, name) {
+    if (!await _confirm(`Remove agent "${name}"? This only removes it from TM settings - the agent service on the remote server is unaffected.`, 'Remove Agent', 'Remove')) return;
+    try {
+        const res  = await fetch('/api/agents/' + id, { method: 'DELETE', headers: _csrfHeaders() });
+        const data = await res.json();
+        if (data.ok) { showToast('Agent removed', 'success'); loadAgentsList(); }
+        else showToast('Remove failed: ' + (data.error || 'Unknown'), 'error');
+    } catch(e) { showToast('Remove failed', 'error'); }
+}
+
+function startAddAgent() {
+    _agentWizId          = null;
+    _agentWizKey         = null;
+    _agentWizStep        = 1;
+    _agentCfgViewOnly    = false;
+    _agentRestartMethod  = '';
+    document.getElementById('agentListView').style.display   = 'none';
+    document.getElementById('agentWizardView').style.display = 'flex';
+    document.getElementById('agentWizardTitle').textContent  = 'Add Agent';
+    document.getElementById('agentWizardStepPills').style.display = '';
+    resetAgentWizard();
+    showAgentWizStep(1);
+}
+
+async function openAgentSetup(id, titleOverride) {
+    _agentCfgViewOnly = true;
+    _agentWizId = id;
+    _agentWizKey = null;
+    document.getElementById('agentListView').style.display   = 'none';
+    document.getElementById('agentWizardView').style.display = 'flex';
+    document.getElementById('agentWizardTitle').textContent  = titleOverride || 'Setup Commands';
+    document.getElementById('agentWizardStepPills').style.display = 'none';
+    document.getElementById('agentRotateKeyBanner').style.display = '';
+    document.getElementById('agentRotatedKeyDisplay').style.display = 'none';
+    document.getElementById('agentRotatedKeyText').textContent = '';
+    resetAgentWizardCfgFields();
+    showAgentWizStep(3);
+    document.getElementById('agentWizSaveBtn').style.display = 'inline-flex';
+    document.getElementById('agentWizKeyDisplay').textContent = '';
+    try {
+        const res  = await fetch('/api/agents');
+        const data = await res.json();
+        const a    = (data.agents || []).find(x => x.id === id);
+        if (a) {
+            if (a.traefik_api_url)    document.getElementById('agCfgTraefikUrl').value  = a.traefik_api_url;
+            const tlsEl = document.getElementById('agCfgInsecureTLS');
+            if (tlsEl) { tlsEl.classList.toggle('on', !!a.traefik_insecure_skip_verify); }
+            if (a.config_path)        document.getElementById('agCfgConfigPath').value  = a.config_path;
+            if (a.static_config_path) document.getElementById('agCfgStaticPath').value  = a.static_config_path;
+            if (a.backup_dir)         document.getElementById('agCfgBackupDir').value   = a.backup_dir;
+            if (a.acme_json_path)     document.getElementById('agCfgAcmePath').value    = a.acme_json_path;
+            if (a.access_log_path)    document.getElementById('agCfgLogPath').value     = a.access_log_path;
+            if (a.plugins_dir)        document.getElementById('agCfgPluginsDir').value  = a.plugins_dir;
+            if (a.docker_host)        document.getElementById('agCfgDockerHost').value  = a.docker_host;
+            if (a.signal_file_path)   document.getElementById('agCfgSignalFile').value  = a.signal_file_path;
+            if (a.crowdsec_lapi_url)  document.getElementById('agCfgCsUrl').value       = a.crowdsec_lapi_url;
+            if (a.crowdsec_machine_id) document.getElementById('agCfgCsMachineId').value = a.crowdsec_machine_id;
+            if (a.restart_method)     selectRestartMethod(a.restart_method, null);
+            const container = a.traefik_container || '';
+            if (container) {
+                document.getElementById('agCfgContainer').value       = container;
+                document.getElementById('agCfgSocketContainer').value = container;
+            }
+            if (a.git_backup_enabled) {
+                document.getElementById('agCfgGitEnabled').checked = true;
+                document.getElementById('agentGitFields').style.display = 'block';
+                if (a.git_backup_repo)    document.getElementById('agCfgGitRepo').value   = a.git_backup_repo;
+                if (a.git_backup_branch)  document.getElementById('agCfgGitBranch').value = a.git_backup_branch;
+                if (a.git_backup_username) document.getElementById('agCfgGitUser').value  = a.git_backup_username;
+                document.getElementById('agCfgGitAutoPush').checked = a.git_backup_auto_push !== false;
+            }
+            if (a.tma_port)       { const el = document.getElementById('agCfgPort');      if (el) el.value = a.tma_port; }
+            if (a.tma_rate_limit) { const el = document.getElementById('agCfgRateLimit'); if (el) el.value = a.tma_rate_limit; }
+            if (a.domains && a.domains.length) { const el = document.getElementById('agCfgDomains'); if (el) el.value = a.domains.join(', '); }
+        }
+    } catch(e) {}
+    agentCfgChanged();
+}
+
+function cancelAddAgent() {
+    document.getElementById('agentWizardView').style.display = 'none';
+    document.getElementById('agentListView').style.display   = 'flex';
+}
+
+function resetAgentWizard() {
+    document.getElementById('agentWizName').value = '';
+    document.getElementById('agentWizUrl').value  = '';
+    document.getElementById('agentWizStep1Err').style.display = 'none';
+    resetAgentWizardCfgFields();
+}
+
+function resetAgentWizardCfgFields() {
+    document.getElementById('agCfgTraefikUrl').value  = 'http://traefik:8080';
+    document.getElementById('agCfgConfigPath').value  = '/app/config';
+    document.getElementById('agCfgStaticPath').value  = '';
+    document.getElementById('agCfgBackupDir').value   = '';
+    document.getElementById('agCfgAcmePath').value    = '';
+    document.getElementById('agCfgLogPath').value     = '';
+    document.getElementById('agCfgPluginsDir').value  = '';
+    document.getElementById('agCfgDockerHost').value  = '';
+    document.getElementById('agCfgContainer').value   = 'traefik';
+    document.getElementById('agCfgSignalFile').value  = '';
+    document.getElementById('agCfgSocketContainer').value = 'traefik';
+    document.getElementById('agCfgGitEnabled').checked = false;
+    document.getElementById('agentGitFields').style.display = 'none';
+    document.getElementById('agCfgGitRepo').value     = '';
+    document.getElementById('agCfgGitBranch').value   = 'main';
+    document.getElementById('agCfgGitUser').value     = '';
+    document.getElementById('agCfgGitToken').value    = '';
+    document.getElementById('agCfgGitAutoPush').checked = true;
+    document.getElementById('agCfgCsUrl').value       = '';
+    const portEl = document.getElementById('agCfgPort'); if (portEl) portEl.value = '';
+    const rlEl   = document.getElementById('agCfgRateLimit'); if (rlEl) rlEl.value = '';
+    const domsEl = document.getElementById('agCfgDomains'); if (domsEl) domsEl.value = '';
+    document.getElementById('agCfgCsKey').value       = '';
+    document.getElementById('agCfgCsMachineId').value = '';
+    document.getElementById('agCfgCsMachinePassword').value = '';
+    document.getElementById('agCfgInsecureTLS')?.classList.remove('on');
+    selectRestartMethod('', document.querySelector('#restartMethodChips .agent-chip'));
+}
+
+function showAgentWizStep(n) {
+    [1,2,3].forEach(i => {
+        const el = document.getElementById('agentWizStep' + i);
+        if (el) el.style.display = i === n ? '' : 'none';
+        const pill = document.getElementById('wiz-step-pill-' + i);
+        if (pill) {
+            pill.style.background = i === n ? 'var(--blue)' : (i < n ? 'var(--green)' : 'var(--border)');
+            pill.style.color      = i <= n ? '#fff' : 'var(--muted)';
+        }
+    });
+    _agentWizStep = n;
+    if (n === 3) { switchAgentCfgTab('traefik', document.querySelector('#agentCfgTabs .auth-sub-tab')); agentCfgChanged(); }
+}
+
+async function agentWizStep1Next() {
+    const name = document.getElementById('agentWizName').value.trim();
+    const url  = document.getElementById('agentWizUrl').value.trim();
+    const err  = document.getElementById('agentWizStep1Err');
+    if (!name || !url) { err.textContent = 'Name and URL are required.'; err.style.display = ''; return; }
+    const btn = document.getElementById('agentWizStep1Btn');
+    btn.disabled = true; btn.innerHTML = '<i class="ph-light ph-spinner-gap animate-spin text-xs"></i> Creating…';
+    try {
+        const res  = await fetch('/api/agents', { method: 'POST', headers: { ..._csrfHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ name, url }) });
+        const data = await res.json();
+        if (!data.ok) { err.textContent = data.error || 'Failed to create agent'; err.style.display = ''; return; }
+        _agentWizId  = data.agent.id;
+        _agentWizKey = data.agent.api_key_raw;
+        document.getElementById('agentWizKeyDisplay').textContent = _agentWizKey;
+        err.style.display = 'none';
+        showAgentWizStep(2);
+    } catch(e) { err.textContent = 'Request failed'; err.style.display = ''; }
+    finally { btn.disabled = false; btn.innerHTML = 'Continue <i class="ph-bold ph-caret-right text-xs"></i>'; }
+}
+
+function agentWizStep2Next() {
+    document.getElementById('agentRotateKeyBanner').style.display = 'none';
+    showAgentWizStep(3);
+}
+
+async function agentWizStep3Save() {
+    if (!_agentWizId) return;
+    const cfg = buildAgentCfgPayload();
+    try {
+        const res  = await fetch('/api/agents/' + _agentWizId, { method: 'PUT', headers: { ..._csrfHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
+        const data = await res.json();
+        if (data.ok) showToast('Agent config saved', 'success');
+        else showToast('Save failed: ' + (data.error || 'Unknown'), 'error');
+    } catch(e) { showToast('Save failed', 'error'); }
+}
+
+async function agentWizDone() {
+    await agentWizStep3Save();
+    document.getElementById('agentWizardView').style.display = 'none';
+    document.getElementById('agentListView').style.display   = 'flex';
+    loadAgentsList();
+}
+
+function copyAgentKey() {
+    navigator.clipboard.writeText(_agentWizKey || '').then(() => showToast('Key copied', 'success'));
+}
+
+function copyAgentCompose() {
+    navigator.clipboard.writeText(document.getElementById('agentComposeOutput').textContent).then(() => showToast('Copied', 'success'));
+}
+
+function copyAgentRun() {
+    navigator.clipboard.writeText(document.getElementById('agentRunOutput').textContent).then(() => showToast('Copied', 'success'));
+}
+
+function copyRotatedKey() {
+    const key = document.getElementById('agentRotatedKeyText').textContent;
+    navigator.clipboard.writeText(key).then(() => showToast('Key copied', 'success'));
+}
+
+async function rotateAgentKey() {
+    const btn = document.getElementById('agentRotateKeyBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph-bold ph-spinner-gap animate-spin text-xs"></i>';
+    try {
+        const res = await fetch('/api/agents/' + _agentWizId + '/rotate-key', {
+            method: 'POST', headers: { ..._csrfHeaders() }
+        });
+        let data = {};
+        try { data = await res.json(); } catch(je) { throw new Error('HTTP ' + res.status + ' - invalid response'); }
+        if (!res.ok || !data.api_key_raw) throw new Error(data.error || ('HTTP ' + res.status));
+        _agentWizKey = data.api_key_raw;
+        document.getElementById('agentRotatedKeyText').textContent = _agentWizKey;
+        document.getElementById('agentRotatedKeyDisplay').style.display = '';
+        btn.innerHTML = '<i class="ph-bold ph-check text-xs"></i> Rotated';
+        agentCfgChanged();
+        showToast('API key rotated - update your agent', 'warning');
+    } catch(e) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ph-bold ph-arrows-clockwise text-xs"></i> Rotate Key';
+        showToast(e.message || 'Rotation failed', 'error');
+    }
+}
+
+function switchAgentCfgTab(id, btn) {
+    document.querySelectorAll('#agentCfgTabs .auth-sub-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('[id^="agentCfgPane-"]').forEach(p => { p.style.display = 'none'; });
+    if (btn) btn.classList.add('active');
+    const pane = document.getElementById('agentCfgPane-' + id);
+    if (pane) pane.style.display = id === 'restart' ? '' : 'flex';
+}
+
+function selectRestartMethod(method, btn) {
+    _agentRestartMethod = method;
+    document.querySelectorAll('#restartMethodChips .agent-chip').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    document.getElementById('restartProxyFields').style.display     = method === 'proxy'       ? '' : 'none';
+    document.getElementById('restartPoisonPillFields').style.display = method === 'poison-pill' ? '' : 'none';
+    document.getElementById('restartSocketFields').style.display    = method === 'socket'      ? '' : 'none';
+    agentCfgChanged();
+}
+
+document.getElementById('agCfgGitEnabled').addEventListener('change', function() {
+    document.getElementById('agentGitFields').style.display = this.checked ? 'block' : 'none';
+    agentCfgChanged();
+});
+
+function buildAgentCfgPayload() {
+    return {
+        traefik_api_url:          document.getElementById('agCfgTraefikUrl').value.trim(),
+        traefik_insecure_skip_verify: document.getElementById('agCfgInsecureTLS')?.classList.contains('on') || false,
+        config_path:        document.getElementById('agCfgConfigPath').value.trim(),
+        static_config_path: document.getElementById('agCfgStaticPath').value.trim(),
+        backup_dir:         document.getElementById('agCfgBackupDir').value.trim(),
+        acme_json_path:     document.getElementById('agCfgAcmePath').value.trim(),
+        access_log_path:    document.getElementById('agCfgLogPath').value.trim(),
+        plugins_dir:        document.getElementById('agCfgPluginsDir').value.trim(),
+        restart_method:     _agentRestartMethod,
+        traefik_container:  (document.getElementById('agCfgContainer').value || document.getElementById('agCfgSocketContainer').value || 'traefik').trim(),
+        docker_host:        document.getElementById('agCfgDockerHost').value.trim(),
+        signal_file_path:   document.getElementById('agCfgSignalFile').value.trim(),
+        crowdsec_lapi_url:  document.getElementById('agCfgCsUrl').value.trim(),
+        crowdsec_api_key:   document.getElementById('agCfgCsKey').value,
+        crowdsec_machine_id:       document.getElementById('agCfgCsMachineId').value.trim(),
+        crowdsec_machine_password: document.getElementById('agCfgCsMachinePassword').value,
+        git_backup_enabled: document.getElementById('agCfgGitEnabled').checked,
+        git_backup_repo:    document.getElementById('agCfgGitRepo').value.trim(),
+        git_backup_branch:  document.getElementById('agCfgGitBranch').value.trim() || 'main',
+        git_backup_username:document.getElementById('agCfgGitUser').value.trim(),
+        git_backup_token:   document.getElementById('agCfgGitToken').value,
+        git_backup_auto_push: document.getElementById('agCfgGitAutoPush').checked,
+        tma_port:        (document.getElementById('agCfgPort')?.value.trim()) || '',
+        tma_rate_limit:  (document.getElementById('agCfgRateLimit')?.value.trim()) || '',
+        domains:         (document.getElementById('agCfgDomains')?.value || '').split(',').map(s => s.trim()).filter(Boolean),
+    };
+}
+
+function agentCfgChanged() {
+    const key       = _agentWizKey || '<your-api-key>';
+    const traefik   = document.getElementById('agCfgTraefikUrl').value.trim() || 'http://traefik:8080';
+    const configPath= document.getElementById('agCfgConfigPath').value.trim() || '/app/config';
+    const staticPath= document.getElementById('agCfgStaticPath').value.trim();
+    const backupDir = document.getElementById('agCfgBackupDir').value.trim();
+    const acmePath  = document.getElementById('agCfgAcmePath').value.trim();
+    const logPath   = document.getElementById('agCfgLogPath').value.trim();
+    const pluginsDir= document.getElementById('agCfgPluginsDir').value.trim();
+    const restart   = _agentRestartMethod;
+    const container = (document.getElementById('agCfgContainer').value || document.getElementById('agCfgSocketContainer').value || 'traefik').trim();
+    const dockerHost= document.getElementById('agCfgDockerHost').value.trim();
+    const signalFile= document.getElementById('agCfgSignalFile').value.trim();
+    const csUrl     = document.getElementById('agCfgCsUrl').value.trim();
+    const csKey     = document.getElementById('agCfgCsKey').value.trim();
+    const csMid     = document.getElementById('agCfgCsMachineId').value.trim();
+    const csMpw     = document.getElementById('agCfgCsMachinePassword').value.trim();
+    const gitOn     = document.getElementById('agCfgGitEnabled').checked;
+    const gitRepo   = document.getElementById('agCfgGitRepo').value.trim();
+    const gitBranch = document.getElementById('agCfgGitBranch').value.trim() || 'main';
+    const gitUser   = document.getElementById('agCfgGitUser').value.trim();
+    const gitToken  = document.getElementById('agCfgGitToken').value.trim();
+    const gitAuto   = document.getElementById('agCfgGitAutoPush').checked;
+
+    const insecureTLS = document.getElementById('agCfgInsecureTLS')?.classList.contains('on');
+    const agentPort   = document.getElementById('agCfgPort')?.value.trim() || '8090';
+    const rateLimit   = document.getElementById('agCfgRateLimit')?.value.trim();
+    const envLines = [`      - TMA_API_KEY=${key}`, `      - TRAEFIK_API_URL=${traefik}`, `      - CONFIG_PATH=${configPath}`];
+    if (agentPort !== '8090') envLines.push(`      - TMA_PORT=${agentPort}`);
+    if (rateLimit && rateLimit !== '300') envLines.push(`      - TMA_RATE_LIMIT=${rateLimit}`);
+    if (insecureTLS) envLines.push(`      - TRAEFIK_INSECURE_SKIP_VERIFY=true`);
+    if (staticPath)  envLines.push(`      - STATIC_CONFIG_PATH=${staticPath}`);
+    if (restart)     envLines.push(`      - RESTART_METHOD=${restart}`);
+    if (restart && container) envLines.push(`      - TRAEFIK_CONTAINER=${container}`);
+    if (restart === 'proxy' && dockerHost)  envLines.push(`      - DOCKER_HOST=${dockerHost}`);
+    if (restart === 'poison-pill' && signalFile) envLines.push(`      - SIGNAL_FILE_PATH=${signalFile}`);
+    if (acmePath)    envLines.push(`      - ACME_JSON_PATH=${acmePath}`);
+    if (logPath)     envLines.push(`      - ACCESS_LOG_PATH=${logPath}`);
+    if (pluginsDir)  envLines.push(`      - PLUGINS_DIR=${pluginsDir}`);
+    if (backupDir)   envLines.push(`      - BACKUP_DIR=${backupDir}`);
+    if (csUrl)       envLines.push(`      - CROWDSEC_LAPI_URL=${csUrl}`);
+    if (csKey)       envLines.push(`      - CROWDSEC_API_KEY=${csKey}`);
+    if (csMid)       envLines.push(`      - CROWDSEC_MACHINE_ID=${csMid}`);
+    if (csMpw)       envLines.push(`      - CROWDSEC_MACHINE_PASSWORD=${csMpw}`);
+    if (gitOn) {
+        envLines.push(`      - GIT_BACKUP_ENABLED=true`);
+        if (gitRepo)   envLines.push(`      - GIT_BACKUP_REPO=${gitRepo}`);
+        envLines.push(`      - GIT_BACKUP_BRANCH=${gitBranch}`);
+        if (gitUser)   envLines.push(`      - GIT_BACKUP_USERNAME=${gitUser}`);
+        if (gitToken)  envLines.push(`      - GIT_BACKUP_TOKEN=${gitToken}`);
+        envLines.push(`      - GIT_BACKUP_AUTO_PUSH=${gitAuto}`);
+    }
+
+    const volLines = [`      - ${configPath}:${configPath}`];
+    if (staticPath)  volLines.push(`      - ${staticPath}:${staticPath}`);
+    if (backupDir)   volLines.push(`      - ${backupDir}:/app/backups`);
+    else             volLines.push(`      - tma_backups:/app/backups`);
+    if (acmePath)    volLines.push(`      - ${acmePath}:${acmePath}:ro`);
+    if (logPath)     volLines.push(`      - ${logPath}:${logPath}:ro`);
+    if (pluginsDir)  volLines.push(`      - ${pluginsDir}:${pluginsDir}:ro`);
+    if (restart === 'socket') volLines.push(`      - /var/run/docker.sock:/var/run/docker.sock:ro`);
+    if (restart === 'poison-pill') volLines.push(`      - traefik-signals:/signals`);
+
+    const namedVols = [];
+    if (!backupDir) namedVols.push(`  tma_backups:`);
+    if (restart === 'poison-pill') namedVols.push(`  traefik-signals:`);
+
+    let compose = `services:\n  traefik-manager-agent:\n    image: ghcr.io/chr0nzz/traefik-manager-agent:latest\n    restart: unless-stopped\n    ports:\n      - "${agentPort}:${agentPort}"\n    environment:\n${envLines.join('\n')}\n    volumes:\n${volLines.join('\n')}`;
+    if (namedVols.length) compose += `\n\nvolumes:\n${namedVols.join('\n')}`;
+
+    const runParts = [`docker run -d \\`, `  --name traefik-manager-agent \\`, `  -p ${agentPort}:${agentPort} \\`];
+    envLines.forEach(e => runParts.push(`  -e ${e.replace(/^\s+- /, '')} \\`));
+    volLines.forEach(v => runParts.push(`  -v ${v.replace(/^\s+- /, '')} \\`));
+    runParts.push(`  ghcr.io/chr0nzz/traefik-manager-agent:latest`);
+
+    const co = document.getElementById('agentComposeOutput');
+    const ro = document.getElementById('agentRunOutput');
+    if (co) co.textContent = compose;
+    if (ro) ro.textContent = runParts.join('\n');
+}
+
+function updateServerSwitcher(agents) {
+    if (typeof _updateServerSwitcherList === 'function') _updateServerSwitcherList(agents);
+}
+
+let _editingTemplateId = null;
+
+async function loadTemplatesList() {
+    const listEl = document.getElementById('templateListView');
+    if (!listEl) return;
+    try {
+        const res  = await fetch('/api/mw/templates');
+        const data = await res.json();
+        const templates = data.templates || [];
+        if (templates.length === 0) {
+            listEl.innerHTML = `<div class="text-center py-10" style="color:var(--muted)">
+                <i class="ph-light ph-puzzle-piece text-3xl block mb-2 opacity-40"></i>
+                <p class="text-xs">No custom templates yet. Click <strong>Add Template</strong> to create one.</p>
+            </div>`;
+            return;
+        }
+        listEl.innerHTML = templates.map(t => `
+            <div class="flex items-center justify-between px-3 py-2.5 rounded-lg" style="background:var(--input-bg);border:1px solid var(--border)">
+                <div class="flex items-center gap-2 min-w-0">
+                    <i class="ph-bold ph-puzzle-piece text-sm flex-shrink-0" style="color:var(--blue)"></i>
+                    <span class="text-sm font-medium truncate" style="color:var(--text)">${_esc(t.name)}</span>
+                </div>
+                <div class="flex gap-1 flex-shrink-0">
+                    <button onclick="openTemplateEditor('${t.id}')" class="btn-icon text-xs" title="Edit"><i class="ph-bold ph-pencil text-xs"></i></button>
+                    <button onclick="deleteTemplate('${t.id}')" class="btn-icon text-xs" title="Delete" style="color:var(--red)"><i class="ph-bold ph-trash text-xs"></i></button>
+                </div>
+            </div>`).join('');
+    } catch(e) {
+        listEl.innerHTML = `<div class="text-xs py-4 text-center" style="color:var(--muted)">Failed to load templates</div>`;
+    }
+}
+
+async function openTemplateEditor(id) {
+    _editingTemplateId = id;
+    document.getElementById('templateListView').style.display = 'none';
+    document.getElementById('templateEditorView').style.display = 'flex';
+    document.getElementById('templateEditorTitle').textContent = id ? 'Edit Template' : 'Add Template';
+    document.getElementById('tplName').value = '';
+    document.getElementById('tplYaml').value = '';
+    if (id) {
+        try {
+            const res  = await fetch('/api/mw/templates');
+            const data = await res.json();
+            const t    = (data.templates || []).find(x => x.id === id);
+            if (t) {
+                document.getElementById('tplName').value = t.name;
+                document.getElementById('tplYaml').value = t.yaml;
+            }
+        } catch(e) {}
+    }
+}
+
+function closeTemplateEditor() {
+    _editingTemplateId = null;
+    document.getElementById('templateEditorView').style.display = 'none';
+    document.getElementById('templateListView').style.display = 'flex';
+    loadTemplatesList();
+}
+
+async function saveTemplate() {
+    const name = document.getElementById('tplName').value.trim();
+    const yaml = document.getElementById('tplYaml').value;
+    if (!name) { showToast('Name is required', 'error'); return; }
+    try {
+        let res;
+        if (_editingTemplateId) {
+            res = await fetch('/api/mw/templates/' + _editingTemplateId, {
+                method: 'PUT', headers: { ..._csrfHeaders(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, yaml })
+            });
+        } else {
+            res = await fetch('/api/mw/templates', {
+                method: 'POST', headers: { ..._csrfHeaders(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, yaml })
+            });
+        }
+        const data = await res.json();
+        if (data.ok) {
+            showToast(_editingTemplateId ? 'Template updated' : 'Template created', 'success');
+            closeTemplateEditor();
+            if (typeof _loadCustomMwTemplates === 'function') _loadCustomMwTemplates();
+        } else {
+            showToast(data.error || 'Save failed', 'error');
+        }
+    } catch(e) { showToast('Request failed', 'error'); }
+}
+
+async function deleteTemplate(id) {
+    if (!confirm('Delete this template?')) return;
+    try {
+        const res  = await fetch('/api/mw/templates/' + id, { method: 'DELETE', headers: _csrfHeaders() });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('Template deleted', 'success');
+            loadTemplatesList();
+            if (typeof _loadCustomMwTemplates === 'function') _loadCustomMwTemplates();
+        } else {
+            showToast(data.error || 'Delete failed', 'error');
+        }
+    } catch(e) { showToast('Request failed', 'error'); }
 }
 
 </script>

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Traefik Manager API
-  version: 1.4.1
+  version: 1.5.0
   description: |
     REST API powering the Traefik Manager web UI and official mobile app.
 
@@ -1329,7 +1329,7 @@ paths:
     get:
       tags: [CrowdSec]
       summary: List active decisions
-      description: Returns active CrowdSec decisions (bans, captchas, bypasses). Returns an empty list if CrowdSec is not configured.
+      description: Returns all active CrowdSec decisions (bans, captchas, bypasses), paginated from the LAPI. Expired decisions are filtered out. Returns an empty list if CrowdSec is not configured.
       responses:
         "200":
           description: Decision list
@@ -1344,8 +1344,50 @@ paths:
                     value: { type: string, example: "1.2.3.4" }
                     type: { type: string, example: "ban" }
                     duration: { type: string, example: "3h59m" }
+                    until: { type: string, format: date-time }
                     scenario: { type: string, example: "crowdsecurity/http-bf" }
                     origin: { type: string, example: "CAPI" }
+    post:
+      tags: [CrowdSec]
+      summary: Add a manual decision
+      description: Creates a manual ban, captcha, or bypass decision via the CrowdSec LAPI. Requires the bouncer key to have write permissions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value, type, duration]
+              properties:
+                value:
+                  type: string
+                  description: IP address or CIDR range
+                  example: "1.2.3.4"
+                type:
+                  type: string
+                  enum: [ban, captcha, bypass]
+                  example: "ban"
+                duration:
+                  type: string
+                  description: Decision duration (e.g. 24h, 7d)
+                  example: "24h"
+                reason:
+                  type: string
+                  description: Optional reason/scenario label
+                  example: "manual ban from Traefik Manager"
+      responses:
+        "200":
+          description: Decision created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        "400":
+          description: Invalid input
+        "502":
+          description: LAPI unreachable or returned an error
 
   /api/crowdsec/alerts:
     get:

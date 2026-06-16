@@ -113,9 +113,12 @@ async function rmSaveConfig() {
 window.rmEnsureData = async function() {
     if (_rmDataLoaded) return;
     try {
+        const routeUrl = _activeAgent
+            ? '/api/agents/' + _activeAgent.id + '/routes'
+            : '/api/routes/all';
         const [routeRes, epRes, cfgRes] = await Promise.all([
-            fetch('/api/routes/all'),
-            fetch('/api/traefik/entrypoints'),
+            fetch(routeUrl, { headers: { 'X-Requested-With': 'fetch' } }),
+            agentFetch('/api/traefik/entrypoints'),
             fetch('/api/dashboard/config')
         ]);
         const routeData = await routeRes.json();
@@ -135,11 +138,6 @@ window.rmEnsureData = async function() {
         _rmAllEps    = {};
     }
     _rmDataLoaded = true;
-};
-
-window.rmInvalidateData = function() {
-    _rmDataLoaded = false;
-    if (typeof window.rmInvalidateDashboard === 'function') window.rmInvalidateDashboard();
 };
 
 (function() {
@@ -1193,6 +1191,12 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && _rmPopupOpen) window.rmClosePopup();
 });
+
+window.rmInvalidateData = function() {
+    _rmDataLoaded = false;
+    _rmDrawn = false;
+    if (typeof window.rmInvalidateDashboard === 'function') window.rmInvalidateDashboard();
+};
 
 })();
 </script>

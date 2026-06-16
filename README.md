@@ -268,6 +268,7 @@ Add routes, manage middlewares, monitor services, and view TLS certificates - al
 - **Route clone** - duplicate a route into the add modal pre-filled with its service URL, middlewares, and entrypoints
 - **Multi-config file support** - mount several dynamic config files with `CONFIG_DIR` or `CONFIG_PATHS`; a dropdown selects which file each route or middleware is saved to; **create new files on the fly** when `CONFIG_DIR` is set
 - **Timestamped backups** before every change; one-click restore from Settings; `POST /api/backup/create` and `POST /api/backup/static/create` for automation
+- **Git Repository Backup** - push your Traefik configuration to a remote Git repository (GitHub, Gitea, Forgejo, GitLab, or any HTTPS host) after every change; browse the full commit history, view per-file side-by-side diffs, and restore any commit with one click; access token stored encrypted at rest; auto-push on every route, middleware, or static config save; manual push and Test Connection available in Settings → Backups → Git
 
 **Live Dashboard**
 - Real-time stats: router counts, service health, entrypoints, Traefik version
@@ -289,8 +290,15 @@ Add routes, manage middlewares, monitor services, and view TLS certificates - al
 - **Certs** - `acme.json` certificates with expiry tracking
 - **Plugins** - plugins from your static `traefik.yml`; add, edit, and remove plugins when static config editor is enabled
 - **Logs** - parsed access log cards showing method, status, path, IP, service, and duration; click any card for a full detail panel with all fields and the raw log line
-- **CrowdSec** - active decisions (bans, captchas, bypasses) and recent alerts from a CrowdSec LAPI; unban IPs with one click. Configure via `CROWDSEC_LAPI_URL` / `CROWDSEC_API_KEY` env vars or **Settings → System Monitoring → CrowdSec**
+- **CrowdSec** - active decisions and recent alerts from a CrowdSec LAPI; add manual bans/captchas/bypasses or unban IPs with one click; stats cards show total alerts, active decisions, LAPI status, and type breakdown. Configure via `CROWDSEC_LAPI_URL` / `CROWDSEC_API_KEY` env vars or **Settings → System Monitoring → CrowdSec**
 - **Configurable file paths** - set `acme.json`, access log, and static config paths from **Settings → File Paths** without a container restart; UI setting takes priority over env vars
+
+**Multi-Server Management**
+- **Traefik Manager Agent (TMA)** - lightweight Go daemon that runs alongside Traefik on any remote server; install it in seconds with the one-liner installer
+- **Server switcher** in the nav bar - switch between local and remote agents; all data tabs show that server's routes, services, middlewares, backups, and logs
+- **Settings → Agents** multi-step wizard - generates a ready-to-paste Docker Compose or Docker Run command with all env vars pre-filled; API key shown once and stored encrypted
+- **Per-server git backup** - each agent handles its own autonomous git cycle via env vars; viewed from TM when that agent is active
+- Manage unlimited remote Traefik instances from a single TM - no VPN or SSH required
 
 **Security**
 - bcrypt passwords (cost 12), CSRF protection, session management with session fixation protection
@@ -362,11 +370,12 @@ Open **http://your-server:5000** - the setup wizard will guide you through the r
 
 | Runtime                                                                                                              | Guide                                                                                                                 |
 | ----------------------------------------------------------------------------------------------------------------------| -----------------------------------------------------------------------------------------------------------------------|
-| <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/windows-terminal.png" width="20" height="20"> Installer | [One-liner: full stack, TM-only Docker, TM-only Linux service](https://traefik-manager.xyzlab.dev/traefik-stack.html) |
+| <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/windows-terminal.png" width="20" height="20"> Installer | [One-liner: full stack, TM-only Docker, TM-only Linux service, Agent](https://traefik-manager.xyzlab.dev/traefik-stack.html) |
 | <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/docker.png" width="20" height="20"> Docker              | [Docker Compose setup, networking, behind Traefik](https://traefik-manager.xyzlab.dev/docker.html)                    |
 | <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/podman.png" width="20" height="20"> Podman              | [Rootless, Quadlet/systemd, SELinux labels](https://traefik-manager.xyzlab.dev/podman.html)                           |
 | <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/linux.png" width="20" height="20"> Linux                | [Native Python + systemd, no container required](https://traefik-manager.xyzlab.dev/linux.html)                       |
 | <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/unraid.png" width="20" height="20"> Unraid              | [Community Applications template, networking, multi-config](https://traefik-manager.xyzlab.dev/unraid.html)           |
+| <i>Agent</i>                                                                                                         | [TMA - remote agent for multi-server management](https://traefik-manager.xyzlab.dev/agent.html)                       |
 
 ---
 
@@ -383,6 +392,7 @@ Full documentation at **[traefik-manager.xyzlab.dev](https://traefik-manager.xyz
 | [Security](https://traefik-manager.xyzlab.dev/security.html)              | API keys, sessions, CSRF, rate limits, and hardening  |
 | [API Reference](https://traefik-manager.xyzlab.dev/api.html)              | REST API for integrations and the mobile app          |
 | [OIDC / SSO](https://traefik-manager.xyzlab.dev/oidc.html)                | OIDC setup, provider examples, and access control     |
+| [Git Repository Backup](https://traefik-manager.xyzlab.dev/git-backup.html) | Auto-push, commit history, diff viewer, and one-click restore |
 | [Mobile App](https://traefik-manager.xyzlab.dev/mobile.html)              | Android companion app setup and features              |
 | [Reset Password](https://traefik-manager.xyzlab.dev/reset-password.html)  | CLI reset, TOTP recovery, manual reset                |
 | [UI Examples](https://traefik-manager.xyzlab.dev/ui-examples.html)        | Screenshots and walkthroughs                          |
@@ -395,6 +405,7 @@ Full documentation at **[traefik-manager.xyzlab.dev](https://traefik-manager.xyz
 | Layer     | Technology                                    |
 | -----------| -----------------------------------------------|
 | Backend   | Python 3.11 · Flask · Gunicorn                |
+| Agent     | Go 1.23 · Alpine Linux (TMA - remote agent daemon) |
 | Config    | ruamel.yaml (preserves comments)              |
 | Auth      | bcrypt · pyotp (TOTP) · Flask sessions · CSRF · Flask-Limiter · Fernet |
 | Frontend  | Vanilla JS · Tailwind CSS · Phosphor Icons    |

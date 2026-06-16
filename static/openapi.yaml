@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Traefik Manager API
-  version: 1.2.0
+  version: 1.5.0
   description: |
     REST API powering the Traefik Manager web UI and official mobile app.
 
@@ -125,6 +125,8 @@ tags:
     description: Read and edit Traefik's static config (`traefik.yml`) via the Static Config editor.
   - name: Utility
     description: Version info, router names, and connection testing.
+  - name: CrowdSec
+    description: Active decisions and alerts from a CrowdSec LAPI, with add and unban support.
 
 paths:
 
@@ -1240,3 +1242,103 @@ paths:
                 properties:
                   ok: { type: boolean }
                   version: { type: string, example: "3.2.0" }
+
+  # ─── CrowdSec ─────────────────────────────────────────────────────────────
+
+  /api/crowdsec/decisions:
+    get:
+      tags: [CrowdSec]
+      summary: List active decisions
+      description: Returns all active CrowdSec decisions (bans, captchas, bypasses), paginated from the LAPI. Expired decisions are filtered out.
+      responses:
+        "200":
+          description: Decision list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    value: { type: string, example: "1.2.3.4" }
+                    type: { type: string, example: "ban" }
+                    duration: { type: string, example: "3h59m" }
+                    until: { type: string, format: date-time }
+                    scenario: { type: string, example: "crowdsecurity/http-bf" }
+                    origin: { type: string, example: "CAPI" }
+    post:
+      tags: [CrowdSec]
+      summary: Add a manual decision
+      description: Creates a manual ban, captcha, or bypass decision via the CrowdSec LAPI.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value, type, duration]
+              properties:
+                value: { type: string, example: "1.2.3.4" }
+                type: { type: string, enum: [ban, captcha, bypass] }
+                duration: { type: string, example: "24h" }
+                reason: { type: string, example: "manual ban from Traefik Manager" }
+      responses:
+        "200":
+          description: Decision created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        "400": { description: Invalid input }
+        "502": { description: LAPI unreachable or returned an error }
+
+  /api/crowdsec/alerts:
+    get:
+      tags: [CrowdSec]
+      summary: List recent alerts
+      description: Returns recent CrowdSec alerts, paginated from the LAPI.
+      responses:
+        "200":
+          description: Alert list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    startAt: { type: string, format: date-time }
+                    source:
+                      type: object
+                      properties:
+                        ip: { type: string, example: "1.2.3.4" }
+                    scenario: { type: string, example: "crowdsecurity/http-bf" }
+                    decisions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          type: { type: string }
+                          duration: { type: string }
+
+  /api/crowdsec/decisions/{id}:
+    delete:
+      tags: [CrowdSec]
+      summary: Delete a decision (unban)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }

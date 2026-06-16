@@ -6,6 +6,20 @@
 You don't normally need to edit this file by hand - all settings are managed through the **Settings** panel in the UI. This page is a reference for advanced use, scripted deployments, or bypassing the setup wizard.
 :::
 
+## Companion files
+
+TM stores some data in separate files alongside `manager.yml` in the same config directory:
+
+| File | Contents |
+|---|---|
+| `manager.yml` | All TM settings - auth, domains, tabs, webhooks, OIDC, git backup, CrowdSec, disabled routes |
+| `agents.yml` | Remote agent registrations (encrypted API keys). Auto-created and migrated from `manager.yml` on first start after v1.5.0 |
+| `templates.yml` | Custom middleware templates created in Settings - Templates |
+| `notifications.yml` | Recent notification history |
+| `dashboard.yml` | Dashboard widget layout |
+
+None of these companion files need to be edited by hand. Back up the entire config directory to preserve all TM state.
+
 ---
 
 ## Full example

@@ -96,6 +96,20 @@
     <div id="routeYamlPopoutEditor" style="flex:1;min-height:0;"></div>
 </div>
 
+<div id="gitDiffPopout" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--bg);flex-direction:column;">
+    <div class="flex items-center justify-between px-6 py-3.5" style="border-bottom:1px solid var(--border);flex-shrink:0;">
+        <div class="flex items-center gap-3" style="min-width:0;flex:1;">
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <i class="ph-bold ph-git-diff" style="color:var(--blue)"></i>
+                <span class="font-semibold text-sm" id="gitDiffPopoutTitle">Diff</span>
+            </div>
+            <div id="gitDiffFileTabs" class="flex gap-1 flex-wrap"></div>
+        </div>
+        <button onclick="closeGitDiffPopout()" class="btn-secondary text-xs flex-shrink-0"><i class="ph-bold ph-arrows-in mr-1"></i>Close</button>
+    </div>
+    <div id="gitDiffPopoutEditor" style="flex:1;min-height:0;"></div>
+</div>
+
 <div id="traefikRestartOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);flex-direction:column;align-items:center;justify-content:center;gap:16px">
     <i class="ph-bold ph-arrows-clockwise text-5xl animate-spin" style="color:var(--blue);opacity:0.9"></i>
     <div class="text-center">
@@ -387,6 +401,134 @@ function _csrfHeaders() {
     const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
     return { 'X-CSRF-Token': token };
 }
+
+let _activeAgent = null;
+const _agentRegistry = {};
+let _agentList = [];
+const _agentHealthCache = {};
+
+function agentFetch(path, opts) {
+    if (!_activeAgent) return fetch(path, opts);
+    const proxyPath = '/api/agents/proxy/' + _activeAgent.id + '/' + path.replace(/^\/api\//, '');
+    return fetch(proxyPath, { ...opts, headers: { ...(opts && opts.headers), ..._csrfHeaders() } });
+}
+
+function _renderServerSwitcherList(runHealthChecks) {
+    const agents = _agentList;
+    const wrap = document.getElementById('serverSwitcherWrap');
+    const list = document.getElementById('serverSwitcherList');
+    const mobileSection = document.getElementById('mobileServerSwitcherSection');
+    const mobileList = document.getElementById('mobileServerSwitcherList');
+    if (!wrap || !list) return;
+    wrap.style.display = agents.length ? '' : 'none';
+    if (mobileSection) mobileSection.style.display = agents.length ? '' : 'none';
+    const localActive = !_activeAgent;
+    const desktopItem = (id, label, dotColor, active, dotId) =>
+        `<div class="notif-item${active ? ' active' : ''}" onclick="${id ? `switchServer('${id}')` : 'switchServer(null)'}" style="cursor:pointer;${active?'background:var(--input-bg);':''}">
+            <div class="flex items-center gap-2 py-1">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${dotColor}"${dotId ? ` id="${dotId}"` : ''}></span>
+                <div style="min-width:0;flex:1;"><div class="text-xs font-medium truncate" style="color:var(--text)">${label}</div></div>
+                ${active ? '<i class="ph-bold ph-check text-xs ml-auto flex-shrink-0" style="color:var(--blue)"></i>' : ''}
+            </div>
+        </div>`;
+    const mobileItem = (id, label, dotColor, active, dotId) =>
+        `<button onclick="${id ? `switchServer('${id}');` : 'switchServer(null);'}closeMobileMenu()" class="mobile-menu-item" style="${active?'background:var(--input-bg);':''}">
+            <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${dotColor}"${dotId ? ` id="m-ss-dot-${id}"` : ''}></span>
+            <span style="flex:1;text-align:left">${label}</span>
+            ${active ? '<i class="ph-bold ph-check text-xs" style="color:var(--blue)"></i>' : ''}
+        </button>`;
+    const hostDot = 'var(--green)';
+    list.innerHTML = desktopItem(null, 'Host', hostDot, localActive, null) +
+        agents.map(a => desktopItem(a.id, _esc(a.name), _agentHealthCache[a.id] || 'var(--muted)', _activeAgent && _activeAgent.id === a.id, 'ss-dot-' + a.id)).join('');
+    if (mobileList) mobileList.innerHTML = mobileItem(null, 'Host', hostDot, localActive, null) +
+        agents.map(a => mobileItem(a.id, _esc(a.name), _agentHealthCache[a.id] || 'var(--muted)', _activeAgent && _activeAgent.id === a.id, a.id)).join('');
+    if (runHealthChecks) {
+        agents.forEach(a => fetch('/api/agents/' + a.id + '/health').then(r => r.json()).then(d => {
+            _agentHealthCache[a.id] = d.ok ? 'var(--green)' : 'var(--red)';
+            const dot = document.getElementById('ss-dot-' + a.id);
+            if (dot) dot.style.background = _agentHealthCache[a.id];
+            const mdot = document.getElementById('m-ss-dot-' + a.id);
+            if (mdot) mdot.style.background = _agentHealthCache[a.id];
+        }).catch(() => { _agentHealthCache[a.id] = 'var(--red)'; }));
+    }
+}
+
+function _updateServerSwitcherList(agents) {
+    agents.forEach(a => _agentRegistry[a.id] = a);
+    _agentList = agents;
+    _renderServerSwitcherList(true);
+}
+
+function switchServer(agentId) {
+    const agent = agentId ? (_agentRegistry[agentId] || null) : null;
+    _activeAgent = agent;
+    _cachedEntrypoints = null;
+    _cachedMiddlewares = null;
+    if (agent) document.getElementById('selfRouteEpWarning')?.remove();
+    if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData();
+    if (agent) {
+        const stored = JSON.parse(localStorage.getItem('tm_tabs_agent_' + agent.id) || '{}');
+        applyTabVisibility(stored);
+    } else {
+        applyTabVisibility(_localTabsCache);
+    }
+    const label = document.getElementById('serverSwitcherLabel');
+    if (label) label.textContent = agent ? agent.name : 'Host';
+    document.getElementById('serverSwitcherMenu')?.classList.remove('open');
+    const chip = document.getElementById('agentServerLabel');
+    if (chip) { chip.textContent = agent ? agent.name : ''; chip.style.display = agent ? '' : 'none'; }
+    _renderServerSwitcherList(false);
+    if (typeof _staticSettingsLoaded !== 'undefined') _staticSettingsLoaded = false;
+    _refreshStaticAvailability();
+    refreshCurrentTab();
+}
+
+async function _refreshStaticAvailability() {
+    const sidebarBtn = document.getElementById('msb-static');
+    const mobileRow  = document.getElementById('msb-static-mobile');
+    try {
+        let available = false;
+        if (_activeAgent) {
+            const res = await agentFetch('/api/static');
+            available = res.ok;
+        } else {
+            const res  = await fetch('/api/static/available');
+            const data = await res.json();
+            available  = !!data.available;
+        }
+        if (sidebarBtn) sidebarBtn.style.display = available ? '' : 'none';
+        if (mobileRow)  mobileRow.style.display  = available ? '' : 'none';
+    } catch(e) {
+        if (_activeAgent) {
+            if (sidebarBtn) sidebarBtn.style.display = 'none';
+            if (mobileRow)  mobileRow.style.display  = 'none';
+        }
+    }
+}
+
+function _setAgentEditControls(_agentActive) {}
+
+function refreshCurrentTab() {
+    const active = document.querySelector('.tab-btn.active');
+    if (!active) return;
+    const tab = active.id.replace('btn-', '');
+    switchTab(tab);
+}
+
+function toggleServerMenu() {
+    const menu = document.getElementById('serverSwitcherMenu');
+    if (!menu) return;
+    const opening = !menu.classList.contains('open');
+    document.querySelectorAll('.notif-panel.open').forEach(p => p.classList.remove('open'));
+    if (opening) menu.classList.add('open');
+}
+
+document.addEventListener('click', e => {
+    const wrap = document.getElementById('serverSwitcherWrap');
+    if (wrap && !wrap.contains(e.target)) {
+        document.getElementById('serverSwitcherMenu')?.classList.remove('open');
+    }
+});
 </script>
 
 <script>
@@ -440,6 +582,7 @@ async function _fixSelfRouteEp(fixEp) {
 const OPTIONAL_TABS = ['dashboard', 'routemap', 'docker', 'kubernetes', 'swarm', 'nomad', 'ecs', 'consulcatalog', 'redis', 'etcd', 'consul', 'zookeeper', 'http_provider', 'file_external', 'certs', 'tls', 'crowdsec', 'plugins', 'logs'];
 
 let _visibleTabsCache = {};
+let _localTabsCache   = {};
 
 function applyTabVisibility(map) {
     if (map) _visibleTabsCache = map;
@@ -464,7 +607,7 @@ function loadTabTogglesIntoModal() {
 
 async function toggleTabVisibility(tab) {
     const newVal = !_visibleTabsCache[tab];
-    
+
     _visibleTabsCache[tab] = newVal;
     const sw  = document.getElementById('toggle-' + tab);
     const btn = document.getElementById('btn-' + tab);
@@ -473,15 +616,23 @@ async function toggleTabVisibility(tab) {
         btn.style.display = newVal ? 'block' : 'none';
         if (!newVal && btn.classList.contains('active')) switchTab('services');
     }
-    
-    try {
-        await fetch('/api/settings/tabs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfHeaders()['X-CSRF-Token'] },
-            body: JSON.stringify({ [tab]: newVal })
-        });
-    } catch(e) {
-        console.error('Failed to save tab visibility', e);
+
+    if (_activeAgent) {
+        const key = 'tm_tabs_agent_' + _activeAgent.id;
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        stored[tab] = newVal;
+        localStorage.setItem(key, JSON.stringify(stored));
+    } else {
+        _localTabsCache[tab] = newVal;
+        try {
+            await fetch('/api/settings/tabs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfHeaders()['X-CSRF-Token'] },
+                body: JSON.stringify({ [tab]: newVal })
+            });
+        } catch(e) {
+            console.error('Failed to save tab visibility', e);
+        }
     }
 }
 
@@ -492,6 +643,7 @@ function switchTab(tab) {
     document.getElementById('btn-' + tab).classList.add('active');
     if (tab === 'dashboard')     refreshDashboardTab();
     if (tab === 'routemap')      refreshRoutemapTab();
+    if (tab === 'services' || tab === 'middlewares') refreshRoutes();
     if (tab === 'live')          refreshLiveView();
     if (tab === 'docker')        refreshDockerTab();
     if (tab === 'kubernetes')    refreshKubernetesTab();
@@ -719,13 +871,11 @@ function openModal() {
         if (el) el.value = '';
     });
     setHttpRuleMode('simple');
-    _initDomainChips([]);
     _initEntrypointChips('http', []);
     _initEntrypointChips('tcp', []);
     _initEntrypointChips('udp', []);
     _initMiddlewareChips([]);
-    document.getElementById('useTls') && (document.getElementById('useTls').checked = false);
-    toggleTcpCertResolver(false);
+    setTcpTlsMode('none', document.getElementById('tcpTlsNone'));
     const crHttp = document.getElementById('certResolver');
     if (crHttp) { crHttp.value = availableCertResolvers.length > 0 ? availableCertResolvers[0] : '__disabled__'; toggleWildcardSection(crHttp.value); }
     const crTcp = document.getElementById('certResolverTcp');
@@ -734,17 +884,15 @@ function openModal() {
     const mainEl = document.getElementById('tlsWildcardMain'); if (mainEl) mainEl.value = '';
     const sansEl = document.getElementById('tlsWildcardSans'); if (sansEl) sansEl.value = '';
     setProtocol('http');
-    // Init config file to first option (multi-config mode)
-    const cfSel = document.getElementById('configFileSelect');
-    const cfHid = document.getElementById('configFile');
-    if (cfSel) cfSel.value = cfSel.options[0]?.value || '';
-    const newRouteInput = document.getElementById('newRouteFileName');
-    if (newRouteInput) { newRouteInput.style.display = 'none'; newRouteInput.value = ''; }
-    if (cfSel && cfHid && cfSel.value !== '__new__') cfHid.value = cfSel.value;
     const tlsOptSel = document.getElementById('tlsOptionsProfileSelect');
     if (tlsOptSel) tlsOptSel.value = '';
     _populateTlsOptionsSelect();
-    document.getElementById('appModal').style.display = 'flex';
+    _updateRouteModalForAgent();
+    const _omAgDoms = _activeAgent ? (_activeAgent.domains || []) : [];
+    if (_activeAgent && _omAgDoms.length > 1) { _initAgentDomainChips(_omAgDoms, []); } else { _initDomainChips([]); }
+    _populateConfigFileSelect('route').then(() => {
+        document.getElementById('appModal').style.display = 'flex';
+    });
 }
 
 function closeModal() { document.getElementById('appModal').style.display = 'none'; }
@@ -762,16 +910,15 @@ function openMwModal() {
     if (titleEl) titleEl.innerText = 'Add Middleware';
     const mwCfSel = document.getElementById('mwConfigFileSelect');
     const mwCfHid = document.getElementById('mwConfigFile');
-    if (mwCfSel) mwCfSel.value = mwCfSel.options[0]?.value || '';
     const newMwInput = document.getElementById('newMwFileName');
     if (newMwInput) { newMwInput.style.display = 'none'; newMwInput.value = ''; }
-    if (mwCfSel && mwCfHid && mwCfSel.value !== '__new__') mwCfHid.value = mwCfSel.value;
-    modal.style.display = 'flex';
+    _populateConfigFileSelect('mw').then(() => { modal.style.display = 'flex'; });
     const mwTplSel = document.getElementById('mwTemplate');
     if (mwTplSel) mwTplSel.value = '';
     setMwMode('yaml');
     _showMwWizard('');
     _initMwMonaco('');
+    _loadCustomMwTemplates();
 }
 
 function closeMwModal() { document.getElementById('mwModal').style.display = 'none'; }
@@ -1029,6 +1176,89 @@ function buildYamlFromWizard() {
     }
 }
 
+function _updateRouteModalForAgent(rebuildBody) {
+    const domainCol  = document.getElementById('routeDomainCol');
+    const domLabel   = document.getElementById('agentDomainLabel');
+    const domBody    = document.getElementById('routeDomainBody');
+    const subLabel   = document.getElementById('routeSubdomainLabel');
+    const subInput   = document.getElementById('subdomain');
+    const agentDomains = _activeAgent ? (_activeAgent.domains || []) : [];
+    if (_activeAgent && agentDomains.length === 0) {
+        if (domainCol) domainCol.style.display = 'none';
+        if (subLabel) subLabel.textContent = 'Hostname';
+        if (subInput) subInput.placeholder = 'app.example.com';
+    } else if (_activeAgent && agentDomains.length > 0) {
+        if (domainCol) domainCol.style.display = '';
+        if (subLabel) subLabel.textContent = 'Subdomain';
+        if (subInput) subInput.placeholder = 'app';
+        if (domLabel) domLabel.textContent = agentDomains.length > 1 ? 'Domains' : 'Domain';
+        if (rebuildBody !== false && domBody) {
+            if (agentDomains.length > 1) {
+                domBody.innerHTML = `<div id="domainChips" class="flex flex-wrap gap-1.5 p-2 rounded-lg" style="background:var(--input-bg);border:1px solid var(--border);min-height:38px"></div><div id="domainHiddenInputs"></div>`;
+            } else {
+                domBody.innerHTML = `<select name="domains" id="domainSelect" class="input-field"><option value="${_esc(agentDomains[0])}">${_esc(agentDomains[0])}</option></select>`;
+            }
+        }
+    } else {
+        if (domainCol) domainCol.style.display = '';
+        if (subLabel) subLabel.textContent = 'Subdomain';
+        if (subInput) subInput.placeholder = 'app';
+        if (domLabel) domLabel.textContent = availableDomains.length > 1 ? 'Domains' : 'Domain';
+        if (rebuildBody !== false && domBody) {
+            if (availableDomains.length > 1) {
+                if (!document.getElementById('domainChips')) {
+                    domBody.innerHTML = `<div id="domainChips" class="flex flex-wrap gap-1.5 p-2 rounded-lg" style="background:var(--input-bg);border:1px solid var(--border);min-height:38px"></div><div id="domainHiddenInputs"></div>`;
+                }
+            } else if (availableDomains.length === 1) {
+                if (!document.getElementById('domainSelect')) {
+                    domBody.innerHTML = `<select name="domains" id="domainSelect" class="input-field"><option value="${_esc(availableDomains[0])}">${_esc(availableDomains[0])}</option></select>`;
+                }
+            } else {
+                domBody.innerHTML = '';
+            }
+        }
+    }
+}
+
+function _buildConfigSelectOptions(sel, files, allowNew) {
+    sel.innerHTML = '<option value="">Select a file...</option>';
+    if (allowNew) {
+        const o = document.createElement('option'); o.value = '__new__'; o.textContent = '+ New file...'; sel.appendChild(o);
+    }
+    files.forEach(f => { const o = document.createElement('option'); o.value = f; o.textContent = f; sel.appendChild(o); });
+}
+
+async function _populateConfigFileSelect(which) {
+    const isRoute = which === 'route';
+    const wrapId     = isRoute ? 'configFileSelectWrap' : 'mwConfigFileSelectWrap';
+    const selId      = isRoute ? 'configFileSelect' : 'mwConfigFileSelect';
+    const newInputId = isRoute ? 'newRouteFileName' : 'newMwFileName';
+    const hidId      = isRoute ? 'configFile' : 'mwConfigFile';
+    const wrap    = document.getElementById(wrapId);
+    const sel     = document.getElementById(selId);
+    const newInput = document.getElementById(newInputId);
+    const hidEl   = document.getElementById(hidId);
+    if (!sel) return;
+    if (newInput) { newInput.style.display = 'none'; newInput.value = ''; }
+    if (_activeAgent) {
+        if (wrap) wrap.style.display = '';
+        try {
+            const r = await agentFetch('/api/configs');
+            const data = await r.json();
+            const files = (data.files || []).map(f => f.name).sort();
+            _buildConfigSelectOptions(sel, files, true);
+            if (files.length === 1) { sel.value = files[0]; if (hidEl) hidEl.value = files[0]; }
+            else { sel.value = ''; if (hidEl) hidEl.value = ''; }
+        } catch(e) { console.error('Failed to load agent configs', e); }
+    } else {
+        const show = MULTI_CONFIG || CONFIG_DIR_SET;
+        if (wrap) wrap.style.display = show ? '' : 'none';
+        _buildConfigSelectOptions(sel, CONFIG_PATHS_LIST.map(cp => cp.label), CONFIG_DIR_SET);
+        if (sel.options.length > 1) sel.value = sel.options[1].value;
+        if (hidEl) hidEl.value = sel.value && sel.value !== '__new__' ? sel.value : '';
+    }
+}
+
 function onRouteConfigFileChange(sel) {
     const newInput = document.getElementById('newRouteFileName');
     const cfHid    = document.getElementById('configFile');
@@ -1072,11 +1302,13 @@ async function saveRouteAjax(event) {
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
-        const res = await fetch(form.action, { method:'POST', headers:{'X-Requested-With':'fetch'}, body: new FormData(form) });
+        const fd = new FormData(form);
+        if (_activeAgent) fd.append('agent_id', _activeAgent.id);
+        const res = await fetch(form.action, { method:'POST', headers:{'X-Requested-With':'fetch'}, body: fd });
         const json = await res.json();
         closeModal();
         showToast(json.message, json.ok ? 'success' : 'error');
-        if (json.ok) { refreshRoutes(); fetchNotifications(); if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData(); }
+        if (json.ok) { refreshRoutes(); fetchNotifications(); if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData(); setTimeout(fetchNotifications, 8000); }
     } catch(e) {
         showToast('Error saving route', 'error');
     } finally {
@@ -1088,9 +1320,25 @@ async function saveMwAjax(event) {
     event.preventDefault();
     const mwMode = document.getElementById('mwCurrentMode')?.value;
     if (mwMode === 'wizard') {
+        const tpl = document.getElementById('mwTemplate')?.value || '';
+        if (tpl === 'basicAuth' || tpl === 'digestAuth') {
+            const usersEl = document.getElementById(tpl === 'basicAuth' ? 'wizBaUsers' : 'wizDaUsers');
+            const users = (usersEl?.value || '').trim().split('\n').map(l => l.trim()).filter(Boolean);
+            if (!users.length) { showToast('Add at least one user before saving', 'error'); return; }
+        }
+        if (['forwardAuth','forwardAuthAuthentik','forwardAuthAuthelia'].includes(tpl)) {
+            const addr = (document.getElementById('wizFaAddress')?.value || '').trim();
+            if (!addr) { showToast('Forward auth address is required', 'error'); return; }
+        }
+        if (tpl === 'forwardAuthGatekeeper') {
+            const url = (document.getElementById('wizGkUrl')?.value || '').trim();
+            if (!url) { showToast('Gatekeeper URL is required', 'error'); return; }
+        }
         buildYamlFromWizard();
-    } else if (_mwMonacoEditor) {
-        document.getElementById('middlewareContent').value = _mwMonacoEditor.getValue();
+    } else {
+        const content = _mwMonacoEditor ? _mwMonacoEditor.getValue() : (document.getElementById('middlewareContent')?.value || '');
+        if (_mwMonacoEditor) document.getElementById('middlewareContent').value = content;
+        if (!content.trim()) { showToast('Middleware content cannot be empty', 'error'); return; }
     }
     const form = event.target;
     const mwFn = document.getElementById('newMwFileName');
@@ -1101,11 +1349,13 @@ async function saveMwAjax(event) {
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
-        const res = await fetch(form.action, { method:'POST', headers:{'X-Requested-With':'fetch'}, body: new FormData(form) });
+        const fd = new FormData(form);
+        if (_activeAgent) fd.append('agent_id', _activeAgent.id);
+        const res = await fetch(form.action, { method:'POST', headers:{'X-Requested-With':'fetch'}, body: fd });
         const json = await res.json();
         closeMwModal();
         showToast(json.message, json.ok ? 'success' : 'error');
-        if (json.ok) { refreshRoutes(); fetchNotifications(); if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData(); }
+        if (json.ok) { _cachedMiddlewares = null; refreshRoutes(); fetchNotifications(); if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData(); setTimeout(fetchNotifications, 8000); }
     } catch(e) {
         showToast('Error saving middleware', 'error');
     } finally {
@@ -1118,6 +1368,7 @@ async function deleteRoute(id, configFile) {
     const data = new FormData();
     data.append('csrf_token', document.querySelector('meta[name="csrf-token"]')?.content || '');
     if (configFile) data.append('configFile', configFile);
+    if (_activeAgent) data.append('agent_id', _activeAgent.id);
     try {
         const res = await fetch('/delete/' + encodeURIComponent(id), { method:'POST', headers:{'X-Requested-With':'fetch'}, body: data });
         const json = await res.json();
@@ -1131,11 +1382,12 @@ async function deleteMw(name, configFile) {
     const data = new FormData();
     data.append('csrf_token', document.querySelector('meta[name="csrf-token"]')?.content || '');
     if (configFile) data.append('configFile', configFile);
+    if (_activeAgent) data.append('agent_id', _activeAgent.id);
     try {
         const res = await fetch('/delete-middleware/' + encodeURIComponent(name), { method:'POST', headers:{'X-Requested-With':'fetch'}, body: data });
         const json = await res.json();
         showToast(json.message, json.ok ? 'success' : 'error');
-        if (json.ok) { refreshRoutes(); fetchNotifications(); if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData(); }
+        if (json.ok) { _cachedMiddlewares = null; refreshRoutes(); fetchNotifications(); if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData(); }
     } catch(e) { showToast('Error deleting middleware', 'error'); }
 }
 
@@ -1146,7 +1398,7 @@ async function toggleRoute(id, currentlyEnabled, silent = false) {
         const res = await fetch('/api/routes/' + encodeURIComponent(id) + '/toggle', {
             method: 'POST',
             headers: { 'X-Requested-With': 'fetch', 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enable: !currentlyEnabled, csrf_token: document.querySelector('meta[name="csrf-token"]')?.content || '' })
+            body: JSON.stringify({ enable: !currentlyEnabled, agent_id: _activeAgent ? _activeAgent.id : '', csrf_token: document.querySelector('meta[name="csrf-token"]')?.content || '' })
         });
         const json = await res.json();
         if (json.ok) {
@@ -1160,13 +1412,34 @@ async function toggleRoute(id, currentlyEnabled, silent = false) {
 
 async function refreshRoutes() {
     try {
-        const res = await fetch('/api/routes');
+        let res;
+        if (_activeAgent) {
+            res = await fetch('/api/agents/' + _activeAgent.id + '/routes', { headers: {'X-Requested-With': 'fetch'} });
+        } else {
+            res = await fetch('/api/routes');
+        }
         const data = await res.json();
         renderRouteGrid(data.apps || []);
         renderMwGrid(data.middlewares || []);
         loadOverviewStats();
+        _renderConfigErrorBanner(data.configErrors || []);
     } catch(e) {}
 }
+
+function _renderConfigErrorBanner(errors) {
+    const el = document.getElementById('configErrorBanner');
+    if (!el) return;
+    if (!errors.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = 'block';
+    el.innerHTML = errors.map(e =>
+        `<div class="flex items-start gap-2 mb-1 last:mb-0">
+            <i class="ph-bold ph-warning-circle flex-shrink-0 mt-0.5" style="color:var(--yellow)"></i>
+            <div class="text-xs"><span class="font-semibold" style="color:var(--text)">${_esc(e.file)}</span><span class="ml-2" style="color:var(--muted)">${_esc(e.error)}</span></div>
+        </div>`
+    ).join('');
+}
+
+function _setAgentBanner(_show) {}
 
 async function pingAllRoutes() {
     const cards = Array.from(document.querySelectorAll('.route-card')).filter(c => c.dataset.protocol === 'http');
@@ -1341,6 +1614,7 @@ async function deleteSelfRoute() {
 
 function renderRouteGrid(apps) {
     window._lastRenderedApps = apps;
+    if (_activeAgent) apps = apps.filter(a => !a.provider || a.provider === 'file');
     const grid = document.getElementById('routeGrid');
     if (!grid) return;
     const emptyEl = document.getElementById('routeEmpty');
@@ -1440,6 +1714,8 @@ function renderMwGrid(middlewares) {
         grid.className = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4';
     }
     _mwCardEls = Array.from(grid.querySelectorAll('.mw-card'));
+    const _mwCountEl = document.getElementById('countMw');
+    if (_mwCountEl) _mwCountEl.textContent = middlewares.length;
     filterMw();
 }
 
@@ -1495,6 +1771,23 @@ function _toggleDomainChip(btn, domain) {
     window._domainChipRender();
 }
 
+function _initAgentDomainChips(domains, selectedDomains) {
+    const container = document.getElementById('domainChips');
+    const hiddenContainer = document.getElementById('domainHiddenInputs');
+    if (!container || !hiddenContainer) return;
+    let selected = new Set(selectedDomains && selectedDomains.length ? selectedDomains : (domains.length === 1 ? [domains[0]] : []));
+    function render() {
+        hiddenContainer.innerHTML = [...selected].map(d => `<input type="hidden" name="domains" value="${_esc(d)}">`).join('');
+        container.innerHTML = domains.map(d => {
+            const on = selected.has(d);
+            return `<button type="button" onclick="_toggleDomainChip(this,'${_esc(d)}')" style="padding:3px 10px;border-radius:9999px;border:1px solid ${on ? 'var(--blue)' : 'var(--border)'};background:${on ? 'rgba(59,130,246,0.15)' : 'transparent'};color:${on ? 'var(--blue)' : 'var(--muted)'};font-size:12px;font-family:monospace;cursor:pointer;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${_esc(d)}">${_esc(d)}</button>`;
+        }).join('');
+    }
+    render();
+    window._domainChipSelected = selected;
+    window._domainChipRender = render;
+}
+
 async function _initEntrypointChips(proto, selectedEntrypoints) {
     const containerId = proto === 'http' ? 'httpEntrypointChips' : proto === 'tcp' ? 'tcpEntrypointChips' : 'udpEntrypointChips';
     const hiddenId    = proto === 'http' ? 'entryPoints' : proto === 'tcp' ? 'entryPointsTcp' : 'entryPointsUdp';
@@ -1504,7 +1797,7 @@ async function _initEntrypointChips(proto, selectedEntrypoints) {
 
     if (!_cachedEntrypoints) {
         try {
-            const res = await fetch('/api/traefik/entrypoints');
+            const res = await agentFetch('/api/traefik/entrypoints');
             _cachedEntrypoints = res.ok ? (await res.json()) : [];
         } catch(e) { _cachedEntrypoints = []; }
     }
@@ -1561,9 +1854,9 @@ async function _initMiddlewareChips(selectedMiddlewares) {
 
     if (!_cachedMiddlewares) {
         try {
-            const res = await fetch('/api/traefik/middlewares');
+            const res = await agentFetch('/api/traefik/middlewares');
             const data = res.ok ? (await res.json()) : {};
-            _cachedMiddlewares = (data.http || []).map(m => m.name || m).filter(Boolean);
+            _cachedMiddlewares = (data.http || []).map(m => m.name || m).filter(m => m && (!m.includes('@') || m.endsWith('@file')));
         } catch(e) { _cachedMiddlewares = []; }
     }
     const mws = _cachedMiddlewares;
@@ -1605,11 +1898,22 @@ function _toggleMwChip(mw) {
 }
 
 const MULTI_CONFIG = {{ multi_config | tojson }};
+const CONFIG_DIR_SET = {{ config_dir_set | tojson }};
 const CONFIG_PATHS_LIST = {{ config_paths_list | tojson | safe }};
 
-function toggleTcpCertResolver(checked) {
+function setTcpTlsMode(mode, btn) {
+    document.querySelectorAll('#tcpTlsNone,#tcpTlsTls,#tcpTlsPassthrough').forEach(b => b.classList.remove('active-http'));
+    if (btn) btn.classList.add('active-http');
     const row = document.getElementById('tcpCertResolverRow');
-    if (row) row.style.display = checked ? '' : 'none';
+    const useTlsInput = document.getElementById('useTls');
+    const passthroughInput = document.getElementById('tlsPassthrough');
+    if (row) row.style.display = mode === 'tls' ? '' : 'none';
+    if (useTlsInput) useTlsInput.value = mode === 'tls' ? 'true' : '';
+    if (passthroughInput) passthroughInput.value = mode === 'passthrough' ? 'true' : '';
+}
+
+function toggleTcpCertResolver(checked) {
+    setTcpTlsMode(checked ? 'tls' : 'none', document.getElementById(checked ? 'tcpTlsTls' : 'tcpTlsNone'));
 }
 
 function toggleWildcardSection(resolverVal) {
@@ -1631,7 +1935,13 @@ function _onWildcardToggle(checked) {
     if (!mainEl || !sansEl) return;
     if (!checked) { mainEl.value = ''; sansEl.value = ''; return; }
     const domSel = document.getElementById('domainSelect');
-    const base   = domSel ? domSel.value : (document.getElementById('singleDomain')?.textContent || '').trim();
+    let base = '';
+    if (window._domainChipSelected && window._domainChipSelected.size) {
+        base = [...window._domainChipSelected][0];
+    } else if (domSel && domSel.value) {
+        base = domSel.value;
+    }
+    if (!base) base = (document.getElementById('singleDomain')?.textContent || '').trim();
     if (base) { mainEl.value = base; sansEl.value = '*.' + base; }
 }
 
@@ -1682,8 +1992,8 @@ async function cloneRoute(btn) {
         document.getElementById('targetIpTcp').value = target[0] || '';
         document.getElementById('targetPortTcp').value = target[1] || '';
         _initEntrypointChips('tcp', app.entryPoints || []);
-        const useTlsChk = document.getElementById('useTls');
-        if (useTlsChk) { useTlsChk.checked = !!app.tls; toggleTcpCertResolver(!!app.tls); }
+        const tlsMode = app.tls ? (app.tls.passthrough ? 'passthrough' : 'tls') : 'none';
+        setTcpTlsMode(tlsMode, document.getElementById(tlsMode === 'passthrough' ? 'tcpTlsPassthrough' : tlsMode === 'tls' ? 'tcpTlsTls' : 'tcpTlsNone'));
         const crTcp = document.getElementById('certResolverTcp');
         if (crTcp && app.certResolver) crTcp.value = app.certResolver;
     } else if (proto === 'udp') {
@@ -1740,8 +2050,6 @@ async function handleEdit(btn) {
     document.getElementById('modalTitle').innerText = 'Edit ' + app.name;
     document.getElementById('serviceName').value = app.name;
     document.getElementById('configFile').value = app.configFile || '';
-    const cfSel = document.getElementById('configFileSelect');
-    if (cfSel && app.configFile) cfSel.value = app.configFile;
     const newRouteInput = document.getElementById('newRouteFileName');
     if (newRouteInput) { newRouteInput.style.display = 'none'; newRouteInput.value = ''; }
 
@@ -1757,19 +2065,24 @@ async function handleEdit(btn) {
         } else {
             setHttpRuleMode('simple');
         }
+        _updateRouteModalForAgent();
+        const _heAgDoms = _activeAgent ? (_activeAgent.domains || []) : [];
+        const domainsForMatch = (_activeAgent && _heAgDoms.length > 0) ? _heAgDoms : availableDomains;
         let subdomain = '';
         const hostMatches = [...rule.matchAll(/Host\(`([^`]+)`\)/g)].map(m => m[1]);
         const matchedDomains = [];
         for (let fullHost of hostMatches) {
             let found = false;
-            for (let d of availableDomains) {
+            for (let d of domainsForMatch) {
                 if (fullHost.endsWith('.' + d)) { if (!subdomain) subdomain = fullHost.slice(0, -(d.length + 1)); matchedDomains.push(d); found = true; break; }
                 else if (fullHost === d) { matchedDomains.push(d); found = true; break; }
             }
             if (!found && !subdomain) subdomain = fullHost;
         }
         document.getElementById('subdomain').value = subdomain;
-        if (document.getElementById('domainChips')) {
+        if (_activeAgent && _heAgDoms.length > 1 && document.getElementById('domainChips')) {
+            _initAgentDomainChips(_heAgDoms, matchedDomains.length ? matchedDomains : []);
+        } else if (document.getElementById('domainChips')) {
             _initDomainChips(matchedDomains.length ? matchedDomains : (availableDomains.length === 1 ? [availableDomains[0]] : []));
         } else {
             const sel = document.getElementById('domainSelect');
@@ -1818,8 +2131,8 @@ async function handleEdit(btn) {
         document.getElementById('targetIpTcp').value = target[0] || '';
         document.getElementById('targetPortTcp').value = target[1] || '';
         _initEntrypointChips('tcp', app.entryPoints || []);
-        const useTlsChk = document.getElementById('useTls');
-        if (useTlsChk) { useTlsChk.checked = !!app.tls; toggleTcpCertResolver(!!app.tls); }
+        const tlsMode2 = app.tls ? (app.tls.passthrough ? 'passthrough' : 'tls') : 'none';
+        setTcpTlsMode(tlsMode2, document.getElementById(tlsMode2 === 'passthrough' ? 'tcpTlsPassthrough' : tlsMode2 === 'tls' ? 'tcpTlsTls' : 'tcpTlsNone'));
         const crTcp = document.getElementById('certResolverTcp');
         if (crTcp && app.certResolver) crTcp.value = app.certResolver;
 
@@ -1830,26 +2143,31 @@ async function handleEdit(btn) {
         _initEntrypointChips('udp', app.entryPoints || []);
     }
 
+    await _populateConfigFileSelect('route');
+    const cfSel = document.getElementById('configFileSelect');
+    if (cfSel && app.configFile) cfSel.value = app.configFile;
     document.getElementById('appModal').style.display = 'flex';
 }
 
-function handleMwEdit(btn) {
+async function handleMwEdit(btn) {
     const mw = JSON.parse(btn.getAttribute('data-mw'));
     document.getElementById('isMwEdit').value = 'true';
     document.getElementById('originalMwId').value = mw.name;
     document.getElementById('middlewareName').value = mw.name;
     document.getElementById('mwModalTitle').innerText = 'Edit ' + mw.name;
     document.getElementById('mwConfigFile').value = mw.configFile || '';
-    const cfSel = document.getElementById('mwConfigFileSelect');
-    if (cfSel && mw.configFile) cfSel.value = mw.configFile;
     const newMwInput = document.getElementById('newMwFileName');
     if (newMwInput) { newMwInput.style.display = 'none'; newMwInput.value = ''; }
     const mwTplSel2 = document.getElementById('mwTemplate');
     if (mwTplSel2) mwTplSel2.value = '';
     setMwMode('yaml');
     _showMwWizard('');
+    await _populateConfigFileSelect('mw');
+    const cfSel = document.getElementById('mwConfigFileSelect');
+    if (cfSel && mw.configFile) cfSel.value = mw.configFile;
     document.getElementById('mwModal').style.display = 'flex';
     _initMwMonaco(mw.yaml.trim());
+    _loadCustomMwTemplates();
 }
 
 const mwTemplates = {
@@ -1878,10 +2196,34 @@ const mwTemplates = {
     inFlightReq: `inFlightReq:\n  amount: 10`,
 };
 
+async function _loadCustomMwTemplates() {
+    const grp = document.getElementById('mwCustomOptgroup');
+    if (!grp) return;
+    try {
+        const res  = await fetch('/api/mw/templates');
+        const data = await res.json();
+        const templates = data.templates || [];
+        grp.innerHTML = templates.map(t => `<option value="custom:${t.id}">${_esc(t.name)}</option>`).join('');
+        grp.style.display = templates.length ? '' : 'none';
+    } catch(e) {
+        grp.style.display = 'none';
+    }
+}
+
 function applyMwTemplate(select) {
     const tpl = select.value;
     if (!tpl) return;
-    if (_wizardTemplates.has(tpl)) {
+    if (tpl.startsWith('custom:')) {
+        const id = tpl.slice(7);
+        fetch('/api/mw/templates').then(r => r.json()).then(data => {
+            const t = (data.templates || []).find(x => x.id === id);
+            if (t) {
+                setMwMode('yaml');
+                if (_mwMonacoEditor) _mwMonacoEditor.setValue(t.yaml);
+                else document.getElementById('middlewareContent').value = t.yaml;
+            }
+        });
+    } else if (_wizardTemplates.has(tpl)) {
         _showMwWizard(tpl);
         setMwMode('wizard');
     } else if (mwTemplates[tpl]) {
@@ -1897,12 +2239,12 @@ let _currentVersion = null;
 async function loadOverviewStats() {
     try {
         const [overview, routers, services, middlewares, version, entrypoints] = await Promise.allSettled([
-            fetch('/api/traefik/overview').then(r => r.json()),
-            fetch('/api/traefik/routers').then(r => r.json()),
-            fetch('/api/traefik/services').then(r => r.json()),
-            fetch('/api/traefik/middlewares').then(r => r.json()),
-            fetch('/api/traefik/version').then(r => r.json()),
-            fetch('/api/traefik/entrypoints').then(r => r.json()),
+            agentFetch('/api/traefik/overview').then(r => r.json()),
+            agentFetch('/api/traefik/routers').then(r => r.json()),
+            agentFetch('/api/traefik/services').then(r => r.json()),
+            agentFetch('/api/traefik/middlewares').then(r => r.json()),
+            agentFetch('/api/traefik/version').then(r => r.json()),
+            agentFetch('/api/traefik/entrypoints').then(r => r.json()),
         ]);
 
         
@@ -1982,32 +2324,37 @@ async function loadOverviewStats() {
                 apiStatusMap[shortName] = { status: r.status || 'unknown', error: r.error || null };
             });
 
-            const hc = statusCounts(http);
-            document.getElementById('statHttpRouters').textContent = http.length;
+            const _isFile = r => (r.provider || (r.name||'').split('@')[1]||'') === 'file';
+            const httpStat   = _activeAgent ? http.filter(_isFile)   : http;
+            const tcpAllStat = _activeAgent ? tcpAll.filter(_isFile) : tcpAll;
+
+            document.getElementById('countRoutes').textContent = httpStat.length + tcpAllStat.length;
+
+            const hc = statusCounts(httpStat);
+            document.getElementById('statHttpRouters').textContent = httpStat.length;
             document.getElementById('statHttpSuccess').textContent = hc.s;
-            document.getElementById('pctHttpSuccess').textContent  = pct(hc.s, http.length);
+            document.getElementById('pctHttpSuccess').textContent  = pct(hc.s, httpStat.length);
             document.getElementById('statHttpWarn').textContent    = hc.w;
-            document.getElementById('pctHttpWarn').textContent     = pct(hc.w, http.length);
+            document.getElementById('pctHttpWarn').textContent     = pct(hc.w, httpStat.length);
             document.getElementById('statHttpErr').textContent     = hc.e;
-            document.getElementById('pctHttpErr').textContent      = pct(hc.e, http.length);
+            document.getElementById('pctHttpErr').textContent      = pct(hc.e, httpStat.length);
             document.getElementById('cmpHttpSuccess').textContent  = hc.s;
             document.getElementById('cmpHttpWarn').textContent     = hc.w;
             document.getElementById('cmpHttpErr').textContent      = hc.e;
             renderDonut('donutHttp', hc.s, hc.w, hc.e);
             renderBar('barHttpRouters', hc.s, hc.w, hc.e);
-            document.getElementById('countRoutes').textContent = http.length + tcpAll.length;
 
             const dockerCount = [...http, ...tcpAll].filter(r => (r.provider || (r.name||'').split('@')[1]||'') === 'docker').length;
             document.getElementById('dockerTabCount').textContent = dockerCount || '-';
 
-            const tc = statusCounts(tcpAll);
-            document.getElementById('statTcpUdp').textContent     = tcpAll.length;
+            const tc = statusCounts(tcpAllStat);
+            document.getElementById('statTcpUdp').textContent     = tcpAllStat.length;
             document.getElementById('statTcpSuccess').textContent  = tc.s;
-            document.getElementById('pctTcpSuccess').textContent   = pct(tc.s, tcpAll.length);
+            document.getElementById('pctTcpSuccess').textContent   = pct(tc.s, tcpAllStat.length);
             document.getElementById('statTcpWarn').textContent     = tc.w;
-            document.getElementById('pctTcpWarn').textContent      = pct(tc.w, tcpAll.length);
+            document.getElementById('pctTcpWarn').textContent      = pct(tc.w, tcpAllStat.length);
             document.getElementById('statTcpErr').textContent      = tc.e;
-            document.getElementById('pctTcpErr').textContent       = pct(tc.e, tcpAll.length);
+            document.getElementById('pctTcpErr').textContent       = pct(tc.e, tcpAllStat.length);
             document.getElementById('cmpTcpSuccess').textContent   = tc.s;
             document.getElementById('cmpTcpWarn').textContent      = tc.w;
             document.getElementById('cmpTcpErr').textContent       = tc.e;
@@ -2088,7 +2435,11 @@ async function loadOverviewStats() {
         }
 
         if (middlewares.status === 'fulfilled') {
-            const all = [...(middlewares.value.http||[]), ...(middlewares.value.tcp||[])];
+            let all = [...(middlewares.value.http||[]), ...(middlewares.value.tcp||[])];
+            if (_activeAgent && _allMiddlewares && _allMiddlewares.length > 0) {
+                const _managedMwNames = new Set(_allMiddlewares.map(m => m.name));
+                all = all.filter(m => _managedMwNames.has((m.name || '').split('@')[0]));
+            }
             const mc = statusCounts(all);
             document.getElementById('statMiddlewares').textContent = all.length;
             document.getElementById('statMwSuccess').textContent   = mc.s;
@@ -2102,7 +2453,6 @@ async function loadOverviewStats() {
             document.getElementById('cmpMwErr').textContent        = mc.e;
             renderDonut('donutMw', mc.s, mc.w, mc.e);
             renderBar('barMiddlewares', mc.s, mc.w, mc.e);
-            document.getElementById('countMw').textContent = all.length;
         }
 
         
@@ -2121,13 +2471,15 @@ async function loadOverviewStats() {
             }).join('');
             _applyEntrypointsVisibility();
             const epNames = entrypoints.value.map(e => e.name);
-            try {
-                const srRes = await fetch('/api/settings/self-route');
-                const sr = await srRes.json();
-                if (sr.domain && sr.entry_point && !epNames.includes(sr.entry_point)) {
-                    _showSelfRouteEpWarning(sr.entry_point, sr.default_entry_point || epNames[0]);
-                }
-            } catch(e) {}
+            if (!_activeAgent) {
+                try {
+                    const srRes = await fetch('/api/settings/self-route');
+                    const sr = await srRes.json();
+                    if (sr.domain && sr.entry_point && !epNames.includes(sr.entry_point)) {
+                        _showSelfRouteEpWarning(sr.entry_point, sr.default_entry_point || epNames[0]);
+                    }
+                } catch(e) {}
+            }
         }
 
     } catch (e) {
@@ -2135,12 +2487,12 @@ async function loadOverviewStats() {
     }
 
     
-    fetch('/api/traefik/certs').then(r => r.json()).then(res => {
+    agentFetch('/api/traefik/certs').then(r => r.json()).then(res => {
         const n = (res.certs || []).length;
         document.getElementById('certsTabCount').textContent = n || '-';
     }).catch(() => {});
 
-    fetch('/api/traefik/plugins').then(r => r.json()).then(res => {
+    agentFetch('/api/traefik/plugins').then(r => r.json()).then(res => {
         const n = (res.plugins || []).length;
         document.getElementById('pluginsTabCount').textContent = n || '-';
     }).catch(() => {});
@@ -2474,7 +2826,12 @@ async function refreshLiveView() {
     container.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i><p>Loading services...</p></div>`;
 
     try {
-        const res = await fetch('/api/traefik/services').then(r => r.json());
+        const r = await agentFetch('/api/traefik/services');
+        const res = await r.json();
+        if (res.error) {
+            container.innerHTML = `<div class="text-center py-16 rounded-xl" style="color:var(--muted);border:1px solid var(--border)"><i class="ph-light ph-plug-slash text-5xl block mb-3 opacity-30"></i><p class="font-medium">Traefik API not reachable</p><p class="text-sm mt-2 font-mono px-4" style="color:var(--text-secondary);word-break:break-all">${_esc(res.error)}</p></div>`;
+            return;
+        }
         const http = (res.http || []).map(s => ({ ...s, _proto: 'HTTP' }));
         const tcp  = (res.tcp  || []).map(s => ({ ...s, _proto: 'TCP' }));
         const udp  = (res.udp  || []).map(s => ({ ...s, _proto: 'UDP' }));
@@ -2815,9 +3172,9 @@ async function openRouteDetail(name, protocol, appData) {
     try {
         
         const [routersRes, servicesRes, entrypointsRes] = await Promise.allSettled([
-            fetch('/api/traefik/routers').then(r => r.json()),
-            fetch('/api/traefik/services').then(r => r.json()),
-            fetch('/api/traefik/entrypoints').then(r => r.json()),
+            agentFetch('/api/traefik/routers').then(r => r.json()),
+            agentFetch('/api/traefik/services').then(r => r.json()),
+            agentFetch('/api/traefik/entrypoints').then(r => r.json()),
         ]);
 
         let liveRouter = null, liveService = null, entrypoints = [];
@@ -3308,11 +3665,14 @@ async function refreshPluginsTab() {
     const container = document.getElementById('pluginsContent');
     container.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i><p>Loading plugins...</p></div>`;
     try {
+        const availP = _activeAgent
+            ? Promise.resolve({ available: false })
+            : fetch('/api/static/available').then(r => r.json());
         const [res, avail] = await Promise.all([
-            fetch('/api/traefik/plugins').then(r => r.json()),
-            fetch('/api/static/available').then(r => r.json()),
+            agentFetch('/api/traefik/plugins').then(r => r.json()),
+            availP,
         ]);
-        _pluginCanManage = avail.available === true;
+        _pluginCanManage = !_activeAgent && avail.available === true;
         const addBtn = document.getElementById('pluginAddBtnWrap');
         if (addBtn) addBtn.style.display = _pluginCanManage ? 'flex' : 'none';
 
@@ -3670,7 +4030,7 @@ async function refreshCertsTab() {
     const container = document.getElementById('certsContent');
     container.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i><p>Loading certificates...</p></div>`;
     try {
-        const res  = await fetch('/api/traefik/certs').then(r => r.json());
+        const res  = await agentFetch('/api/traefik/certs').then(r => r.json());
         const certs = Array.isArray(res.certs) ? res.certs : [];
 
         if (res.error && certs.length === 0) {
@@ -3942,65 +4302,192 @@ async function _populateTlsOptionsSelect() {
 
 let _csDecisions = [];
 let _csAlerts    = [];
-let _csTypeFilter = 'all';
+let _csTypeFilter    = 'all';
+let _csView          = 'decisions';
+let _csLapiOnline    = false;
+let _csDecisionsPage = 1;
+let _csBanType       = 'ban';
+const _CS_PAGE_SIZE  = 100;
 
 async function refreshCrowdSecTab() {
-    const decEl  = document.getElementById('csDecisionsTable');
-    const altEl  = document.getElementById('csAlertsTable');
+    const decEl   = document.getElementById('csDecisionsTable');
+    const altEl   = document.getElementById('csAlertsTable');
     const statsEl = document.getElementById('crowdsecStats');
+    const notCfgEl = document.getElementById('csNotConfigured');
+    if (!_activeAgent && !window._hostCsEnabled) {
+        if (notCfgEl) notCfgEl.style.setProperty('display', 'flex', 'important');
+        if (decEl) decEl.closest('#csDecisionsSection')?.style.setProperty('display','none');
+        if (statsEl) statsEl.innerHTML = '';
+        return;
+    }
+    if (notCfgEl) notCfgEl.style.setProperty('display', 'none', 'important');
     if (!decEl) return;
     const spinner = `<div class="text-center py-8" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-3xl block mb-2 animate-spin opacity-40"></i><p class="text-xs">Loading...</p></div>`;
     decEl.innerHTML = spinner;
-    altEl.innerHTML = spinner;
+    if (altEl) altEl.innerHTML = spinner;
     try {
-        const [decisions, alerts] = await Promise.all([
-            fetch('/api/crowdsec/decisions').then(r => r.json()),
-            fetch('/api/crowdsec/alerts').then(r => r.json()),
+        const [decRes, altRes] = await Promise.all([
+            agentFetch('/api/crowdsec/decisions'),
+            agentFetch('/api/crowdsec/alerts'),
         ]);
-        _csDecisions = Array.isArray(decisions) ? decisions : [];
-        _csAlerts    = Array.isArray(alerts)    ? alerts    : [];
-        _renderCsStats(_csDecisions, statsEl);
+        if (!decRes.ok) {
+            if (decRes.status === 404 && _activeAgent) {
+                if (notCfgEl) notCfgEl.style.setProperty('display', 'flex', 'important');
+                if (decEl) decEl.closest('#csDecisionsSection')?.style.setProperty('display','none');
+                if (statsEl) statsEl.innerHTML = '';
+                return;
+            }
+            _csLapiOnline = false;
+            let errMsg = `CrowdSec LAPI unavailable (HTTP ${decRes.status})`;
+            try { errMsg = (await decRes.json()).error || errMsg; } catch {}
+            _renderCsStats([], [], false, statsEl);
+            decEl.innerHTML = `<div class="text-center py-8 text-xs" style="color:var(--muted)">${_esc(errMsg)}</div>`;
+            if (altEl) altEl.innerHTML = '';
+            return;
+        }
+        _csLapiOnline = true;
+        const rawDec  = await decRes.json();
+        let altErr    = '';
+        let rawAlt    = [];
+        if (altRes.ok) {
+            rawAlt = await altRes.json();
+        } else {
+            try { altErr = (await altRes.json()).error || ''; } catch {}
+        }
+        _csDecisions = Array.isArray(rawDec) ? rawDec : [];
+        _csAlerts    = Array.isArray(rawAlt) ? rawAlt : [];
+        _csDecisionsPage = 1;
+        _renderCsStats(_csDecisions, _csAlerts, _csLapiOnline, statsEl);
         _csApplyFilters();
+        if (altEl && !altRes.ok) {
+            const hint = altErr ? _esc(altErr) : 'Alerts unavailable - bouncer key may lack read:alerts permission, or set CROWDSEC_MACHINE_ID / CROWDSEC_MACHINE_PASSWORD';
+            altEl.innerHTML = `<div class="text-center py-8 text-xs" style="color:var(--muted)">${hint}</div>`;
+        }
     } catch(e) {
+        _csLapiOnline = false;
+        _renderCsStats([], [], false, statsEl);
         const err = `<div class="text-center py-8 text-xs" style="color:var(--muted)">Could not reach CrowdSec LAPI</div>`;
-        decEl.innerHTML = err; altEl.innerHTML = err;
+        decEl.innerHTML = err;
+        if (altEl) altEl.innerHTML = err;
     }
+}
+
+function _setCsView(view, btn) {
+    _csView = view;
+    _csDecisionsPage = 1;
+    document.querySelectorAll('[id^="cs-view-"]').forEach(b => b.classList.remove('active-http'));
+    if (btn) btn.classList.add('active-http');
+    const typeFilter   = document.getElementById('csTypeFilter');
+    const addBtn       = document.getElementById('csAddDecisionBtn');
+    const decSection   = document.getElementById('csDecisionsSection');
+    const altSection   = document.getElementById('csAlertsSection');
+    const isDecisions  = view === 'decisions';
+    if (typeFilter) typeFilter.style.display  = isDecisions ? '' : 'none';
+    if (addBtn)     addBtn.style.display      = isDecisions ? '' : 'none';
+    if (decSection) decSection.style.display  = isDecisions ? '' : 'none';
+    if (altSection) altSection.style.display  = isDecisions ? 'none' : '';
+    _csApplyFilters();
 }
 
 function _setCsType(type, btn) {
     _csTypeFilter = type;
+    _csDecisionsPage = 1;
     document.querySelectorAll('[id^="cs-type-"]').forEach(b => b.classList.remove('active-http'));
-    btn.classList.add('active-http');
+    if (btn) btn.classList.add('active-http');
+    _csApplyFilters();
+}
+
+function _setCsPage(n) {
+    _csDecisionsPage = n;
     _csApplyFilters();
 }
 
 function _csApplyFilters() {
     const q = (document.getElementById('csSearch')?.value || '').toLowerCase().trim();
-    const decEl = document.getElementById('csDecisionsTable');
-    const altEl = document.getElementById('csAlertsTable');
-    const filtered = _csDecisions.filter(d => {
-        if (_csTypeFilter !== 'all' && d.type !== _csTypeFilter) return false;
-        if (q && !((d.value||'').toLowerCase().includes(q) || (d.scenario||'').toLowerCase().includes(q) || (d.origin||'').toLowerCase().includes(q))) return false;
-        return true;
-    });
-    const filteredAlerts = _csAlerts.filter(a => {
-        if (!q) return true;
-        const ip = (a.source && a.source.ip) ? a.source.ip : '';
-        return ip.toLowerCase().includes(q) || (a.scenario||'').toLowerCase().includes(q);
-    });
-    if (decEl) _renderCsDecisions(filtered, decEl);
-    if (altEl) _renderCsAlerts(filteredAlerts, altEl);
+    if (_csView === 'decisions') {
+        const decEl  = document.getElementById('csDecisionsTable');
+        const filtered = _csDecisions.filter(d => {
+            if (_csTypeFilter !== 'all' && d.type !== _csTypeFilter) return false;
+            if (q && !((d.value||'').toLowerCase().includes(q) || (d.scenario||'').toLowerCase().includes(q) || (d.origin||'').toLowerCase().includes(q))) return false;
+            return true;
+        });
+        if (decEl) _renderCsDecisions(filtered, decEl);
+    } else {
+        const altEl = document.getElementById('csAlertsTable');
+        const filteredAlerts = _csAlerts.filter(a => {
+            if (!q) return true;
+            const ip = (a.source && a.source.ip) ? a.source.ip : '';
+            return ip.toLowerCase().includes(q) || (a.scenario||'').toLowerCase().includes(q);
+        });
+        if (altEl) _renderCsAlerts(filteredAlerts, altEl);
+    }
 }
 
-function _renderCsStats(decisions, el) {
+function openCsBanModal() {
+    document.getElementById('csBanIp').value       = '';
+    document.getElementById('csBanReason').value   = '';
+    document.getElementById('csBanDuration').value = '24h';
+    const errEl = document.getElementById('csBanError');
+    if (errEl) errEl.style.display = 'none';
+    _setCsBanType('ban');
+    document.getElementById('csBanModal').style.display = '';
+    setTimeout(() => document.getElementById('csBanIp')?.focus(), 50);
+}
+
+function closeCsBanModal() {
+    document.getElementById('csBanModal').style.display = 'none';
+}
+
+function _setCsBanType(type, btn) {
+    _csBanType = type;
+    document.querySelectorAll('[id^="csBanType-"]').forEach(b => b.classList.remove('active-http'));
+    const el = document.getElementById('csBanType-' + type);
+    if (el) el.classList.add('active-http');
+}
+
+async function submitCsBan() {
+    const ip = (document.getElementById('csBanIp')?.value || '').trim();
+    const errEl   = document.getElementById('csBanError');
+    const errMsg  = document.getElementById('csBanErrorMsg');
+    const submitBtn = document.querySelector('#csBanModal button[onclick="submitCsBan()"]');
+    if (errEl) errEl.style.display = 'none';
+    if (!ip) {
+        if (errEl && errMsg) { errMsg.textContent = 'IP/Range is required'; errEl.style.display = 'flex'; }
+        return;
+    }
+    const duration = document.getElementById('csBanDuration')?.value || '24h';
+    const reason   = (document.getElementById('csBanReason')?.value || '').trim();
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Adding...'; }
+    try {
+        const res = await agentFetch('/api/crowdsec/decisions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+            body: JSON.stringify({ value: ip, type: _csBanType, duration, reason }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to add decision');
+        closeCsBanModal();
+        addNotification('success', `Decision added: ${_csBanType} ${ip} for ${duration}`);
+        setTimeout(refreshCrowdSecTab, 800);
+    } catch(e) {
+        if (errEl && errMsg) { errMsg.textContent = e.message || 'Failed to add decision'; errEl.style.display = 'flex'; }
+    } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add Decision'; }
+    }
+}
+
+function _renderCsStats(decisions, alerts, lapiOnline, el) {
     if (!el) return;
-    const bans      = decisions.filter(d => d.type === 'ban').length;
-    const captchas  = decisions.filter(d => d.type === 'captcha').length;
-    const bypasses  = decisions.filter(d => d.type === 'bypass').length;
+    const bans     = decisions.filter(d => d.type === 'ban').length;
+    const captchas = decisions.filter(d => d.type === 'captcha').length;
+    const bypasses = decisions.filter(d => d.type === 'bypass').length;
     const stats = [
-        { label: 'Active Bans',     value: bans,     color: 'var(--red)',    icon: 'ph-prohibit' },
-        { label: 'Captchas',        value: captchas,  color: 'var(--yellow)', icon: 'ph-puzzle-piece' },
-        { label: 'Bypasses',        value: bypasses,  color: 'var(--green)',  icon: 'ph-check-circle' },
+        { label: 'Total Alerts',     value: alerts.length,    color: 'var(--blue)',   icon: 'ph-shield-slash' },
+        { label: 'Active Decisions', value: decisions.length, color: 'var(--red)',    icon: 'ph-crosshair-simple' },
+        { label: 'LAPI Status',      value: lapiOnline ? 'Online' : 'Offline', color: lapiOnline ? 'var(--green)' : 'var(--red)', icon: 'ph-pulse', isStatus: true },
+        { label: 'Active Bans',      value: bans,             color: 'var(--red)',    icon: 'ph-prohibit' },
+        { label: 'Captchas',         value: captchas,         color: 'var(--yellow)', icon: 'ph-puzzle-piece' },
+        { label: 'Bypasses',         value: bypasses,         color: 'var(--green)',  icon: 'ph-check-circle' },
     ];
     el.innerHTML = stats.map(s => `
         <div class="rounded-xl p-4" style="background:var(--card);border:1px solid var(--border)">
@@ -4008,39 +4495,61 @@ function _renderCsStats(decisions, el) {
                 <span class="text-xs font-semibold uppercase tracking-wide" style="color:var(--muted)">${s.label}</span>
                 <i class="ph-bold ${s.icon} text-base" style="color:${s.color};opacity:0.7"></i>
             </div>
-            <div class="text-3xl font-bold" style="color:${s.value > 0 ? s.color : 'var(--muted)'}">${s.value}</div>
+            <div class="text-2xl font-bold" style="color:${(s.isStatus || s.value > 0) ? s.color : 'var(--muted)'}">${s.value}</div>
         </div>`).join('');
 }
 
-function _renderCsDecisions(decisions, el) {
-    document.getElementById('csDecisionCount').textContent = decisions.length;
-    if (decisions.length === 0) {
+function _renderCsDecisions(allFiltered, el) {
+    const total     = allFiltered.length;
+    const totalPages = Math.max(1, Math.ceil(total / _CS_PAGE_SIZE));
+    if (_csDecisionsPage > totalPages) _csDecisionsPage = totalPages;
+    const start    = (_csDecisionsPage - 1) * _CS_PAGE_SIZE;
+    const decisions = allFiltered.slice(start, start + _CS_PAGE_SIZE);
+
+    const countEl = document.getElementById('csDecisionCount');
+    if (countEl) countEl.textContent = total;
+
+    if (total === 0) {
         el.innerHTML = `<div class="text-center py-10 text-xs" style="color:var(--muted)">No active decisions</div>`;
         return;
     }
     const rows = decisions.map(d => {
-        const exp = d.duration || d.until || '-';
-        const scenario = _esc(d.scenario || d.origin || '-');
+        const until    = d.until ? new Date(d.until).toLocaleString() : (d.duration || '-');
+        const scenario = _esc(d.scenario || '-');
+        const origin   = _esc(d.origin || '-');
         return `<tr style="border-top:1px solid var(--border)">
             <td class="px-3 py-2 font-mono text-xs" style="color:var(--text)">${_esc(d.value || '-')}</td>
             <td class="px-3 py-2 text-xs"><span class="badge ${d.type === 'ban' ? 'badge-red' : d.type === 'captcha' ? 'badge-yellow' : 'badge-green'}">${_esc(d.type || '-')}</span></td>
-            <td class="px-3 py-2 text-xs" style="color:var(--muted)">${_esc(String(exp))}</td>
+            <td class="px-3 py-2 text-xs" style="color:var(--muted)">${_esc(origin)}</td>
             <td class="px-3 py-2 text-xs" style="color:var(--muted)">${scenario}</td>
+            <td class="px-3 py-2 text-xs" style="color:var(--muted)">${_esc(String(until))}</td>
             <td class="px-3 py-2 text-xs text-right">
                 <button onclick="csUnban(${d.id})" class="btn-icon text-xs" title="Unban / delete decision" style="color:var(--red)"><i class="ph-bold ph-trash"></i></button>
             </td>
         </tr>`;
     }).join('');
+
+    const paginationBar = totalPages > 1 ? `
+        <div class="flex items-center justify-between px-3 py-2" style="border-top:1px solid var(--border);background:var(--input-bg)">
+            <span class="text-xs" style="color:var(--muted)">Showing ${start + 1}-${Math.min(start + _CS_PAGE_SIZE, total)} of ${total}</span>
+            <div class="flex items-center gap-1">
+                <button onclick="_setCsPage(${_csDecisionsPage - 1})" ${_csDecisionsPage <= 1 ? 'disabled' : ''} class="btn-icon text-xs" style="${_csDecisionsPage <= 1 ? 'opacity:0.3;cursor:default' : ''}"><i class="ph-bold ph-caret-left"></i></button>
+                <span class="text-xs px-2" style="color:var(--muted)">Page ${_csDecisionsPage} of ${totalPages}</span>
+                <button onclick="_setCsPage(${_csDecisionsPage + 1})" ${_csDecisionsPage >= totalPages ? 'disabled' : ''} class="btn-icon text-xs" style="${_csDecisionsPage >= totalPages ? 'opacity:0.3;cursor:default' : ''}"><i class="ph-bold ph-caret-right"></i></button>
+            </div>
+        </div>` : '';
+
     el.innerHTML = `<table class="w-full text-left" style="border-collapse:collapse">
         <thead><tr style="background:var(--input-bg)">
             <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">IP / Scope</th>
             <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Type</th>
-            <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Duration / Until</th>
+            <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Origin</th>
             <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Scenario</th>
+            <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Expires</th>
             <th class="px-3 py-2 text-xs font-semibold text-right" style="color:var(--muted)">Action</th>
         </tr></thead>
         <tbody>${rows}</tbody>
-    </table>`;
+    </table>${paginationBar}`;
 }
 
 function _renderCsAlerts(alerts, el) {
@@ -4075,7 +4584,7 @@ function _renderCsAlerts(alerts, el) {
 async function csUnban(id) {
     if (!confirm(`Delete decision ${id} (unban IP)?`)) return;
     try {
-        const res = await fetch(`/api/crowdsec/decisions/${id}`, {
+        const res = await agentFetch(`/api/crowdsec/decisions/${id}`, {
             method: 'DELETE', headers: {'X-CSRFToken': _csrfToken()}
         }).then(r => r.json());
         if (res.ok) { addNotification('success', `Decision ${id} deleted`); refreshCrowdSecTab(); }
@@ -4098,7 +4607,7 @@ async function refreshLogs() {
     const container = document.getElementById('logsContent');
     container.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i><p>Loading logs...</p></div>`;
     try {
-        const res = await fetch(`/api/traefik/logs?lines=${_currentLogLines}`).then(r => r.json());
+        const res = await agentFetch(`/api/traefik/logs?lines=${_currentLogLines}`).then(r => r.json());
         if (res.error) {
             container.innerHTML = _emptyMountState({
                 icon: 'ph-terminal',
@@ -4375,19 +4884,13 @@ function _initMobileFilterBars() {
         const res  = await fetch('/api/settings');
         const data = await res.json();
         const tabs = data.visible_tabs || {};
+        _localTabsCache = tabs;
         applyTabVisibility(tabs);
         if (tabs.dashboard) switchTab('dashboard');
     } catch(e) {
         applyTabVisibility({});
     }
-    try {
-        const res  = await fetch('/api/static/available');
-        const data = await res.json();
-        const sidebarBtn = document.getElementById('msb-static');
-        if (sidebarBtn) sidebarBtn.style.display = data.available ? '' : 'none';
-        const mobileStaticRow = document.getElementById('msb-static-mobile');
-        if (mobileStaticRow) mobileStaticRow.style.display = data.available ? '' : 'none';
-    } catch(e) {}
+    _refreshStaticAvailability();
     if (typeof applyUiPrefs === 'function') applyUiPrefs();
     if (typeof _applyDocsLinkVisibility === 'function') _applyDocsLinkVisibility();
     _initMobileFilterBars();
@@ -4395,6 +4898,7 @@ function _initMobileFilterBars() {
     loadOverviewStats();
     checkManagerVersion();
     fetchNotifications();
+    fetch('/api/agents').then(r => r.json()).then(d => _updateServerSwitcherList(d.agents || [])).catch(() => {});
     setInterval(fetchNotifications, 60000);
 })();
 
@@ -4691,11 +5195,12 @@ function openStaticYamlPopout() {
 async function openStaticYamlPopoutFromShortcut() {
     if (!_staticRawContent) {
         try {
-            const res  = await fetch('/api/static/config');
+            const res  = await agentFetch(_activeAgent ? '/api/static' : '/api/static/config');
             const data = await res.json();
-            if (data.raw) {
-                _staticRawContent = data.raw;
-                _staticOriginalContent = data.raw;
+            const raw  = _activeAgent ? data.content : data.raw;
+            if (raw) {
+                _staticRawContent = raw;
+                _staticOriginalContent = raw;
             }
         } catch(e) {}
     }
@@ -4704,6 +5209,74 @@ async function openStaticYamlPopoutFromShortcut() {
 
 function closeStaticYamlPopout() {
     const overlay = document.getElementById('staticYamlPopout');
+    if (overlay) overlay.style.display = 'none';
+}
+
+let _gitDiffEditor  = null;
+let _gitDiffFiles   = [];
+let _gitDiffActive  = 0;
+
+function openGitDiffPopout(sha, files) {
+    const overlay = document.getElementById('gitDiffPopout');
+    if (!overlay) return;
+    const title = document.getElementById('gitDiffPopoutTitle');
+    if (title) title.textContent = 'Diff - ' + sha.slice(0, 8);
+    _gitDiffFiles  = files;
+    _gitDiffActive = 0;
+    overlay.style.display = 'flex';
+    _renderGitDiffTabs();
+    _showGitDiffFile(0);
+}
+
+function _renderGitDiffTabs() {
+    const tabs = document.getElementById('gitDiffFileTabs');
+    if (!tabs) return;
+    tabs.innerHTML = _gitDiffFiles.map((f, i) => {
+        const name   = f.filename.split('/').pop();
+        const active = i === _gitDiffActive;
+        return `<button onclick="_showGitDiffFile(${i})" id="gitDiffTab${i}" title="${f.filename}" class="btn-secondary text-xs" style="${active ? 'background:var(--input-bg);border-color:var(--blue);' : ''}">${name}</button>`;
+    }).join('');
+}
+
+function _showGitDiffFile(idx) {
+    _gitDiffActive = idx;
+    const f = _gitDiffFiles[idx];
+    if (!f) return;
+    _gitDiffFiles.forEach((_, i) => {
+        const t = document.getElementById('gitDiffTab' + i);
+        if (t) t.style.borderColor = i === idx ? 'var(--blue)' : '';
+    });
+    const ext  = f.filename.split('.').pop().toLowerCase();
+    const lang = (ext === 'yml' || ext === 'yaml') ? 'yaml' : 'plaintext';
+    const container = document.getElementById('gitDiffPopoutEditor');
+    if (_gitDiffEditor) {
+        _gitDiffEditor.setModel({
+            original: monaco.editor.createModel(f.old, lang),
+            modified: monaco.editor.createModel(f.new, lang),
+        });
+    } else {
+        require(['vs/editor/editor.main'], function() {
+            _ensureMonacoThemes().then(() => {
+                const isDark = document.documentElement.classList.contains('dark');
+                _gitDiffEditor = monaco.editor.createDiffEditor(container, {
+                    readOnly:           true,
+                    renderSideBySide:   true,
+                    theme:              _monacoThemeName(isDark),
+                    fontSize:           12,
+                    minimap:            { enabled: false },
+                    scrollBeyondLastLine: false,
+                });
+                _gitDiffEditor.setModel({
+                    original: monaco.editor.createModel(f.old, lang),
+                    modified: monaco.editor.createModel(f.new, lang),
+                });
+            });
+        });
+    }
+}
+
+function closeGitDiffPopout() {
+    const overlay = document.getElementById('gitDiffPopout');
     if (overlay) overlay.style.display = 'none';
 }
 
@@ -4746,11 +5319,10 @@ async function discardStaticChanges() {
 async function saveStaticConfig() {
     const content = _staticMonaco ? _staticMonaco.getValue() : _staticRawContent;
     try {
-        const res  = await fetch('/api/static/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
-            body: JSON.stringify({ content }),
-        });
+        const fetchFn = _activeAgent
+            ? () => agentFetch('/api/static', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) })
+            : () => fetch('/api/static/config', { method: 'POST', headers: { 'Content-Type': 'application/json', ..._csrfHeaders() }, body: JSON.stringify({ content }) });
+        const res  = await fetchFn();
         const data = await res.json();
         if (data.ok) {
             _staticRawContent = content;
@@ -4759,11 +5331,13 @@ async function saveStaticConfig() {
             _clearStaticPending();
             _showStaticRestartBanner();
             showToast('Static config saved', 'success');
-            try {
-                const r2 = await fetch('/api/static/config');
-                const d2 = await r2.json();
-                _renderStaticSections(d2.parsed);
-            } catch(e) {}
+            if (!_activeAgent) {
+                try {
+                    const r2 = await fetch('/api/static/config');
+                    const d2 = await r2.json();
+                    _renderStaticSections(d2.parsed);
+                } catch(e) {}
+            }
         } else {
             showToast(data.error || 'Save failed', 'error');
         }
@@ -4810,7 +5384,7 @@ async function openRouteYamlEditor(id) {
     const title = document.getElementById('routeYamlPopoutTitle');
     if (title) title.textContent = `Raw YAML - ${name}`;
     try {
-        const res  = await fetch(`/api/routes/${encodeURIComponent(id)}/raw`);
+        const res  = await agentFetch(`/api/routes/${encodeURIComponent(id)}/raw`);
         const data = await res.json();
         if (data.error) { showToast(data.error, 'error'); return; }
         const overlay = document.getElementById('routeYamlPopout');
@@ -4829,7 +5403,7 @@ function closeRouteYamlEditor() {
 async function saveRouteYaml() {
     const content = _routeYamlMonaco ? _routeYamlMonaco.getValue() : _routeYamlContent;
     try {
-        const res = await fetch(`/api/routes/${encodeURIComponent(_routeYamlId)}/raw`, {
+        const res = await agentFetch(`/api/routes/${encodeURIComponent(_routeYamlId)}/raw`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
             body: JSON.stringify({ content }),
@@ -4883,9 +5457,9 @@ async function _waitForReconnect(immediate = false) {
 async function triggerTraefikRestart() {
     _showRestartOverlay();
     try {
-        const res  = await fetch('/api/static/restart', {
+        const res  = await agentFetch('/api/static/restart', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+            headers: { 'Content-Type': 'application/json' },
         });
         const data = await res.json();
         if (data.ok) {
@@ -5685,12 +6259,13 @@ async function _loadStaticFromDisk() {
     const wrapper = document.getElementById('staticSettingsContent');
     if (!wrapper) return;
     try {
-        const fetches = [fetch('/api/static/config')];
+        const fetches = [_activeAgent ? agentFetch('/api/static') : fetch('/api/static/config')];
         if (!_traefikRuntime) fetches.push(fetch('/api/traefik/runtime').then(r => r.json()).catch(() => null));
         const results = await Promise.all(fetches);
         const res = results[0];
         if (results[1]) _traefikRuntime = results[1];
         const data = await res.json();
+        if (_activeAgent && data.content !== undefined) data.raw = data.content;
         if (data.error) {
             wrapper.innerHTML = `<div class="text-center py-16" style="color:var(--muted)">
                 <i class="ph-light ph-warning-circle text-4xl block mb-3 opacity-40"></i>
@@ -5701,10 +6276,25 @@ async function _loadStaticFromDisk() {
         if (_providerMonaco) { _providerMonaco.dispose(); _providerMonaco = null; }
         _staticRawContent = data.raw || '';
         _staticOriginalContent = _staticRawContent;
-        wrapper.innerHTML = _buildStaticTabHTML();
         _clearStaticPending();
         _staticPendingChanges = false;
         _hideStaticRestartBanner();
+        if (_activeAgent) {
+            const hdrAddBtn = document.getElementById('staticHdrAddBtn');
+            if (hdrAddBtn) hdrAddBtn.style.display = 'none';
+            wrapper.innerHTML = `<div class="text-center py-16" style="color:var(--muted)">
+                <i class="ph-light ph-sliders-horizontal text-4xl block mb-3 opacity-30"></i>
+                <p class="text-sm font-medium mb-2" style="color:var(--text)">Remote Static Config</p>
+                <p class="text-xs max-w-xs mx-auto mb-4">Section editing is not available for remote agents. Use the Raw YAML editor to view and edit the config.</p>
+                <button onclick="openStaticYamlPopout()" class="nav-btn text-xs">
+                    <i class="ph-bold ph-code"></i> Open Raw YAML Editor
+                </button>
+            </div>`;
+            return;
+        }
+        const hdrAddBtn = document.getElementById('staticHdrAddBtn');
+        if (hdrAddBtn) hdrAddBtn.style.display = '';
+        wrapper.innerHTML = _buildStaticTabHTML();
         _renderStaticSections(data.parsed || {});
         _renderEpRuntimeWarning();
         switchStaticSection(_staticActiveSection);

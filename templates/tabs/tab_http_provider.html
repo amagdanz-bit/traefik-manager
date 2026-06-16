@@ -37,8 +37,8 @@ async function refreshHttpProviderTab() {
 
     try {
         const [routerRes, mwRes] = await Promise.all([
-            fetch('/api/traefik/routers').then(r => r.json()),
-            fetch('/api/traefik/middlewares').then(r => r.json()).catch(() => ({})),
+            agentFetch('/api/traefik/routers').then(r => r.json()),
+            agentFetch('/api/traefik/middlewares').then(r => r.json()).catch(() => ({})),
         ]);
 
         const http = (routerRes.http || []).map(r => ({ ...r, _proto: 'HTTP' }));
