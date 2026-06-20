@@ -408,9 +408,10 @@ let _agentList = [];
 const _agentHealthCache = {};
 
 function agentFetch(path, opts) {
-    if (!_activeAgent) return fetch(path, opts);
+    const merged = { ...opts, headers: { ...(opts && opts.headers), ..._csrfHeaders() } };
+    if (!_activeAgent) return fetch(path, merged);
     const proxyPath = '/api/agents/proxy/' + _activeAgent.id + '/' + path.replace(/^\/api\//, '');
-    return fetch(proxyPath, { ...opts, headers: { ...(opts && opts.headers), ..._csrfHeaders() } });
+    return fetch(proxyPath, merged);
 }
 
 function _renderServerSwitcherList(runHealthChecks) {
