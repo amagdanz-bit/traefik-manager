@@ -25,7 +25,7 @@ from io import StringIO
 from cryptography.fernet import Fernet, InvalidToken
 
 GITHUB_REPO  = "chr0nzz/traefik-manager"
-APP_VERSION  = "1.5.1"
+APP_VERSION  = "1.5.2"
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -3678,6 +3678,8 @@ def _build_all_apps(include_external=True, include_internal=False):
         app['entrypointMiddlewares'] = ep_mws
     settings = load_settings()
     for route_id, rdata in settings.get('disabled_routes', {}).items():
+        if route_id.startswith('agent_'):
+            continue  # agent disabled routes belong to that agent, not the host
         rname    = route_id.split('::', 1)[1] if '::' in route_id else route_id
         proto    = rdata.get('protocol', 'http')
         router   = rdata.get('router', {})
