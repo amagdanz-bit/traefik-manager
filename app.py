@@ -4202,6 +4202,20 @@ def api_route_raw_save(route_id):
 
 @app.route('/')
 @login_required
+def _static_cert_resolvers():
+    path = _get_static_config_path()
+    if not path or not os.path.exists(path):
+        return []
+    try:
+        with open(path, 'r') as f:
+            data = _yaml_safe.load(f) or {}
+        resolvers = data.get('certificatesResolvers') or {}
+        if isinstance(resolvers, dict):
+            return [str(k).strip() for k in resolvers if str(k).strip()]
+    except Exception:
+        logger.debug("Failed to read certificatesResolvers from static config", exc_info=True)
+    return []
+
 def index():
     settings    = load_settings()
     apps, middlewares = _build_all_apps(include_external=False)
@@ -4210,6 +4224,9 @@ def index():
     login_time = session.get('login_time', '')
     config_paths_list = [{'label': os.path.basename(p), 'path': p} for p in CONFIG_PATHS]
     cert_resolvers    = [r.strip() for r in settings['cert_resolver'].split(',') if r.strip()]
+    for r in _static_cert_resolvers():
+        if r not in cert_resolvers:
+            cert_resolvers.append(r)
 
     return render_template('index.html', apps=apps, domains=settings['domains'],
                            middlewares=middlewares, settings=settings,
@@ -4995,6 +5012,26 @@ def api_agent_routes(agent_id):
     except Exception as e:
         logger.exception("Agent routes error")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/agents/<agent_id>/cert-resolvers')
+@login_required
+def api_agent_cert_resolvers(agent_id):
+    agent = _agent_by_id(agent_id)
+    if not agent:
+        return jsonify({'resolvers': []})
+    try:
+        resp = _agent_request(agent, 'GET', '/api/static')
+        if resp.status_code != 200:
+            return jsonify({'resolvers': []})
+        content   = (resp.json() or {}).get('content', '')
+        data      = _yaml_safe.load(content) or {}
+        resolvers = data.get('certificatesResolvers') or {}
+        if isinstance(resolvers, dict):
+            return jsonify({'resolvers': [str(k).strip() for k in resolvers if str(k).strip()]})
+    except Exception:
+        logger.debug("Failed to read agent cert resolvers", exc_info=True)
+    return jsonify({'resolvers': []})
 
 
 @app.route('/api/agents', methods=['GET'])

@@ -465,6 +465,7 @@ function switchServer(agentId) {
     _activeAgent = agent;
     _cachedEntrypoints = null;
     _cachedMiddlewares = null;
+    _cachedCertResolvers = null;
     if (agent) document.getElementById('selfRouteEpWarning')?.remove();
     if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData();
     if (agent) {
@@ -878,9 +879,9 @@ function openModal() {
     _initMiddlewareChips([]);
     setTcpTlsMode('none', document.getElementById('tcpTlsNone'));
     const crHttp = document.getElementById('certResolver');
-    if (crHttp) { crHttp.value = availableCertResolvers.length > 0 ? availableCertResolvers[0] : '__disabled__'; toggleWildcardSection(crHttp.value); }
+    if (crHttp) { crHttp.value = (!_activeAgent && availableCertResolvers.length > 0) ? availableCertResolvers[0] : '__disabled__'; toggleWildcardSection(crHttp.value); }
     const crTcp = document.getElementById('certResolverTcp');
-    if (crTcp && availableCertResolvers.length > 0) crTcp.value = availableCertResolvers[0];
+    if (crTcp) crTcp.value = (!_activeAgent && availableCertResolvers.length > 0) ? availableCertResolvers[0] : '__disabled__';
     const wcChk = document.getElementById('wildcardCheckbox'); if (wcChk) wcChk.checked = false;
     const mainEl = document.getElementById('tlsWildcardMain'); if (mainEl) mainEl.value = '';
     const sansEl = document.getElementById('tlsWildcardSans'); if (sansEl) sansEl.value = '';
@@ -894,6 +895,7 @@ function openModal() {
     _populateConfigFileSelect('route').then(() => {
         document.getElementById('appModal').style.display = 'flex';
     });
+    _loadAgentResolversIntoSelects();
 }
 
 function closeModal() { document.getElementById('appModal').style.display = 'none'; }
@@ -1782,7 +1784,44 @@ function _onBackdropClick(e, fn) {
 const availableDomains = {{ domains | tojson | safe }};
 const availableCertResolvers = {{ cert_resolvers | tojson | safe }};
 
+function _ensureResolverOption(sel, value) {
+    if (!sel || !value) return;
+    if (![...sel.options].some(o => o.value === value)) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = value;
+        const noneOpt = [...sel.options].find(o => o.value === '__none__');
+        sel.insertBefore(opt, noneOpt || null);
+    }
+    sel.value = value;
+}
+
 let _cachedEntrypoints = null;
+let _cachedCertResolvers = null;
+
+async function _loadAgentResolversIntoSelects() {
+    if (!_activeAgent) return;
+    if (_cachedCertResolvers === null) {
+        try {
+            const res = await fetch('/api/agents/' + _activeAgent.id + '/cert-resolvers');
+            _cachedCertResolvers = (await res.json()).resolvers || [];
+        } catch (e) { _cachedCertResolvers = []; }
+    }
+    const list = _cachedCertResolvers;
+    ['certResolver', 'certResolverTcp'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const cur = sel.value;
+        sel.innerHTML = '';
+        sel.add(new Option('No TLS', '__disabled__'));
+        list.forEach(r => sel.add(new Option(r, r)));
+        sel.add(new Option('None (external / custom cert)', '__none__'));
+        if (cur) _ensureResolverOption(sel, cur);
+        else sel.value = '__disabled__';
+    });
+    const crHttp = document.getElementById('certResolver');
+    if (crHttp) toggleWildcardSection(crHttp.value);
+}
 
 function _copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(() => {
@@ -2021,7 +2060,7 @@ async function cloneRoute(btn) {
         const crHttp = document.getElementById('certResolver');
         if (crHttp) {
             if (!app.tls && app.tls !== false) crHttp.value = '__disabled__';
-            else if (app.certResolver) crHttp.value = app.certResolver;
+            else if (app.certResolver) _ensureResolverOption(crHttp, app.certResolver);
             else crHttp.value = '__none__';
             toggleWildcardSection(crHttp.value);
         }
@@ -2052,7 +2091,7 @@ async function cloneRoute(btn) {
         const tlsMode = app.tls ? (app.tls.passthrough ? 'passthrough' : 'tls') : 'none';
         setTcpTlsMode(tlsMode, document.getElementById(tlsMode === 'passthrough' ? 'tcpTlsPassthrough' : tlsMode === 'tls' ? 'tcpTlsTls' : 'tcpTlsNone'));
         const crTcp = document.getElementById('certResolverTcp');
-        if (crTcp && app.certResolver) crTcp.value = app.certResolver;
+        if (crTcp && app.certResolver) _ensureResolverOption(crTcp, app.certResolver);
     } else if (proto === 'udp') {
         const target = (app.target || '').split(':');
         document.getElementById('targetIpUdp').value = target[0] || '';
@@ -2158,7 +2197,7 @@ async function handleEdit(btn) {
         const crHttp = document.getElementById('certResolver');
         if (crHttp) {
             if (!app.tls && app.tls !== false) crHttp.value = '__disabled__';
-            else if (app.certResolver) crHttp.value = app.certResolver;
+            else if (app.certResolver) _ensureResolverOption(crHttp, app.certResolver);
             else crHttp.value = '__none__';
             toggleWildcardSection(crHttp.value);
         }
@@ -2191,7 +2230,7 @@ async function handleEdit(btn) {
         const tlsMode2 = app.tls ? (app.tls.passthrough ? 'passthrough' : 'tls') : 'none';
         setTcpTlsMode(tlsMode2, document.getElementById(tlsMode2 === 'passthrough' ? 'tcpTlsPassthrough' : tlsMode2 === 'tls' ? 'tcpTlsTls' : 'tcpTlsNone'));
         const crTcp = document.getElementById('certResolverTcp');
-        if (crTcp && app.certResolver) crTcp.value = app.certResolver;
+        if (crTcp && app.certResolver) _ensureResolverOption(crTcp, app.certResolver);
 
     } else if (proto === 'udp') {
         const target = (app.target || '').split(':');
@@ -2206,6 +2245,7 @@ async function handleEdit(btn) {
         if (cfSel) cfSel.value = app.configFile;
         document.getElementById('configFile').value = app.configFile;
     }
+    await _loadAgentResolversIntoSelects();
     document.getElementById('appModal').style.display = 'flex';
 }
 
