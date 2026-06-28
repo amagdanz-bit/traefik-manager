@@ -4200,8 +4200,6 @@ def api_route_raw_save(route_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
-@app.route('/')
-@login_required
 def _static_cert_resolvers():
     path = _get_static_config_path()
     if not path or not os.path.exists(path):
@@ -4216,6 +4214,8 @@ def _static_cert_resolvers():
         logger.debug("Failed to read certificatesResolvers from static config", exc_info=True)
     return []
 
+@app.route('/')
+@login_required
 def index():
     settings    = load_settings()
     apps, middlewares = _build_all_apps(include_external=False)
