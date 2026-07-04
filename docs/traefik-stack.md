@@ -37,6 +37,28 @@ Installs both Traefik and Traefik Manager via Docker Compose. Best for a fresh s
 - A domain name with DNS pointing to your server
 - Ports 80 and 443 open for internet-facing deployments
 
+### Sections and review screen
+
+The setup runs through numbered sections (General, Deployment type, Domain, TLS / Certificates, Dynamic config, Optional mounts, CrowdSec, Docker network). After the last section a review table summarizes every answer:
+
+```
+  Review configuration
+  ────────────────────────────────────────────────────────
+   1  General             ~/traefik-stack
+   2  Deployment type     external (internet-facing)
+   3  Domain              example.com  dash:traefik.example.com  tm:manager.example.com
+   4  TLS / Certificates  Let's Encrypt DNS (cloudflare)  you@example.com
+   5  Dynamic config      Directory
+   6  Optional mounts     logs certs static(restart:proxy)
+   7  CrowdSec            install alongside
+   8  Docker network      traefik-net  api:8080
+  ────────────────────────────────────────────────────────
+
+  Edit a section (1-8) or Enter to install:
+```
+
+Type a section number to re-configure it, then press Enter with no number to begin the install. Nothing is written to disk until you confirm.
+
 ### What the script configures
 
 **Install directory** - where all files are created (default: `~/traefik-stack`)
@@ -165,6 +187,14 @@ docker compose restart
 
 Installs just Traefik Manager as a Docker container. Use this when Traefik is already running on your server.
 
+### Sections and review screen
+
+The setup runs through numbered sections (General, Network, Access, Dynamic config, Optional mounts) and ends with a review table where you can re-configure any section by number before anything is installed - the same flow as the other modes:
+
+```
+  Edit a section (1-5) or Enter to install:
+```
+
 ### What the script configures
 
 **Install directory** - where files are created (default: `~/traefik-manager`)
@@ -225,6 +255,14 @@ Installs Traefik Manager as a native systemd service. No Docker required. Use th
 - Python 3.11 or newer
 - `git`
 - `systemd`
+
+### Sections and review screen
+
+The setup runs through numbered sections (General, Service user, Dynamic config, Optional mounts) and ends with a review table where you can re-configure any section by number before anything is installed - the same flow as the other modes:
+
+```
+  Edit a section (1-4) or Enter to install:
+```
 
 ### What the script configures
 
