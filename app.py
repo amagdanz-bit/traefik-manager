@@ -3646,7 +3646,7 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
         tls_tcp = rdata.get('tls', {})
         apps.append({'id': app_id, 'name': rname, 'rule': rdata.get('rule', ''),
                      'service_name': svc_name, 'target': target,
-                     'middlewares': [], 'entryPoints': _to_list(rdata.get('entryPoints')),
+                     'middlewares': _to_list(rdata.get('middlewares')), 'entryPoints': _to_list(rdata.get('entryPoints')),
                      'protocol': 'tcp', 'tls': tls_tcp if isinstance(tls_tcp, dict) else ({} if tls_tcp else None), 'enabled': True,
                      'certResolver': tls_tcp.get('certResolver', '') if isinstance(tls_tcp, dict) else '',
                      'configFile': config_file, 'provider': 'file'})
