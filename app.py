@@ -3680,6 +3680,10 @@ def _build_middlewares(config, config_file=''):
         buf = StringIO()
         yaml.dump(mdata, buf)
         middlewares.append({'name': mname, 'yaml': buf.getvalue(), 'type': 'http', 'configFile': config_file})
+    for mname, mdata in config.get('tcp', {}).get('middlewares', {}).items():
+        buf = StringIO()
+        yaml.dump(mdata, buf)
+        middlewares.append({'name': mname, 'yaml': buf.getvalue(), 'type': 'tcp', 'configFile': config_file})
     return middlewares
 
 
