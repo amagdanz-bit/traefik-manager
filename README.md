@@ -424,9 +424,9 @@ Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to rep
 
 <a href="https://www.star-history.com/?repos=chr0nzz%2Ftraefik-manager&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=chr0nzz/traefik-manager&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=chr0nzz/traefik-manager&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=chr0nzz/traefik-manager&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=chr0nzz/traefik-manager&type=date&theme=dark&legend=top-left&sealed_token=oQ__sQS09Vl71fXzxJNG40hpV_FisG6wxonR_P3lCUWpLBsdQ7L1nIcJSRlkgBebijfWkKO2X0NT-k4jPHXnLz3sthfOc9sxZbXVeRdse4MNHp7w8WkA1GcRgwl-6SHJDi8h3Amcc-ymm0GnUL4sJuqeL3uBlfPO_ib8UNdeoRsTFEAva86ntE_B-UV5" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=chr0nzz/traefik-manager&type=date&legend=top-left&sealed_token=oQ__sQS09Vl71fXzxJNG40hpV_FisG6wxonR_P3lCUWpLBsdQ7L1nIcJSRlkgBebijfWkKO2X0NT-k4jPHXnLz3sthfOc9sxZbXVeRdse4MNHp7w8WkA1GcRgwl-6SHJDi8h3Amcc-ymm0GnUL4sJuqeL3uBlfPO_ib8UNdeoRsTFEAva86ntE_B-UV5" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=chr0nzz/traefik-manager&type=date&legend=top-left&sealed_token=oQ__sQS09Vl71fXzxJNG40hpV_FisG6wxonR_P3lCUWpLBsdQ7L1nIcJSRlkgBebijfWkKO2X0NT-k4jPHXnLz3sthfOc9sxZbXVeRdse4MNHp7w8WkA1GcRgwl-6SHJDi8h3Amcc-ymm0GnUL4sJuqeL3uBlfPO_ib8UNdeoRsTFEAva86ntE_B-UV5" />
  </picture>
 </a>
 
