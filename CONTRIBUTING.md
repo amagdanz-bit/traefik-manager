@@ -38,12 +38,15 @@ Open a [Feature Request](.github/ISSUE_TEMPLATE/feature_request.yml) issue befor
 
 ## Submitting a pull request
 
-1. Fork the repo and create your branch from `dev` (for new features and active development) or `main` (for docs or stable fixes).
+> [!IMPORTANT]
+> **All pull requests target `dev`.** Never open a PR against `main` - it only moves when a release is cut. PRs against `main` will be asked to retarget.
+
+1. Fork the repo and create your branch from `dev`.
 2. Keep PRs focused - one fix or feature per PR.
 3. For anything beyond a small bug fix, open an issue first so we can align on approach.
 4. Test your changes with a real Traefik instance if possible.
 5. Update the relevant docs page in `docs/` if your change affects user-facing behaviour.
-6. Open the PR against the correct branch (see [Branch guide](#branch-guide)).
+6. Open the PR against `dev` (see [Branch guide](#branch-guide)). GitHub preselects `main` - change the base branch dropdown when creating the PR.
 
 ---
 
@@ -148,9 +151,9 @@ docs/                         # VitePress documentation site
 
 ## Branch guide
 
-| Branch | Purpose | PR target |
-|--------|---------|-----------|
-| `dev` | Active development - new features and bug fixes for the next release | `dev` |
-| `main` | Stable - docs fixes, security patches only | `main` |
+| Branch | Purpose | Accepts PRs? |
+|--------|---------|--------------|
+| `dev` | Active development - all features, bug fixes, and docs changes for the next release | **Yes - every PR targets `dev`** |
+| `main` | Release branch - only moves when a version is tagged | **No - never open PRs here** |
 
-When `dev` is ready for release it is merged to `main`. New features go to `dev`.
+Everything lands on `dev` first - features, bug fixes, and docs alike. When `dev` is ready for release it is merged to `main` and tagged, which publishes the Docker images. Nothing else touches `main`: a PR merged there would sit unreleased, drift out of sync with `dev`, and risk being clobbered by the next release merge.

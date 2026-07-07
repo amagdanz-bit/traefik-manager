@@ -1,0 +1,28 @@
+name: PR base branch check
+
+on:
+  pull_request_target:
+    types: [opened, reopened, edited]
+    branches: [main]
+
+jobs:
+  enforce-dev-base:
+    if: github.actor != github.repository_owner
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                'Thanks for the PR! It currently targets `main`, but all contributions go to `dev` - `main` only moves when a release is cut.',
+                '',
+                'Please retarget: **Edit** (next to the PR title) > change the base branch dropdown to `dev`. No need to close or recreate the PR.',
+              ].join('\n')
+            });
+            core.setFailed('PR targets main - retarget to dev.');

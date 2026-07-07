@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> **This PR must target the `dev` branch.** `main` only moves on releases. If the base branch above says `main`, change it to `dev` (the base dropdown next to the PR title).
+
 ## Summary
 
 <!-- What does this PR do? Link the issue it addresses if applicable. -->
@@ -20,6 +23,6 @@ Closes #
 
 ## Checklist
 
-- [ ] Targeted the correct branch (`dev` for new features/fixes, `main` for docs/stable fixes)
+- [ ] PR targets the `dev` branch (never `main`)
 - [ ] Updated relevant docs in `docs/` if behaviour changed
 - [ ] No commented-out code or debug statements left in
