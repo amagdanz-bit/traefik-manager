@@ -23,7 +23,7 @@ Traefik's static configuration controls settings that cannot be changed at runti
 
 | Section               | Description                                                                                                                                          |
 | -----------------------| ------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Entrypoints           | Add, edit, and remove entrypoints - port, protocol, optional HTTP-to-HTTPS redirect                                                                  |
+| Entrypoints           | Add, edit, and remove entrypoints - port, protocol, optional HTTP-to-HTTPS redirect, and the [Underscore Headers](hardening.md#header-alias-spoofing-underscore-headers) strategy (Traefik 3.6.20 / 3.7.6+). Edits merge into the existing entrypoint, preserving keys the form does not manage. |
 | Certificate Resolvers | ACME email, storage path, DNS or HTTP challenge type and credentials                                                                                 |
 | Plugins               | Install and remove experimental plugins; view installed plugins                                                                                      |
 | API                   | Enable or disable the Traefik API and Dashboard, insecure mode, and debug mode                                                                       |

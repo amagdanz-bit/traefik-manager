@@ -60,6 +60,7 @@
                                 <option value="rateLimit">Rate Limit</option>
                                 <option value="secureHeaders">Secure Headers</option>
                                 <option value="corsHeaders">CORS Headers</option>
+                                <option value="encodedCharacters">Encoded Characters (Traefik 3.7+)</option>
                             </optgroup>
                             <optgroup label="Routing">
                                 <option value="redirectScheme">Redirect to HTTPS</option>
@@ -124,6 +125,11 @@
                             <label>Auth Response Headers <span class="text-xs font-normal" style="color:var(--muted)">(one per line)</span></label>
                             <textarea id="wizFaHeaders" class="input-field font-mono text-xs" rows="4" placeholder="X-Auth-User&#10;X-Auth-Token"></textarea>
                         </div>
+                        <div>
+                            <label>Max Response Body Size <span class="text-xs font-normal" style="color:var(--muted)">(bytes, optional - Traefik 3.7+)</span></label>
+                            <input type="number" min="0" id="wizFaMaxBody" class="input-field text-sm" placeholder="4096">
+                            <p class="text-xs mt-1" style="color:var(--muted)">Caps the auth server response body. Auth responses are tiny, so a small limit is safe.</p>
+                        </div>
                     </div>
 
                     <div id="mwWiz-forwardAuthGatekeeper" class="mw-wiz-form space-y-3" style="display:none">
@@ -150,6 +156,10 @@
                             <textarea id="wizGkHeaders" class="input-field font-mono text-xs" rows="4">X-Auth-User
 X-Auth-Email
 X-Auth-Groups</textarea>
+                        </div>
+                        <div>
+                            <label>Max Response Body Size <span class="text-xs font-normal" style="color:var(--muted)">(bytes, optional - Traefik 3.7+)</span></label>
+                            <input type="number" min="0" id="wizGkMaxBody" class="input-field text-sm" placeholder="4096">
                         </div>
                     </div>
 
@@ -317,6 +327,18 @@ X-Forwarded-Name: name</textarea>
                             <div class="flex items-end pb-2">
                                 <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizCorsVary" checked style="accent-color:var(--blue)"> Add Vary Header</label>
                             </div>
+                        </div>
+                    </div>
+
+                    <div id="mwWiz-encodedCharacters" class="mw-wiz-form space-y-3" style="display:none">
+                        <p class="text-xs" style="color:var(--muted)">All are rejected by default (secure). Check a character only if a backend genuinely needs it in the request path. Requires Traefik 3.7+.</p>
+                        <div class="flex flex-col gap-2 rounded-lg p-2.5" style="background:var(--input-bg);border:1px solid var(--border)">
+                            <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizEcSlash" style="accent-color:var(--blue)"> Allow encoded slash <code class="font-mono text-xs" style="color:var(--muted)">%2F</code></label>
+                            <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizEcBackSlash" style="accent-color:var(--blue)"> Allow encoded backslash <code class="font-mono text-xs" style="color:var(--muted)">%5C</code></label>
+                            <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizEcSemicolon" style="accent-color:var(--blue)"> Allow encoded semicolon <code class="font-mono text-xs" style="color:var(--muted)">%3B</code></label>
+                            <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizEcPercent" style="accent-color:var(--blue)"> Allow encoded percent <code class="font-mono text-xs" style="color:var(--muted)">%25</code></label>
+                            <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizEcQuestion" style="accent-color:var(--blue)"> Allow encoded question mark <code class="font-mono text-xs" style="color:var(--muted)">%3F</code></label>
+                            <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text)"><input type="checkbox" id="wizEcHash" style="accent-color:var(--blue)"> Allow encoded hash <code class="font-mono text-xs" style="color:var(--muted)">%23</code></label>
                         </div>
                     </div>
 

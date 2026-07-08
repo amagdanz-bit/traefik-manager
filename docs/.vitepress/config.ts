@@ -29,11 +29,13 @@ export default defineConfig({
       { text: 'Home', link: '/' },
       { text: 'Guide', link: '/guide' },
       { text: 'Security', link: '/security' },
+      { text: 'Hardening', link: '/hardening' },
       { text: 'API', link: '/api' },
       { text: 'UI Examples', link: '/ui-examples' },
       {
-        text: 'v1.6.1',
+        text: 'v1.7.0',
         items: [
+          { text: 'v1.7.0', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.7.0' },
           { text: 'v1.6.1', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.6.1' },
           { text: 'v1.6.0', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.6.0' },
           { text: 'v1.5.2', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.5.2' },
@@ -49,6 +51,7 @@ export default defineConfig({
       { text: 'Guide', link: '/guide' },
       { text: 'Mobile App', link: '/mobile' },
       { text: 'Security', link: '/security' },
+      { text: 'Traefik Hardening', link: '/hardening' },
       { text: 'API', link: '/api' },
       { text: 'UI Examples', link: '/ui-examples' },
       {

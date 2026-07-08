@@ -35,9 +35,11 @@ Every template switches to **Wizard** mode - a structured form with labeled fiel
 | Category | Templates |
 |---|---|
 | Auth | Basic Auth, Digest Auth, Forward Auth, Forward Auth (Authentik), Forward Auth (Authelia), Forward Auth (Gatekeeper) |
-| Security | IP Allow List, IP Allow List (Private Ranges), Rate Limit, Secure Headers, CORS Headers |
+| Security | IP Allow List, IP Allow List (Private Ranges), Rate Limit, Secure Headers, CORS Headers, Encoded Characters (Traefik 3.7+) |
 | Routing | Redirect to HTTPS, Redirect Regex, Strip Prefix, Add Prefix, Replace Path |
 | Advanced | Gzip Compress, Retry, Circuit Breaker, Buffering, Middleware Chain, In-Flight Limit |
+
+The Forward Auth wizards (including Authentik, Authelia, and Gatekeeper) expose an optional **Max Response Body Size** field (`maxResponseBodySize`, Traefik 3.7+) to cap the auth server's response. See [Traefik Security Hardening](hardening.md) for the recommended hardening middlewares and options.
 
 ### Middleware ordering in routes
 

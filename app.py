@@ -25,7 +25,7 @@ from io import StringIO
 from cryptography.fernet import Fernet, InvalidToken
 
 GITHUB_REPO  = "chr0nzz/traefik-manager"
-APP_VERSION  = "1.6.1"
+APP_VERSION  = "1.7.0"
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -2065,8 +2065,15 @@ def api_docs():
 
 @app.route('/openapi.yaml')
 def openapi_yaml():
-    from flask import send_from_directory
-    return send_from_directory('static', 'openapi.yaml')
+    import re as _re
+    try:
+        with open(os.path.join(app.static_folder, 'openapi.yaml'), 'r') as f:
+            spec = f.read()
+        spec = _re.sub(r'(?m)^(\s*version:\s*).*$', rf'\g<1>{APP_VERSION}', spec, count=1)
+        return spec, 200, {'Content-Type': 'application/yaml'}
+    except Exception:
+        from flask import send_from_directory
+        return send_from_directory('static', 'openapi.yaml')
 
 
 def _restart_via_docker() -> bool:
@@ -2222,14 +2229,34 @@ def api_static_section_update():
                 eps.pop(name, None)
             else:
                 if action == 'edit' and old_name != name:
-                    eps.pop(old_name, None)
+                    eps[name] = eps.pop(old_name, None)
+                ep = eps.get(name)
+                if not isinstance(ep, dict):
+                    ep = {}
                 addr = str(payload.get('address', '')).strip()
-                ep = {'address': DoubleQuotedScalarString(addr) if addr else ''}
+                if addr:
+                    ep['address'] = DoubleQuotedScalarString(addr)
+                elif 'address' not in ep:
+                    ep['address'] = ''
+                http_blk = ep.get('http') if isinstance(ep.get('http'), dict) else {}
                 redirect_to = str(payload.get('redirect_to', '')).strip()
                 if redirect_to:
-                    ep['http'] = {'redirections': {'entryPoint': {'to': redirect_to, 'scheme': 'https', 'permanent': True}}}
+                    http_blk['redirections'] = {'entryPoint': {'to': redirect_to, 'scheme': 'https', 'permanent': True}}
+                else:
+                    http_blk.pop('redirections', None)
+                uhs = str(payload.get('underscore_headers', '')).strip().lower()
+                if uhs in ('delete', 'reject'):
+                    http_blk['underscoreHeadersStrategy'] = uhs
+                else:
+                    http_blk.pop('underscoreHeadersStrategy', None)
+                if http_blk:
+                    ep['http'] = http_blk
+                else:
+                    ep.pop('http', None)
                 if payload.get('http3'):
                     ep['http3'] = {}
+                else:
+                    ep.pop('http3', None)
                 eps[name] = ep
         elif section == 'resolvers':
             resolvers = config.setdefault('certificatesResolvers', {})
