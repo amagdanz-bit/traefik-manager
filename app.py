@@ -4514,7 +4514,10 @@ def save_entry():
                 else:
                     hosts = [f"Host(`{d}`)" for d in selected_domains]
                     rule  = " || ".join(hosts)
-            target_url = target_ip if target_ip.startswith('http') else f"{scheme}://{target_ip}:{target_port}"
+            if target_ip.startswith(('http://', 'https://')):
+                target_url = target_ip
+            else:
+                target_url = f"{scheme}://{target_ip}:{target_port}" if target_port else f"{scheme}://{target_ip}"
             mws        = [m.strip() for m in middlewares_in.split(',')] if middlewares_in else []
             insecure   = request.form.get('insecureSkipVerify') == 'true'
             config.setdefault('http', {}).setdefault('routers', {})
