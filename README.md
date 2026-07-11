@@ -8,12 +8,19 @@
 
 Add routes, manage middlewares, monitor services, and view TLS certificates - all without touching a YAML file by hand.
 
-[![Docker Image](https://img.shields.io/badge/ghcr.io-chr0nzz%2Ftraefik--manager-blue?logo=docker&logoColor=white)](https://github.com/chr0nzz/traefik-manager/pkgs/container/traefik-manager)
-[![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Version](https://img.shields.io/github/v/release/chr0nzz/traefik-manager)](https://github.com/chr0nzz/traefik-manager/releases)
-[![Docs](https://img.shields.io/badge/docs-github.io-blue)](https://traefik-manager.xyzlab.dev/)
+[![Build](https://img.shields.io/github/actions/workflow/status/chr0nzz/traefik-manager/docker.yml?logo=githubactions&logoColor=white&label=build)](https://github.com/chr0nzz/traefik-manager/actions/workflows/docker.yml)
+[![Docker Image](https://img.shields.io/badge/ghcr.io-chr0nzz%2Ftraefik--manager-blue?logo=docker&logoColor=white)](https://github.com/chr0nzz/traefik-manager/pkgs/container/traefik-manager)
+[![Image Size](https://ghcr-badge.egpl.dev/chr0nzz/traefik-manager/size?label=image%20size)](https://github.com/chr0nzz/traefik-manager/pkgs/container/traefik-manager)
+[![Last Commit](https://img.shields.io/github/last-commit/chr0nzz/traefik-manager/dev?label=last%20commit)](https://github.com/chr0nzz/traefik-manager/commits/dev)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-xyzlab.dev-blue)](https://traefik-manager.xyzlab.dev/)
+
+[![Stars](https://img.shields.io/github/stars/chr0nzz/traefik-manager?logo=github&color=e3b341)](https://github.com/chr0nzz/traefik-manager/stargazers)
+[![Issues](https://img.shields.io/github/issues/chr0nzz/traefik-manager?logo=github)](https://github.com/chr0nzz/traefik-manager/issues)
 [![Mobile App](https://img.shields.io/badge/mobile-repo-green?logo=android&logoColor=white)](https://github.com/chr0nzz/traefik-manager-mobile)
 [![Google Play](https://img.shields.io/badge/Google_Play-Available-blue?logo=google-play&logoColor=white)](https://play.google.com/store/apps/details?id=dev.chr0nzz.traefikmanager)
+[![Play Downloads](https://playbadges.pavi2410.me/badge/downloads?id=dev.chr0nzz.traefikmanager)](https://play.google.com/store/apps/details?id=dev.chr0nzz.traefikmanager)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Sponsor-ff5f5f?logo=ko-fi&logoColor=white)](https://ko-fi.com/chr0nzz)
 
 </div>
