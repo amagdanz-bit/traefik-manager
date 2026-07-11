@@ -500,6 +500,13 @@
                                         <div class="text-xs mb-1" style="color:var(--muted)">Claim name that contains groups. Keycloak: <code>groups</code>, some providers: <code>roles</code>.</div>
                                         <input type="text" id="oidcGroupsClaim" class="input-field text-xs" placeholder="groups">
                                     </div>
+                                    <div class="flex items-start gap-2 p-2 rounded-lg" style="background:rgba(210,153,34,0.06);border:1px solid rgba(210,153,34,0.2)">
+                                        <input type="checkbox" id="oidcAllowAny" class="rounded mt-0.5" style="accent-color:var(--yellow)">
+                                        <div>
+                                            <label for="oidcAllowAny" class="text-xs font-semibold block cursor-pointer" style="color:var(--text)">Allow any authenticated account</label>
+                                            <div class="text-xs mt-0.5" style="color:var(--muted)">Off by default. When both allowlists above are empty, OIDC logins are <b>denied</b> unless you enable this. Only turn it on if every account at your provider should have full admin access.</div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -2410,6 +2417,7 @@ async function loadOidcStatus() {
         set(['oidcAllowedEmails', data.oidc_allowed_emails]);
         set(['oidcAllowedGroups', data.oidc_allowed_groups]);
         set(['oidcGroupsClaim', data.oidc_groups_claim]);
+        const _anyEl = document.getElementById('oidcAllowAny'); if (_anyEl) _anyEl.checked = !!data.oidc_allow_any_authenticated;
         document.getElementById('oidcClientSecret') && (document.getElementById('oidcClientSecret').value = '');
         const secretLabel = document.getElementById('oidcSecretSetLabel');
         if (secretLabel) secretLabel.classList.toggle('hidden', !data.oidc_client_secret_set);
@@ -2427,11 +2435,12 @@ async function oidcToggleEnabled() {
     const ae    = document.getElementById('oidcAllowedEmails')?.value.trim() || '';
     const ag    = document.getElementById('oidcAllowedGroups')?.value.trim() || '';
     const gc    = document.getElementById('oidcGroupsClaim')?.value.trim() || 'groups';
+    const any   = document.getElementById('oidcAllowAny')?.checked || false;
     try {
         const res = await fetch('/api/auth/oidc', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfHeaders()['X-CSRF-Token']},
-            body: JSON.stringify({ oidc_enabled: !isOn, oidc_provider_url: url, oidc_client_id: id, oidc_client_secret: sec, oidc_display_name: disp, oidc_allowed_emails: ae, oidc_allowed_groups: ag, oidc_groups_claim: gc })
+            body: JSON.stringify({ oidc_enabled: !isOn, oidc_provider_url: url, oidc_client_id: id, oidc_client_secret: sec, oidc_display_name: disp, oidc_allowed_emails: ae, oidc_allowed_groups: ag, oidc_groups_claim: gc, oidc_allow_any_authenticated: any })
         });
         const data = await res.json();
         if (data.ok) {
@@ -2462,7 +2471,7 @@ async function saveOidcConfig() {
         const res = await fetch('/api/auth/oidc', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfHeaders()['X-CSRF-Token']},
-            body: JSON.stringify({ oidc_enabled: isOn, oidc_provider_url: url, oidc_client_id: id, oidc_client_secret: sec, oidc_display_name: disp, oidc_allowed_emails: ae, oidc_allowed_groups: ag, oidc_groups_claim: gc })
+            body: JSON.stringify({ oidc_enabled: isOn, oidc_provider_url: url, oidc_client_id: id, oidc_client_secret: sec, oidc_display_name: disp, oidc_allowed_emails: ae, oidc_allowed_groups: ag, oidc_groups_claim: gc, oidc_allow_any_authenticated: any })
         });
         const data = await res.json();
         if (data.ok) {

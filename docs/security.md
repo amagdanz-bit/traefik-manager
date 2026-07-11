@@ -132,6 +132,26 @@ Set `COOKIE_SECURE=true` whenever TM is accessed over HTTPS. Without it, browser
 
 ---
 
+## Outbound requests (SSRF protection)
+
+Several features make TM issue outbound HTTP requests on your behalf - the connection test, the webhook test, the URL ping tool, and OIDC provider discovery. To prevent these from being used to reach cloud metadata endpoints, these fetchers reject:
+
+- Link-local addresses (`169.254.0.0/16`, including the `169.254.169.254` cloud metadata IP)
+- Multicast, reserved, and unspecified addresses
+
+Private and loopback targets are still allowed, because reaching internal services (e.g. `http://traefik:8080`) is the normal, legitimate use for a self-hosted reverse-proxy manager. Redirects are not followed on the ping tool.
+
+---
+
+## Git backup safety
+
+When you configure git backup:
+
+- The repository URL must use `https://`, `http://`, `ssh://`, or `git://`. Other transports (`ext::`, `file://`, `fd::`) are rejected, and git is invoked with those protocols disabled, so a crafted URL cannot execute local commands.
+- The access token is passed to git through `GIT_ASKPASS` rather than being embedded in the remote URL. It is not written to `.git/config`, does not appear in process arguments, and is redacted from any error message shown in the UI.
+
+---
+
 ## Recommended setup
 
 ::: tip Run behind a reverse proxy with HTTPS
@@ -169,12 +189,15 @@ If you do not use the Static Config editor, do not mount `traefik.yml` read-writ
 
 ## File permissions
 
-TM writes to three locations:
+TM writes to these locations:
 
 | Path | Purpose |
 |---|---|
 | `/app/config/manager.yml` | Settings, hashed password, API key hashes |
-| `/app/config/.secret_key` | Session signing key (generated once) |
+| `/app/config/.secret_key` | Session signing key (generated once, written `0600`) |
+| `/app/config/.otp_key` | TOTP/secret encryption key (written `0600`) |
 | `CONFIG_DIR` / `CONFIG_PATHS` | Dynamic Traefik config files |
 
-These paths should be owned by the container user and not world-readable on the host. The `/app/config/` directory is the most sensitive as it contains the password hash and session key.
+The `.secret_key` and `.otp_key` files are created with `0600` permissions so only the container user can read them. These paths should be owned by the container user and not world-readable on the host. The `/app/config/` directory is the most sensitive as it contains the password hash and encryption keys.
+
+If you provide your own session key with the `SECRET_KEY` environment variable, it must be at least 32 characters - TM refuses to start with a shorter key.

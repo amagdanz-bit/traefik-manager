@@ -2659,7 +2659,7 @@ async function loadOverviewStats() {
                 const isHttps = ['443','8443'].includes(port);
                 const color = isHttps ? 'badge-green' : isHttp ? 'badge-http' : 'badge-muted';
                 return `<div class="ep-pill">
-                    <span class="badge ${color} text-xs">${ep.name}</span>
+                    <span class="badge ${color} text-xs">${_esc(ep.name)}</span>
                     <span class="font-mono text-xs" style="color:var(--muted)">${addr}</span>
                 </div>`;
             }).join('');
@@ -3624,8 +3624,8 @@ function renderDetailPanel(app, protocol, liveRouter, liveService, entrypoints) 
 
     const serversList = liveService ? (liveService.loadBalancer?.servers || []) : [];
     const serversHtml = serversList.length > 0
-        ? serversList.map(s => `<div class="font-mono text-xs break-all mt-1 px-2 py-1 rounded" style="color:var(--green);background:var(--input-bg);word-break:break-all">${s.url || s.address || '-'}</div>`).join('')
-        : `<div class="font-mono text-xs break-all mt-1 px-2 py-1 rounded" style="color:var(--green);background:var(--input-bg);word-break:break-all">${app.target}</div>`;
+        ? serversList.map(s => `<div class="font-mono text-xs break-all mt-1 px-2 py-1 rounded" style="color:var(--green);background:var(--input-bg);word-break:break-all">${_esc(s.url || s.address || '-')}</div>`).join('')
+        : `<div class="font-mono text-xs break-all mt-1 px-2 py-1 rounded" style="color:var(--green);background:var(--input-bg);word-break:break-all">${_esc(app.target)}</div>`;
 
     const flowHtml = `
     <div class="mb-5">
@@ -3635,14 +3635,14 @@ function renderDetailPanel(app, protocol, liveRouter, liveService, entrypoints) 
             <div class="flow-arrow">→</div>
             <div class="flow-box active-box text-center flex-1">
                 <div class="text-xs font-bold uppercase tracking-wider mb-1" style="color:var(--blue)">Router</div>
-                <div class="font-bold text-sm" style="color:var(--text)">${app.name}</div>
+                <div class="font-bold text-sm" style="color:var(--text)">${_esc(app.name)}</div>
                 ${tlsInfo}
                 <div class="mt-1.5">${statusBadge}</div>
             </div>
             <div class="flow-arrow">→</div>
             <div class="flow-box text-center flex-1">
                 <div class="text-xs font-bold uppercase tracking-wider mb-1" style="color:var(--muted)">Service</div>
-                <div class="font-bold text-sm truncate" style="color:var(--text)">${app.service_name}</div>
+                <div class="font-bold text-sm truncate" style="color:var(--text)">${_esc(app.service_name)}</div>
                 <div class="mt-2">${serversHtml}</div>
             </div>
         </div>

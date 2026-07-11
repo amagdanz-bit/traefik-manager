@@ -125,7 +125,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", app.healthHandler)
-	mux.Handle("/api/", app.authMiddleware(app.rateLimitMiddleware(http.HandlerFunc(app.router))))
+	mux.Handle("/api/", app.rateLimitMiddleware(app.authMiddleware(http.HandlerFunc(app.router))))
 
 	log.Printf("TMA v%s listening on :%s (traefik=%s, insecure-tls=%v)", Version, cfg.Port, cfg.TraefikAPIURL, cfg.TraefikInsecureSkipVerify)
 	if err := http.ListenAndServe(":"+cfg.Port, mux); err != nil {
