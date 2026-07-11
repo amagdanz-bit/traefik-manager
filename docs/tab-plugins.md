@@ -11,6 +11,15 @@ The **Plugins** tab shows Traefik plugins declared in the static `traefik.yml` c
 
 When the [Static Config tab](static.md) is enabled (i.e. `STATIC_CONFIG_PATH` is set and the file is mounted read-write), the Plugins tab gains **Add**, **Edit**, and **Delete** actions. Without it, plugins are read-only and must be managed by hand in `traefik.yml`.
 
+## Installing a plugin
+
+Click **Add Plugin** and paste the installation snippet from the [Traefik plugin catalog](https://plugins.traefik.io/):
+
+1. **Static config snippet** - the `experimental.plugins` block from the plugin's page. TM backs up `traefik.yml` and merges the plugin declaration into it.
+2. **Middleware snippet** *(optional)* - the plugin's example middleware. Replace any `{{ ... }}` placeholders with real values and TM saves it to your dynamic config, ready to attach to a route.
+
+After installing, a banner prompts you to restart Traefik so the plugin is downloaded and loaded.
+
 ## Enabling the tab
 
 ### During setup wizard

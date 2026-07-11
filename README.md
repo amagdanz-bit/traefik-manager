@@ -28,7 +28,7 @@ Add routes, manage middlewares, monitor services, and view TLS certificates - al
 - **Routes** - add, edit, clone, and enable/disable HTTP, TCP, and UDP routes from the browser
 - **Middlewares** - 24 guided wizards plus a raw YAML editor, for HTTP and TCP
 - **Multi-server** - manage unlimited remote Traefik instances through a lightweight Go agent
-- **Static config editor** - edit entrypoints, cert resolvers, and plugins; Traefik restarts automatically
+- **Static config editor** - edit the full `traefik.yml` from the UI; Traefik restarts automatically
 - **Backups** - timestamped local backups plus git push with history, diffs, and one-click restore
 - **Monitoring** - live services, certificates, access logs, CrowdSec, and CVE advisory warnings
 - **Mobile app** - Android companion app on Google Play
@@ -69,233 +69,12 @@ Open **http://your-server:5000** - the setup wizard will guide you through the r
 
 ## Screenshots
 
-<details>
-<summary><b>Initial Setup Workflow</b></summary>
-<table>
-<tr>
-<td width="33%">
-<a href="docs/public/images/dark-login.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-login.png">
-  <img src="docs/public/images/light-login.png" alt="Login" />
-</picture></a>
-<br /><b>1. Login</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-setup-welcome.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-setup-welcome.png">
-  <img src="docs/public/images/light-setup-welcome.png" alt="Welcome" />
-</picture></a>
-<br /><b>2. Welcome</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-setup-connection.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-setup-connection.png">
-  <img src="docs/public/images/light-setup-connection.png" alt="Connection &amp; domains" />
-</picture></a>
-<br /><b>3. Connection &amp; domains</b>
-</td>
-</tr>
-<tr>
-<td>
-<a href="docs/public/images/dark-setup-self-route.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-setup-self-route.png">
-  <img src="docs/public/images/light-setup-self-route.png" alt="Self route" />
-</picture></a>
-<br /><b>4. Self route</b>
-</td>
-<td>
-<a href="docs/public/images/dark-setup-monitoring.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-setup-monitoring.png">
-  <img src="docs/public/images/light-setup-monitoring.png" alt="Optional tabs" />
-</picture></a>
-<br /><b>5. Optional tabs</b>
-</td>
-<td>
-<a href="docs/public/images/dark-setup-password.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-setup-password.png">
-  <img src="docs/public/images/light-setup-password.png" alt="Set password" />
-</picture></a>
-<br /><b>6. Set password</b>
-</td>
-</tr>
-</table>
-</details>
-
-<details>
-<summary><b>Dashboard</b></summary>
 <p align="center">
-<a href="docs/public/images/dark-dashboard.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-dashboard.png">
-  <img src="docs/public/images/light-dashboard.png" width="80%" alt="Dashboard" />
+<a href="https://traefik-manager.xyzlab.dev/ui-examples.html"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/readme-carousel-dark.gif">
+  <img src="docs/public/images/readme-carousel-light.gif" width="85%" alt="Traefik Manager - Dashboard, Routes, Middlewares, and Route Map" />
 </picture></a>
 </p>
-</details>
-
-<details>
-<summary><b>Routes</b></summary>
-<table>
-<tr>
-<td width="33%">
-<a href="docs/public/images/dark-routes-cards.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-routes-cards.png">
-  <img src="docs/public/images/light-routes-cards.png" alt="Routes – card view" />
-</picture></a>
-<br /><b>Card View</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-routes-list.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-routes-list.png">
-  <img src="docs/public/images/light-routes-list.png" alt="Routes – list view" />
-</picture></a>
-<br /><b>List View</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-routes-add-http.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-routes-add-http.png">
-  <img src="docs/public/images/light-routes-add-http.png" alt="Add HTTP route" />
-</picture></a>
-<br /><b>Add HTTP</b>
-</td>
-</tr>
-<tr>
-<td>
-<a href="docs/public/images/dark-routes-add-tcp.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-routes-add-tcp.png">
-  <img src="docs/public/images/light-routes-add-tcp.png" alt="Add TCP route" />
-</picture></a>
-<br /><b>Add TCP</b>
-</td>
-<td>
-<a href="docs/public/images/dark-routes-add-udp.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-routes-add-udp.png">
-  <img src="docs/public/images/light-routes-add-udp.png" alt="Add UDP route" />
-</picture></a>
-<br /><b>Add UDP</b>
-</td>
-<td></td>
-</tr>
-</table>
-</details>
-
-<details>
-<summary><b>Services</b></summary>
-<p align="center">
-<a href="docs/public/images/dark-services-cards.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-services-cards.png">
-  <img src="docs/public/images/light-services-cards.png" width="48%" alt="Services – card view" />
-</picture></a>
-<a href="docs/public/images/dark-services-list.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-services-list.png">
-  <img src="docs/public/images/light-services-list.png" width="48%" alt="Services – list view" />
-</picture></a>
-</p>
-</details>
-
-<details>
-<summary><b>Middlewares</b></summary>
-<table>
-<tr>
-<td width="33%">
-<a href="docs/public/images/dark-middlewares-cards.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-middlewares-cards.png">
-  <img src="docs/public/images/light-middlewares-cards.png" alt="Middlewares – card view" />
-</picture></a>
-<br /><b>Card View</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-middlewares-list.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-middlewares-list.png">
-  <img src="docs/public/images/light-middlewares-list.png" alt="Middlewares – list view" />
-</picture></a>
-<br /><b>List View</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-middlewares-add.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-middlewares-add.png">
-  <img src="docs/public/images/light-middlewares-add.png" alt="Add middleware" />
-</picture></a>
-<br /><b>Add</b>
-</td>
-</tr>
-</table>
-</details>
-
-<details>
-<summary><b>Plugins</b></summary>
-<p align="center">
-<a href="docs/public/images/dark-plugins.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-plugins.png">
-  <img src="docs/public/images/light-plugins.png" width="48%" alt="Plugins" />
-</picture></a>
-<a href="docs/public/images/dark-plugins-add.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-plugins-add.png">
-  <img src="docs/public/images/light-plugins-add.png" width="48%" alt="Plugins – add" />
-</picture></a>
-</p>
-</details>
-
-
-<details>
-<summary><b>Route Map</b></summary>
-<p align="center">
-<a href="docs/public/images/dark-route-map.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-route-map.png">
-  <img src="docs/public/images/light-route-map.png" width="80%" alt="Route Map" />
-</picture></a>
-</p>
-</details>
-
-<details>
-<summary><b>Settings</b></summary>
-<table>
-<tr>
-<td width="33%">
-<a href="docs/public/images/dark-settings-interface.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-settings-interface.png">
-  <img src="docs/public/images/light-settings-interface.png" alt="Settings – interface" />
-</picture></a>
-<br /><b>Interface</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-settings-auth-password.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-settings-auth-password.png">
-  <img src="docs/public/images/light-settings-auth-password.png" alt="Settings – auth" />
-</picture></a>
-<br /><b>Authentication</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-settings-auth-apikeys.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-settings-auth-apikeys.png">
-  <img src="docs/public/images/light-settings-auth-apikeys.png" alt="Settings – API keys" />
-</picture></a>
-<br /><b>API Keys</b>
-</td>
-</tr>
-<tr>
-<td>
-<a href="docs/public/images/dark-settings-static-config.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-settings-static-config.png">
-  <img src="docs/public/images/light-settings-static-config.png" alt="Settings – static config" />
-</picture></a>
-<br /><b>Static Config</b>
-</td>
-<td>
-<a href="docs/public/images/dark-settings-connection.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-settings-connection.png">
-  <img src="docs/public/images/light-settings-connection.png" alt="Settings – connection" />
-</picture></a>
-<br /><b>Connection</b>
-</td>
-<td>
-<a href="docs/public/images/dark-settings-backups.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-settings-backups.png">
-  <img src="docs/public/images/light-settings-backups.png" alt="Settings – backups" />
-</picture></a>
-<br /><b>Backups</b>
-</td>
-</tr>
-</table>
-</details>
 
 ---
 
@@ -323,17 +102,21 @@ Open **http://your-server:5000** - the setup wizard will guide you through the r
 - Real-time stats: router counts, service health, entrypoints, Traefik version
 - **Provider tabs**: Docker, Kubernetes, Swarm, Nomad, ECS, Consul Catalog, Redis, etcd, Consul KV, ZooKeeper, HTTP, File - all API-based, no extra mounts
 - **Traefik CVE advisory warnings** - flags known security advisories affecting your running Traefik version
-- Optional tabs (toggle in Settings):
-  - **Dashboard** - routes grouped by category with app icons from [selfh.st/icons](https://selfh.st/icons/), per-card name/icon/group overrides
+- Optional tabs (toggle in Settings) - API-based, no mounts:
+  - **Dashboard** - routes grouped by category with app icons from [selfh.st/icons](https://selfh.st/icons/) (cached locally), per-card name/icon/group overrides
   - **Route Map** - entry points, routes, middlewares, and services in a visual topology
-  - **Certs** - `acme.json` certificates with expiry tracking
-  - **Logs** - parsed access log cards with full-detail panel
+  - **TLS Options** - create and manage named `tls.options` profiles, assignable per route
   - **CrowdSec** - decisions and alerts from a LAPI; ban, captcha, bypass, or unban IPs with one click
+- Optional tabs that read a mounted file:
+  - **Certs** *(mount `acme.json`)* - TLS certificates with expiry tracking
+  - **Plugins** *(mount `traefik.yml`)* - view plugins declared in your static config, and **install new ones** by pasting the snippet from the plugin catalog - TM writes the static config, optionally creates the matching middleware, and prompts a restart
+  - **Logs** *(mount the Traefik access log)* - parsed access log cards with full-detail panel
+- **Configurable file paths** - set the `acme.json`, access log, and static config paths from **Settings → File Paths** without a container restart; UI settings override env vars
 - Card/list view toggle on Routes, Middlewares, and Services
 
 ### Static Config Editor *(optional - mount `traefik.yml` read-write)*
 
-- Edit **entrypoints, certificate resolvers, and plugins** from the UI; raw **Monaco** YAML editor for everything else
+- Edit every part of `traefik.yml` from the UI - **Entrypoints, Cert Resolvers, Plugins, API, Logging, and Providers** sections, plus a raw **Monaco** YAML editor for the full file
 - Changes are staged, backed up, and Traefik is **restarted automatically** - via socket proxy (recommended), poison pill (no socket needed), or direct socket
 - Full-screen reconnect overlay polls until Traefik is back up
 
@@ -435,16 +218,6 @@ Features: browse routes, middlewares, and services · enable/disable routes · a
 ## Contributing
 
 Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to report bugs, suggest features, and run the project locally.
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=chr0nzz%2Ftraefik-manager&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=chr0nzz/traefik-manager&type=date&theme=dark&legend=top-left&sealed_token=oQ__sQS09Vl71fXzxJNG40hpV_FisG6wxonR_P3lCUWpLBsdQ7L1nIcJSRlkgBebijfWkKO2X0NT-k4jPHXnLz3sthfOc9sxZbXVeRdse4MNHp7w8WkA1GcRgwl-6SHJDi8h3Amcc-ymm0GnUL4sJuqeL3uBlfPO_ib8UNdeoRsTFEAva86ntE_B-UV5" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=chr0nzz/traefik-manager&type=date&legend=top-left&sealed_token=oQ__sQS09Vl71fXzxJNG40hpV_FisG6wxonR_P3lCUWpLBsdQ7L1nIcJSRlkgBebijfWkKO2X0NT-k4jPHXnLz3sthfOc9sxZbXVeRdse4MNHp7w8WkA1GcRgwl-6SHJDi8h3Amcc-ymm0GnUL4sJuqeL3uBlfPO_ib8UNdeoRsTFEAva86ntE_B-UV5" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=chr0nzz/traefik-manager&type=date&legend=top-left&sealed_token=oQ__sQS09Vl71fXzxJNG40hpV_FisG6wxonR_P3lCUWpLBsdQ7L1nIcJSRlkgBebijfWkKO2X0NT-k4jPHXnLz3sthfOc9sxZbXVeRdse4MNHp7w8WkA1GcRgwl-6SHJDi8h3Amcc-ymm0GnUL4sJuqeL3uBlfPO_ib8UNdeoRsTFEAva86ntE_B-UV5" />
- </picture>
-</a>
 
 ## License
 
