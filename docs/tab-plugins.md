@@ -16,7 +16,7 @@ When the [Static Config tab](static.md) is enabled (i.e. `STATIC_CONFIG_PATH` is
 Click **Add Plugin** and paste the installation snippet from the [Traefik plugin catalog](https://plugins.traefik.io/):
 
 1. **Static config snippet** - the `experimental.plugins` block from the plugin's page. TM backs up `traefik.yml` and merges the plugin declaration into it.
-2. **Middleware snippet** *(optional)* - the plugin's example middleware. Replace any `{{ ... }}` placeholders with real values and TM saves it to your dynamic config, ready to attach to a route.
+2. **Middleware snippet** *(optional)* - the plugin's example middleware. Replace the double-curly-brace template placeholders with real values and TM saves it to your dynamic config, ready to attach to a route.
 
 After installing, a banner prompts you to restart Traefik so the plugin is downloaded and loaded.
 
