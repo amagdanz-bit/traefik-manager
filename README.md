@@ -23,7 +23,51 @@ Add routes, manage middlewares, monitor services, and view TLS certificates - al
 
 ---
 
-## Interface Gallery
+## Highlights
+
+- **Routes** - add, edit, clone, and enable/disable HTTP, TCP, and UDP routes from the browser
+- **Middlewares** - 24 guided wizards plus a raw YAML editor, for HTTP and TCP
+- **Multi-server** - manage unlimited remote Traefik instances through a lightweight Go agent
+- **Static config editor** - edit entrypoints, cert resolvers, and plugins; Traefik restarts automatically
+- **Backups** - timestamped local backups plus git push with history, diffs, and one-click restore
+- **Monitoring** - live services, certificates, access logs, CrowdSec, and CVE advisory warnings
+- **Mobile app** - Android companion app on Google Play
+
+## Quick Start
+
+**One-liner installer** - installs Traefik + Traefik Manager together, or Traefik Manager on its own via Docker or a native Linux service:
+
+```bash
+curl -fsSL https://get-traefik.xyzlab.dev | bash
+```
+
+**Manual Docker Compose:**
+
+```yaml
+services:
+  traefik-manager:
+    image: ghcr.io/chr0nzz/traefik-manager:latest
+    container_name: traefik-manager
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - COOKIE_SECURE=false
+    volumes:
+      - /path/to/traefik/dynamic.yml:/app/config/dynamic.yml
+      - /path/to/traefik-manager/config:/app/config
+      - /path/to/traefik-manager/backups:/app/backups
+```
+
+```bash
+docker compose up -d
+```
+
+Open **http://your-server:5000** - the setup wizard will guide you through the rest.
+
+---
+
+## Screenshots
 
 <details>
 <summary><b>Initial Setup Workflow</b></summary>
@@ -257,113 +301,66 @@ Add routes, manage middlewares, monitor services, and view TLS certificates - al
 
 ## Features
 
-**Routing & Middleware**
-- Add, edit, delete, and **enable/disable** HTTP, TCP, and UDP routes - no YAML editing required
-- **Advanced rule editor** - toggle between a domain chip builder and a free-text rule input for complex expressions (`PathPrefix`, `HostRegexp`, `&&` / `||` compounds, etc.)
-- **Multiple domains per route** - select any combination of your configured domains; generates multi-host Traefik rules (`Host(\`sub.d1\`) || Host(\`sub.d2\`)`)
-- **Per-service insecureSkipVerify** - checkbox adds a named `serversTransport` for backends with self-signed certs (Proxmox, Kasm, etc.); yellow TLS skip badge shown on route cards
-- **Wildcard certificate domains** - "Request wildcard certificate" checkbox auto-fills `tls.domains` from the selected domain; use with DNS challenge resolvers to request `*.domain.com` certs
-- **TLS Options tab** - create and manage named `tls.options` profiles (min/max version, cipher suites, curve preferences, SNI strict, ALPN, mTLS client auth); assign a profile to any route via the route form
-- **23 middleware wizard templates** with guided form fields (Basic Auth, Forward Auth, Rate Limit, IP Allowlist, Secure Headers, CORS, Redirect, Strip/Add Prefix, Retry, Circuit Breaker, Buffering, and more) - toggle to raw YAML for anything else
-- **Route clone** - duplicate a route into the add modal pre-filled with its service URL, middlewares, and entrypoints
-- **Multi-config file support** - mount several dynamic config files with `CONFIG_DIR` or `CONFIG_PATHS`; a dropdown selects which file each route or middleware is saved to; **create new files on the fly** when `CONFIG_DIR` is set
-- **Timestamped backups** before every change; one-click restore from Settings; `POST /api/backup/create` and `POST /api/backup/static/create` for automation
-- **Git Repository Backup** - push your Traefik configuration to a remote Git repository (GitHub, Gitea, Forgejo, GitLab, or any HTTPS host) after every change; browse the full commit history, view per-file side-by-side diffs, and restore any commit with one click; access token stored encrypted at rest; auto-push on every route, middleware, or static config save; manual push and Test Connection available in Settings → Backups → Git
-- **App icons on routes** *(optional, off by default)* - toggle in Settings → Interface → Routes to show an app icon next to each route name in grid and list view, reusing the Dashboard's selfh.st icons and per-route custom overrides; applies to the Host and remote agents
+### Routes
 
-**Live Dashboard**
+- Add, edit, clone, delete, and enable/disable **HTTP, TCP, and UDP** routes
+- **Multiple domains per route** with a chip builder, or switch to the **advanced rule editor** for complex expressions (`PathPrefix`, `HostRegexp`, `&&` / `||`)
+- **Per-route certificate resolver** - pick any configured resolver, request **wildcard certificates**, or disable TLS
+- **TLS options profiles** - create named `tls.options` (min/max version, ciphers, mTLS, SNI strict) and assign them per route
+- **insecureSkipVerify per service** for backends with self-signed certs (Proxmox, Kasm, etc.)
+- **Multi-config file support** - mount several dynamic files via `CONFIG_DIR` / `CONFIG_PATHS`, choose the target file per route, create new files from the UI
+- Optional **app icons** on route cards and lists, shared with the Dashboard tab
+
+### Middlewares
+
+- **24 guided wizards**: Basic/Digest Auth, Forward Auth (with Authentik, Authelia, and Gatekeeper presets), OIDC Auth, Rate Limit, In-Flight Requests, IP Allowlist, Secure Headers, CORS, Redirects, Strip/Add/Replace Prefix, Retry, Circuit Breaker, Buffering, Compress, Chain, Encoded Characters, and more
+- **Raw YAML editor** for anything the wizards don't cover
+- **TCP middlewares** alongside HTTP
+- **Provider middlewares** (Docker, Kubernetes, etc.) shown read-only in the provider tabs
+
+### Live Dashboard & Monitoring
+
 - Real-time stats: router counts, service health, entrypoints, Traefik version
-- Provider tabs: Docker, Kubernetes, Swarm, Nomad, ECS, Consul Catalog, Redis, etcd, Consul KV, ZooKeeper, HTTP Provider, File - all API-based, no extra mounts; **each tab shows provider middlewares** in a read-only section
-- **Filter live services** by protocol (HTTP/TCP/UDP) and provider (docker, file, kubernetes…)
-- **List view toggle** on Routes, Middlewares, and Services tabs - switch between card grid and compact table
+- **Provider tabs**: Docker, Kubernetes, Swarm, Nomad, ECS, Consul Catalog, Redis, etcd, Consul KV, ZooKeeper, HTTP, File - all API-based, no extra mounts
+- **Traefik CVE advisory warnings** - flags known security advisories affecting your running Traefik version
+- Optional tabs (toggle in Settings):
+  - **Dashboard** - routes grouped by category with app icons from [selfh.st/icons](https://selfh.st/icons/), per-card name/icon/group overrides
+  - **Route Map** - entry points, routes, middlewares, and services in a visual topology
+  - **Certs** - `acme.json` certificates with expiry tracking
+  - **Logs** - parsed access log cards with full-detail panel
+  - **CrowdSec** - decisions and alerts from a LAPI; ban, captcha, bypass, or unban IPs with one click
+- Card/list view toggle on Routes, Middlewares, and Services
 
-**Visualizations** *(optional, toggle in Settings)*
-- **Dashboard tab** - routes grouped by category (Media, Monitoring, Infrastructure, etc.) with app icons sourced from [selfh.st/icons](https://selfh.st/icons/), cached locally, and per-card editing (display name, icon override, group override)
-- **Route Map tab** - 4-column topology view (Entry Points - Routes - Middlewares - Services) with Bezier curve connections, hover-to-highlight, and route tooltips
+### Static Config Editor *(optional - mount `traefik.yml` read-write)*
 
-**Static Config Editor** *(optional - mount `traefik.yml` read-write)*
-- Edit Traefik's static configuration directly from the UI - entrypoints, certificate resolvers, plugins, and a raw YAML editor (Monaco/VS Code engine) for anything else
-- Changes are staged with a pending banner, backed up before saving, and Traefik is restarted automatically
-- Three restart methods: **socket proxy** (recommended - sidecar with minimal socket exposure), **poison pill** (no socket needed - shared signal file), **direct socket**
-- Full-screen reconnect overlay polls until Traefik is back up and dismisses automatically
+- Edit **entrypoints, certificate resolvers, and plugins** from the UI; raw **Monaco** YAML editor for everything else
+- Changes are staged, backed up, and Traefik is **restarted automatically** - via socket proxy (recommended), poison pill (no socket needed), or direct socket
+- Full-screen reconnect overlay polls until Traefik is back up
 
-**System Monitoring** *(optional)*
-- **Certs** - `acme.json` certificates with expiry tracking
-- **Plugins** - plugins from your static `traefik.yml`; add, edit, and remove plugins when static config editor is enabled
-- **Logs** - parsed access log cards showing method, status, path, IP, service, and duration; click any card for a full detail panel with all fields and the raw log line
-- **CrowdSec** - active decisions and recent alerts from a CrowdSec LAPI; add manual bans/captchas/bypasses or unban IPs with one click; stats cards show total alerts, active decisions, LAPI status, and type breakdown. Configure via `CROWDSEC_LAPI_URL` / `CROWDSEC_API_KEY` env vars or **Settings → System Monitoring → CrowdSec**
-- **Configurable file paths** - set `acme.json`, access log, and static config paths from **Settings → File Paths** without a container restart; UI setting takes priority over env vars
+### Backups
 
-**Multi-Server Management**
-- **Traefik Manager Agent (TMA)** - lightweight Go daemon that runs alongside Traefik on any remote server; install it in seconds with the one-liner installer
-- **Server switcher** in the nav bar - switch between local and remote agents; all data tabs show that server's routes, services, middlewares, backups, and logs
-- **Settings → Agents** multi-step wizard - generates a ready-to-paste Docker Compose or Docker Run command with all env vars pre-filled; API key shown once and stored encrypted
-- **Per-server git backup** - each agent handles its own autonomous git cycle via env vars; viewed from TM when that agent is active
-- Manage unlimited remote Traefik instances from a single TM - no VPN or SSH required
+- **Timestamped backups** before every change, one-click restore, **configurable retention**
+- **Git repository backup** - auto-push your config to GitHub, Gitea, Forgejo, GitLab, or any HTTPS remote; browse commit history, view side-by-side diffs, restore any commit, set custom commit messages
 
-**Security**
-- bcrypt passwords (cost 12), CSRF protection, session management with session fixation protection
-- Optional TOTP 2FA · 7-day remember me · configurable inactivity timeout
-- Auto-generated password on first start · CLI recovery with `flask reset-password`
-- **OIDC / SSO** - sign in with Keycloak, Google, Authentik, or any OIDC-compliant provider alongside password login; access restricted to specific emails or groups; client secret stored encrypted at rest
-- **Per-device API keys** - up to 10 named keys (e.g. "My Phone"), each independently revocable via `X-Api-Key` header
-- **Traefik API basic auth** - set `TRAEFIK_API_USER` / `TRAEFIK_API_PASSWORD` (or via Settings) for Traefik dashboards with `api.insecure: false`
-- **Rate limiting** on login and auth endpoints (Flask-Limiter)
-- **Atomic config writes** - crash-safe YAML saves via temp file + rename
-- **Encrypted OTP secret** - TOTP seed encrypted at rest with Fernet
+### Multi-Server (Agents)
 
+- **Traefik Manager Agent (TMA)** - a lightweight Go daemon that runs next to Traefik on any remote server
+- **Server switcher** in the nav bar - every tab (routes, services, middlewares, backups, logs) works against the active server
+- Setup wizard generates a ready-to-paste Docker Compose or Docker Run command; API key shown once and stored encrypted
+- Per-agent git backup; manage unlimited servers from one TM - no VPN or SSH required
 
----
+### Notifications
 
-## Mobile App
+- In-app notification center for logins, config saves, restarts, backups, and CrowdSec actions
+- **Webhook forwarding** to Discord or ntfy, with a test button in Settings
 
-**traefik-manager-mobile** is a React Native companion app for managing Traefik Manager from your phone. Requires **Traefik Manager v1.0.0 or higher**.
+### Security
 
-|          |                                                                                                |
-| ----------| ------------------------------------------------------------------------------------------------|
-| Repo     | [github.com/chr0nzz/traefik-manager-mobile](https://github.com/chr0nzz/traefik-manager-mobile) |
-| Download | [Latest release](https://github.com/chr0nzz/traefik-manager-mobile/releases/latest)            |
-| Auth     | Per-device API key - generate one in **Settings → Authentication → App / Mobile API Keys**     |
-
-<a href="https://play.google.com/store/apps/details?id=dev.chr0nzz.traefikmanager">
-  <img src="static/icons/GetItOnGooglePlay.svg" alt="Get it on Google Play" height="60" />
-</a>
-
-Features: browse routes, middlewares, and services · enable/disable routes · add and edit routes and middlewares (23 middleware templates with guided wizards) · multiple domains per route · per-service insecureSkipVerify · backend scheme + pass host header controls · multi-config file picker · edit mode for bulk actions · CrowdSec tab · system light/dark theme.
-
----
-
-## Quick Start
-
-**One-liner installer** - installs Traefik + Traefik Manager together, or Traefik Manager on its own via Docker or a native Linux service:
-
-```bash
-curl -fsSL https://get-traefik.xyzlab.dev | bash
-```
-
-**Manual Docker Compose:**
-
-```yaml
-services:
-  traefik-manager:
-    image: ghcr.io/chr0nzz/traefik-manager:latest
-    container_name: traefik-manager
-    restart: unless-stopped
-    ports:
-      - "5000:5000"
-    environment:
-      - COOKIE_SECURE=false
-    volumes:
-      - /path/to/traefik/dynamic.yml:/app/config/dynamic.yml
-      - /path/to/traefik-manager/config:/app/config
-      - /path/to/traefik-manager/backups:/app/backups
-```
-
-```bash
-docker compose up -d
-```
-
-Open **http://your-server:5000** - the setup wizard will guide you through the rest.
+- **bcrypt passwords** (cost 12), optional **TOTP 2FA**, session fixation protection, configurable inactivity timeout
+- **OIDC / SSO** - Keycloak, Google, Authentik, or any OIDC provider; restrict by email or group; can run as the **sole login method** with built-in auth disabled
+- **Per-device API keys** (up to 10, individually revocable) - the mobile app keeps working in every auth mode
+- CSRF protection, rate limiting, SSRF and git-transport hardening, secrets encrypted at rest (Fernet), atomic config writes
+- See the [security](https://traefik-manager.xyzlab.dev/security.html) and [Traefik hardening](https://traefik-manager.xyzlab.dev/hardening.html) docs
 
 ---
 
@@ -391,13 +388,32 @@ Full documentation at **[traefik-manager.xyzlab.dev](https://traefik-manager.xyz
 | [Configuration](https://traefik-manager.xyzlab.dev/manager-yml.html)      | `manager.yml` reference                               |
 | [Environment Variables](https://traefik-manager.xyzlab.dev/env-vars.html) | `CONFIG_DIR`, `CONFIG_PATHS`, auth, domains, and more |
 | [Security](https://traefik-manager.xyzlab.dev/security.html)              | API keys, sessions, CSRF, rate limits, and hardening  |
+| [Traefik Hardening](https://traefik-manager.xyzlab.dev/hardening.html)    | CVE advisories, header aliases, forwardAuth limits    |
 | [API Reference](https://traefik-manager.xyzlab.dev/api.html)              | REST API for integrations and the mobile app          |
 | [OIDC / SSO](https://traefik-manager.xyzlab.dev/oidc.html)                | OIDC setup, provider examples, and access control     |
 | [Git Repository Backup](https://traefik-manager.xyzlab.dev/git-backup.html) | Auto-push, commit history, diff viewer, and one-click restore |
 | [Mobile App](https://traefik-manager.xyzlab.dev/mobile.html)              | Android companion app setup and features              |
 | [Reset Password](https://traefik-manager.xyzlab.dev/reset-password.html)  | CLI reset, TOTP recovery, manual reset                |
 | [UI Examples](https://traefik-manager.xyzlab.dev/ui-examples.html)        | Screenshots and walkthroughs                          |
-| [Provider Tabs](https://traefik-manager.xyzlab.dev/tab-docker.html)                      | Docker, Kubernetes, Swarm, Nomad, ECS, and more       |
+| [Provider Tabs](https://traefik-manager.xyzlab.dev/tab-docker.html)       | Docker, Kubernetes, Swarm, Nomad, ECS, and more       |
+
+---
+
+## Mobile App
+
+**traefik-manager-mobile** is a React Native companion app for managing Traefik Manager from your phone. Requires **Traefik Manager v1.0.0 or higher**.
+
+|          |                                                                                                |
+| ----------| ------------------------------------------------------------------------------------------------|
+| Repo     | [github.com/chr0nzz/traefik-manager-mobile](https://github.com/chr0nzz/traefik-manager-mobile) |
+| Download | [Latest release](https://github.com/chr0nzz/traefik-manager-mobile/releases/latest)            |
+| Auth     | Per-device API key - generate one in **Settings → Authentication → App / Mobile API Keys**     |
+
+<a href="https://play.google.com/store/apps/details?id=dev.chr0nzz.traefikmanager">
+  <img src="static/icons/GetItOnGooglePlay.svg" alt="Get it on Google Play" height="60" />
+</a>
+
+Features: browse routes, middlewares, and services · enable/disable routes · add and edit routes and middlewares with guided wizards · multiple domains per route · per-service insecureSkipVerify · multi-config file picker · edit mode for bulk actions · CrowdSec tab · system light/dark theme.
 
 ---
 
