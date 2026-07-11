@@ -911,6 +911,12 @@ def _auth_enabled() -> bool:
         return True
     return load_settings().get('auth_enabled', True)
 
+def _oidc_active() -> bool:
+    return bool(load_settings().get('oidc_enabled'))
+
+def _auth_required() -> bool:
+    return _auth_enabled() or _oidc_active()
+
 
 def _hash_password(plaintext: str) -> str:
     import bcrypt
@@ -984,8 +990,10 @@ logger.info(f"Static Config:  {_static_path if _static_path else 'not configured
 logger.info(f"Domains:        {_s['domains']}")
 logger.info(f"Cert Resolver:  {_s['cert_resolver'] or 'not set'}")
 logger.info(f"Auth Enabled:   {_auth_enabled()}")
-if _oidc_on:
+if _s.get('oidc_enabled'):
     logger.info(f"OIDC:           enabled ({_s.get('oidc_issuer', '')})")
+if not _auth_enabled() and not _s.get('oidc_enabled'):
+    logger.warning("SECURITY: no authentication is active - the web UI is publicly accessible. Enable a password or OIDC.")
 logger.info("===========================================")
 
 _ensure_password()
@@ -1049,7 +1057,7 @@ def _verify_api_key(key: str, stored: str) -> bool:
 
 def _is_authenticated() -> bool:
 
-    if not _auth_enabled():
+    if not _auth_required():
         return True
     return session.get('authenticated') is True
 
@@ -1145,13 +1153,14 @@ def set_security_headers(response):
 @limiter.limit("5 per minute", methods=["POST"])
 def login():
 
-    if not _auth_enabled():
+    if not _auth_required():
         return redirect(url_for('index'))
 
     if session.get('authenticated'):
         return redirect(url_for('index'))
 
     settings = load_settings()
+    local_auth = _auth_enabled()
     temp_password_hint = (
         settings.get('must_change_password', False)
         and not os.environ.get('ADMIN_PASSWORD', '').strip()
@@ -1160,6 +1169,13 @@ def login():
     error = None
     if request.method == 'POST':
         _check_csrf()
+        if not local_auth:
+            error = 'Local password login is disabled. Sign in with your identity provider.'
+            return render_template('login.html', error=error, next=request.args.get('next', ''),
+                                   csrf_token=_get_csrf_token(), temp_password_hint=False,
+                                   local_auth_enabled=False,
+                                   oidc_enabled=settings.get('oidc_enabled', False),
+                                   oidc_display_name=settings.get('oidc_display_name', 'OIDC'))
         password = request.form.get('password', '')
         pw_hash  = settings.get('password_hash', '')
         admin_pw = os.environ.get('ADMIN_PASSWORD', '').strip()
@@ -1209,13 +1225,14 @@ def login():
     return render_template('login.html', error=error, next=next_url,
                            csrf_token=_get_csrf_token(),
                            temp_password_hint=temp_password_hint,
+                           local_auth_enabled=local_auth,
                            oidc_enabled=settings.get('oidc_enabled', False),
                            oidc_display_name=settings.get('oidc_display_name', 'OIDC'))
 
 
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
-    if not _auth_enabled():
+    if not _auth_required():
         return redirect(url_for('index'))
 
     current = load_settings()
@@ -1442,7 +1459,8 @@ def api_auth_toggle():
         visible_tabs=settings['visible_tabs'],
     )
     logger.info(f"auth_enabled set to {enabled} by {request.remote_addr}")
-    return jsonify({'success': True, 'auth_enabled': enabled})
+    reauth = _auth_required() and not session.get('authenticated')
+    return jsonify({'success': True, 'auth_enabled': enabled, 'reauth_required': reauth})
 
 
 @app.route('/login/otp', methods=['GET', 'POST'])
@@ -3232,6 +3250,8 @@ def api_get_settings():
     s.pop('traefik_api_password', None)
     s['traefik_api_password_set'] = bool(load_settings().get('traefik_api_password', ''))
     s['auth_enabled']             = _auth_enabled()
+    s['oidc_active']            = _oidc_active()
+    s['no_auth']                = not _auth_required()
     s['has_password']           = _has_password_set()
     s['auth_env_forced']        = os.environ.get('AUTH_ENABLED', '').strip().lower() in ('false', '0', 'no')
     s['oidc_client_secret_set'] = bool(load_settings().get('oidc_client_secret', ''))
@@ -4251,7 +4271,8 @@ def index():
     settings    = load_settings()
     apps, middlewares = _build_all_apps(include_external=False)
     apps = [a for a in apps if not (a.get('service_name') or '').endswith('@internal')]
-    auth_on    = _auth_enabled()
+    auth_on    = _auth_required()
+    no_auth    = not _auth_required()
     login_time = session.get('login_time', '')
     config_paths_list = [{'label': os.path.basename(p), 'path': p} for p in CONFIG_PATHS]
     cert_resolvers    = [r.strip() for r in settings['cert_resolver'].split(',') if r.strip()]
@@ -4261,7 +4282,7 @@ def index():
 
     return render_template('index.html', apps=apps, domains=settings['domains'],
                            middlewares=middlewares, settings=settings,
-                           auth_enabled=auth_on, login_time=login_time,
+                           auth_enabled=auth_on, no_auth=no_auth, login_time=login_time,
                            multi_config=MULTI_CONFIG,
                            config_paths_list=config_paths_list,
                            config_dir_set=bool(ACTIVE_CONFIG_DIR),
@@ -4891,7 +4912,8 @@ def api_save_oidc():
             oidc_allowed_groups=str(data.get('oidc_allowed_groups', '')).strip(),
             oidc_groups_claim=str(data.get('oidc_groups_claim', 'groups')).strip() or 'groups',
         )
-        return jsonify({'ok': True})
+        reauth = _auth_required() and not session.get('authenticated')
+        return jsonify({'ok': True, 'reauth_required': reauth})
     except Exception:
         logger.exception("OIDC save error")
         return jsonify({'ok': False, 'error': 'Save failed'}), 500

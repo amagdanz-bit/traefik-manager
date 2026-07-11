@@ -56,6 +56,12 @@
 </head>
 <body class="min-h-screen font-sans">
 
+{% if no_auth %}
+<div style="background:var(--red);color:#fff;text-align:center;padding:8px 16px;font-size:13px;font-weight:600;position:sticky;top:0;z-index:99997;">
+    <i class="ph-bold ph-warning" style="margin-right:6px"></i>
+    No authentication is active - this interface is publicly accessible. Enable a password or OIDC in Settings - Authentication.
+</div>
+{% endif %}
 
 <div id="customConfirmOverlay" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.5);backdrop-filter:blur(3px);align-items:center;justify-content:center;">
     <div style="max-width:380px;width:90%;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:24px;box-shadow:0 16px 48px rgba(0,0,0,0.4);">

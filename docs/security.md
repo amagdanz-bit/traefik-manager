@@ -29,11 +29,26 @@ Sessions are invalidated immediately on logout.
 
 ---
 
+## Authentication modes
+
+Traefik Manager has two independent web-UI auth mechanisms - **built-in password** and **OIDC / SSO** - plus **API keys** for programmatic access. Access to the UI is required whenever *either* password or OIDC is enabled:
+
+| Password | OIDC | Result |
+|---|---|---|
+| Enabled | Off | Password login (optionally with 2FA). |
+| Enabled | Enabled | Login page offers both. |
+| **Disabled** | **Enabled** | **OIDC is the sole login** - the password form is hidden and users are sent to your identity provider. |
+| Disabled | Off | **No authentication - the UI is publicly accessible.** A red warning is shown in the app and Settings, and logged at startup. Avoid this outside a fully trusted, isolated network. |
+
+Disabling built-in authentication only turns off the password form - it does **not** disable OIDC. **API keys keep working in every mode**, so the mobile app and automation are unaffected when OIDC is your only interactive login.
+
+> **Recovery / lockout safety:** disabling built-in authentication preserves your password hash in `manager.yml`. If your OIDC provider becomes unreachable and you are locked out, set `auth_enabled: true` in `manager.yml` and restart the container - the password form returns and you can log in with your existing password. You can also generate a fresh password with `flask reset-password` (see the [Reset Password](reset-password.md) guide).
+
 ## OIDC / SSO login
 
-TM supports OpenID Connect as an additional login method alongside the built-in password. When enabled, a "Sign in with [provider]" button appears on the login page. Password login continues to work alongside OIDC.
+TM supports OpenID Connect, either alongside the built-in password or as the **sole** login method (disable built-in authentication to make OIDC mandatory). When enabled, a "Sign in with [provider]" button appears on the login page.
 
-Supported providers include Google, Keycloak, Authentik, and any OIDC-compliant identity provider. Access can be restricted to specific email addresses or groups.
+Supported providers include Google, Keycloak, Authentik, Entra ID, Zitadel, and any OIDC-compliant identity provider. Access can be restricted to specific email addresses or groups.
 
 See the [OIDC setup guide](oidc.md) for full configuration details.
 

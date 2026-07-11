@@ -337,6 +337,11 @@
                             </button>
                         </div>
 
+                        <div id="noAuthWarning" style="display:none;margin:12px 16px 0;padding:10px 12px;border-radius:8px;background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.35);">
+                            <div class="text-xs font-medium" style="color:var(--red);display:flex;align-items:center;gap:6px;"><i class="ph-bold ph-warning"></i> No authentication is active</div>
+                            <div class="text-xs mt-1" style="color:var(--muted)">This interface is publicly accessible. Enable Built-in Authentication (below) or configure OIDC / SSO. API keys still work but do not protect the web UI.</div>
+                        </div>
+
                         <div id="auth-sub-password" class="auth-sub-panel" style="display:flex;">
                             <div id="authSection">
                                 <div class="flex items-center justify-between" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
@@ -1731,6 +1736,8 @@ async function openSettingsModal(panel) {
             }
             if (changePwForm) changePwForm.style.display = isOn ? '' : 'none';
         }
+        const noAuthWarn = document.getElementById('noAuthWarning');
+        if (noAuthWarn) noAuthWarn.style.display = data.no_auth ? '' : 'none';
     } catch(e) {
         console.error('Could not load settings', e);
     }
@@ -1797,10 +1804,12 @@ async function toggleAuth() {
         });
         const data = await res.json();
         if (data.success) {
+            if (data.reauth_required) return _redirectToLoginAfterAuthEnable('Authentication enabled');
             stateLabel.textContent = newState ? 'enabled' : 'disabled';
             stateLabel.style.color = newState ? 'var(--green)' : 'var(--muted)';
             toggleLabel.textContent = newState ? 'Disable' : 'Enable';
             if (changePwForm) changePwForm.style.display = newState ? '' : 'none';
+            const naw = document.getElementById('noAuthWarning'); if (naw) naw.style.display = 'none';
             showToast(`Authentication ${newState ? 'enabled' : 'disabled'}.`, 'success');
         } else {
             showToast(data.error || 'Failed to update auth.', 'error');
@@ -2424,8 +2433,19 @@ async function oidcToggleEnabled() {
             headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfHeaders()['X-CSRF-Token']},
             body: JSON.stringify({ oidc_enabled: !isOn, oidc_provider_url: url, oidc_client_id: id, oidc_client_secret: sec, oidc_display_name: disp, oidc_allowed_emails: ae, oidc_allowed_groups: ag, oidc_groups_claim: gc })
         });
-        if ((await res.json()).ok) loadOidcStatus();
-    } catch(e) {}
+        const data = await res.json();
+        if (data.ok) {
+            if (data.reauth_required) return _redirectToLoginAfterAuthEnable('OIDC enabled');
+            loadOidcStatus();
+        } else {
+            showToast(data.error || 'Failed to update OIDC', 'error');
+        }
+    } catch(e) { showToast('Failed to update OIDC', 'error'); }
+}
+
+function _redirectToLoginAfterAuthEnable(what) {
+    showToast(`${what} - authentication is now required, redirecting to sign in`, 'info');
+    setTimeout(() => { window.location.href = '/login'; }, 1200);
 }
 
 async function saveOidcConfig() {
@@ -2446,6 +2466,7 @@ async function saveOidcConfig() {
         });
         const data = await res.json();
         if (data.ok) {
+            if (data.reauth_required) return _redirectToLoginAfterAuthEnable('OIDC saved');
             const msg = document.getElementById('oidcSavedMsg');
             if (msg) { msg.classList.remove('hidden'); setTimeout(() => msg.classList.add('hidden'), 2500); }
             loadOidcStatus();
