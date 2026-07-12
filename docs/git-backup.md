@@ -6,6 +6,10 @@ Traefik Manager can automatically push your Traefik configuration to a Git repos
 When a remote agent is active in the [server switcher](agent.md), the Backups - Git tab shows **that agent's** git history. Each agent handles its own git backup cycle autonomously via its `GIT_BACKUP_*` environment variables - you configure this when adding the agent in Settings - Agents. The Host git backup and remote agent git backup are independent.
 :::
 
+::: warning One repository (or branch) per server
+Every server pushes its config to the same paths in the repository (`dynamic/`, `static/`). If the Host and an agent - or two agents - share the same repository **and** branch, they will overwrite each other's files on every push and their pushes will conflict. Give each server its own repository, or the same repository with a **different branch per server** (e.g. `host`, `agent-vps1`, `agent-vps2`).
+:::
+
 Supported platforms: GitHub, Gitea, Forgejo, GitLab, and any Git host accessible over HTTPS.
 
 ---

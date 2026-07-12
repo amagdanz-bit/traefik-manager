@@ -210,6 +210,10 @@ sudo ufw allow from <subnet> to any port <crowdsec-port> proto tcp
 | `GIT_BACKUP_COMMIT_MESSAGE` | `traefik-manager: {action} at {timestamp}` | Commit message template |
 | `GIT_BACKUP_AUTO_PUSH` | `true` | Push after every config write |
 
+::: warning
+Do not point multiple servers (Host or agents) at the same repository and branch - they push to the same file paths and will overwrite each other. Use a separate repository or a distinct `GIT_BACKUP_BRANCH` per server (e.g. `agent-vps1`). See [Git Repository Backup](git-backup.md).
+:::
+
 ### Agent server
 
 | Variable | Default | Description |

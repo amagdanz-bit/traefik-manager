@@ -183,10 +183,17 @@ def load_agents() -> list:
 
 def save_agents_file(agents: list):
     os.makedirs(os.path.dirname(AGENTS_PATH), exist_ok=True)
-    tmp = AGENTS_PATH + '.tmp'
-    with open(tmp, 'w') as f:
-        yaml.dump({'agents': _save_agents(agents)}, f)
-    os.replace(tmp, AGENTS_PATH)
+    tmp = f"{AGENTS_PATH}.tmp.{os.getpid()}.{threading.get_ident()}"
+    try:
+        with open(tmp, 'w') as f:
+            yaml.dump({'agents': _save_agents(agents)}, f)
+        os.replace(tmp, AGENTS_PATH)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 def load_templates() -> list:
@@ -208,11 +215,18 @@ def load_templates() -> list:
 def save_templates_file(templates: list):
     import json as _json
     os.makedirs(os.path.dirname(TEMPLATES_PATH), exist_ok=True)
-    tmp = TEMPLATES_PATH + '.tmp'
+    tmp = f"{TEMPLATES_PATH}.tmp.{os.getpid()}.{threading.get_ident()}"
     safe = [{'id': t['id'], 'name': t['name'], 'yaml': t['yaml']} for t in templates]
-    with open(tmp, 'w') as f:
-        yaml.dump({'templates': _json.loads(_json.dumps(safe))}, f)
-    os.replace(tmp, TEMPLATES_PATH)
+    try:
+        with open(tmp, 'w') as f:
+            yaml.dump({'templates': _json.loads(_json.dumps(safe))}, f)
+        os.replace(tmp, TEMPLATES_PATH)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
@@ -230,11 +244,32 @@ from flask_limiter.util import get_remote_address
 limiter = Limiter(get_remote_address, app=app, default_limits=[], storage_uri="memory://")
 
 
-yaml = YAML()
-yaml.preserve_quotes = True
-yaml.indent(mapping=2, sequence=4, offset=2)
-yaml.width = 4096
-_yaml_safe = YAML(typ='safe')
+class _ThreadLocalYAML:
+    def __init__(self, typ=None):
+        self._tl = threading.local()
+        self._typ = typ
+
+    def _y(self):
+        y = getattr(self._tl, 'y', None)
+        if y is None:
+            if self._typ:
+                y = YAML(typ=self._typ)
+            else:
+                y = YAML()
+                y.preserve_quotes = True
+                y.indent(mapping=2, sequence=4, offset=2)
+                y.width = 4096
+            self._tl.y = y
+        return y
+
+    def load(self, stream):
+        return self._y().load(stream)
+
+    def dump(self, data, stream):
+        return self._y().dump(data, stream)
+
+yaml = _ThreadLocalYAML()
+_yaml_safe = _ThreadLocalYAML(typ='safe')
 
 
 BACKUP_DIR    = os.environ.get('BACKUP_DIR',    '/app/backups')
@@ -770,7 +805,7 @@ def save_settings(domains, cert_resolver, traefik_api_url,
             return _json.loads(_json.dumps(v, default=str))
         except Exception:
             return v
-    tmp = SETTINGS_PATH + '.tmp'
+    tmp = f"{SETTINGS_PATH}.tmp.{os.getpid()}.{threading.get_ident()}"
     _doc = _plain({
         'domains':              domains,
         'cert_resolver':        cert_resolver,
@@ -818,9 +853,16 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         'agent_api_rate_limit':      agent_api_rate_limit,
         'backup_keep_count':         backup_keep_count,
     })
-    with open(tmp, 'w') as f:
-        yaml.dump(_doc, f)
-    os.replace(tmp, SETTINGS_PATH)
+    try:
+        with open(tmp, 'w') as f:
+            yaml.dump(_doc, f)
+        os.replace(tmp, SETTINGS_PATH)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
     logger.info("Manager settings saved")
 
 
@@ -862,10 +904,17 @@ def _write_self_route(domain: str, service_url: str, cert_resolver: str, router_
             }
         }
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        tmp = path + '.tmp'
-        with open(tmp, 'w') as f:
-            yaml.dump(content, f)
-        os.replace(tmp, path)
+        tmp = f"{path}.tmp.{os.getpid()}.{threading.get_ident()}"
+        try:
+            with open(tmp, 'w') as f:
+                yaml.dump(content, f)
+            os.replace(tmp, path)
+        finally:
+            if os.path.exists(tmp):
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
         logger.info(f"Self-route written to new file: {path}")
     else:
         cfg = load_config(CONFIG_PATH)
@@ -2895,38 +2944,38 @@ def _git_push_configs(action='backup', custom_message=None):
             repo_dir = _git_ensure_repo()
         except Exception as e:
             return False, f'Repo init failed: {_redact(str(e))}'
-        # Sync the local clone to the remote first so the push always fast-forwards.
-        # This self-heals a diverged clone that would otherwise reject every push.
-        _, _, frc = _git_run(['fetch', 'origin', branch], credentials=creds)
-        if frc == 0:
-            _git_run(['reset', '--hard', 'FETCH_HEAD'])
         dyn_dir    = os.path.join(repo_dir, 'dynamic')
         static_dir = os.path.join(repo_dir, 'static')
-        os.makedirs(dyn_dir,    exist_ok=True)
-        os.makedirs(static_dir, exist_ok=True)
-        for p in CONFIG_PATHS:
-            if os.path.exists(p):
-                shutil.copy2(p, os.path.join(dyn_dir, os.path.basename(p)))
-        sp = _get_static_config_path()
-        if sp and os.path.exists(sp):
-            shutil.copy2(sp, os.path.join(static_dir, os.path.basename(sp)))
         ts  = time.strftime('%Y-%m-%d %H:%M:%S')
         if custom_message and custom_message.strip():
             msg = custom_message.strip()
         else:
             msg = tmpl.replace('{action}', action).replace('{timestamp}', ts)
-        _git_run(['add', '-A'])
-        _, _, rc = _git_run(['diff', '--cached', '--quiet'])
-        if rc == 0:
-            return True, 'No changes'
-        _, err, rc = _git_run(['commit', '-m', msg])
-        if rc != 0:
-            return False, f'Commit failed: {_redact(err)}'
-        _, err, rc = _git_run(['push', 'origin', f'HEAD:{branch}'], credentials=creds)
-        if rc != 0:
-            return False, f'Push failed: {_redact(err)}'
-        logger.info(f"Git backup: {msg}")
-        return True, ''
+        err = ''
+        for attempt in (1, 2):
+            _, _, frc = _git_run(['fetch', 'origin', branch], credentials=creds)
+            if frc == 0:
+                _git_run(['reset', '--hard', 'FETCH_HEAD'])
+            os.makedirs(dyn_dir,    exist_ok=True)
+            os.makedirs(static_dir, exist_ok=True)
+            for p in CONFIG_PATHS:
+                if os.path.exists(p):
+                    shutil.copy2(p, os.path.join(dyn_dir, os.path.basename(p)))
+            sp = _get_static_config_path()
+            if sp and os.path.exists(sp):
+                shutil.copy2(sp, os.path.join(static_dir, os.path.basename(sp)))
+            _git_run(['add', '-A'])
+            _, _, rc = _git_run(['diff', '--cached', '--quiet'])
+            if rc == 0:
+                return True, 'No changes'
+            _, err, rc = _git_run(['commit', '-m', msg])
+            if rc != 0:
+                return False, f'Commit failed: {_redact(err)}'
+            _, err, rc = _git_run(['push', 'origin', f'HEAD:{branch}'], credentials=creds)
+            if rc == 0:
+                logger.info(f"Git backup: {msg}")
+                return True, ''
+        return False, f'Push failed: {_redact(err)}'
 
 def _git_push_if_enabled(action='backup'):
     try:
@@ -3701,7 +3750,7 @@ def save_config(data, path=None):
     content = stream.getvalue()
     for placeholder, original in template_map.items():
         content = content.replace(placeholder, original)
-    tmp = path + '.tmp'
+    tmp = f"{path}.tmp.{os.getpid()}.{threading.get_ident()}"
     try:
         with open(tmp, 'w') as f:
             f.write(content)
@@ -4320,7 +4369,7 @@ def api_route_raw_save(route_id):
         yaml_content = stream.getvalue()
         for placeholder, original in combined_map.items():
             yaml_content = yaml_content.replace(placeholder, original)
-        tmp = target_path + '.tmp'
+        tmp = f"{target_path}.tmp.{os.getpid()}.{threading.get_ident()}"
         try:
             with open(tmp, 'w') as f:
                 f.write(yaml_content)

@@ -852,8 +852,6 @@ func (a *App) gitPush(action string, customMsg string) error {
 	}
 	dynDir := filepath.Join(repoDir, "dynamic")
 	staticDir := filepath.Join(repoDir, "static")
-	os.MkdirAll(dynDir, 0o755)
-	os.MkdirAll(staticDir, 0o755)
 
 	copyToDir := func(src, destDir string) {
 		info, err := os.Stat(src)
@@ -878,37 +876,46 @@ func (a *App) gitPush(action string, customMsg string) error {
 		}
 	}
 
-	copyToDir(a.cfg.ConfigPath, dynDir)
-	if a.cfg.StaticConfigPath != "" {
-		copyToDir(a.cfg.StaticConfigPath, staticDir)
-	}
-
 	ts := time.Now().Format("2006-01-02 15:04:05")
 	msg := strings.NewReplacer("{action}", action, "{timestamp}", ts).Replace(a.cfg.GitBackupCommitMsg)
 	if strings.TrimSpace(customMsg) != "" {
 		msg = strings.TrimSpace(customMsg)
 	}
 
-	a.gitRun([]string{"add", "-A"}, repoDir)
-	_, _, rc := a.gitRun([]string{"diff", "--cached", "--quiet"}, repoDir)
-	if rc == 0 {
-		return nil
-	}
-	_, errOut, rc := a.gitRun([]string{"commit", "-m", msg}, repoDir)
-	if rc != 0 {
-		return fmt.Errorf("commit failed: %s", errOut)
-	}
 	creds := gitCreds{username: a.cfg.GitBackupUsername, token: a.cfg.GitBackupToken}
-	_, errOut, rc = a.gitRun([]string{"push", "-u", "origin", a.cfg.GitBackupBranch}, repoDir, creds)
-	if rc != 0 {
-		token := a.cfg.GitBackupToken
-		if token != "" {
-			errOut = strings.ReplaceAll(errOut, token, "***")
+	var errOut string
+	for attempt := 0; attempt < 2; attempt++ {
+		_, _, frc := a.gitRun([]string{"fetch", "origin", a.cfg.GitBackupBranch}, repoDir, creds)
+		if frc == 0 {
+			a.gitRun([]string{"reset", "--hard", "FETCH_HEAD"}, repoDir)
 		}
-		return fmt.Errorf("push failed: %s", errOut)
+		os.MkdirAll(dynDir, 0o755)
+		os.MkdirAll(staticDir, 0o755)
+		copyToDir(a.cfg.ConfigPath, dynDir)
+		if a.cfg.StaticConfigPath != "" {
+			copyToDir(a.cfg.StaticConfigPath, staticDir)
+		}
+		a.gitRun([]string{"add", "-A"}, repoDir)
+		_, _, rc := a.gitRun([]string{"diff", "--cached", "--quiet"}, repoDir)
+		if rc == 0 {
+			return nil
+		}
+		var commitErr string
+		_, commitErr, rc = a.gitRun([]string{"commit", "-m", msg}, repoDir)
+		if rc != 0 {
+			return fmt.Errorf("commit failed: %s", commitErr)
+		}
+		_, errOut, rc = a.gitRun([]string{"push", "-u", "origin", a.cfg.GitBackupBranch}, repoDir, creds)
+		if rc == 0 {
+			log.Printf("git backup pushed: %s", msg)
+			return nil
+		}
 	}
-	log.Printf("git backup pushed: %s", msg)
-	return nil
+	token := a.cfg.GitBackupToken
+	if token != "" {
+		errOut = strings.ReplaceAll(errOut, token, "***")
+	}
+	return fmt.Errorf("push failed: %s", errOut)
 }
 
 var shaRe = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
