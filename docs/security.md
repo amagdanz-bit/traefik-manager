@@ -170,7 +170,7 @@ Recommended configuration:
 
 ## Static config editor
 
-The Static Config tab lets you edit `traefik.yml` directly from the UI and restart Traefik automatically. This has security implications beyond the dynamic config:
+The Static Config tab lets you edit `traefik.yml` directly from the UI and restart Traefik with one click. This has security implications beyond the dynamic config:
 
 - **Read-write mount** - `traefik.yml` must be mounted without `:ro`, giving TM write access to Traefik's entire static configuration including entrypoints, providers, and TLS settings
 - **Restart access** - restarting Traefik requires one of three methods, each with different trust boundaries:

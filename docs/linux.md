@@ -170,7 +170,7 @@ usermod -aG adm traefik-manager
 
 ## Static config editor
 
-The Static Config tab lets you edit `traefik.yml` directly from the UI. After saving, Traefik Manager can restart Traefik automatically.
+The Static Config tab lets you edit `traefik.yml` directly from the UI. After saving, click **Restart Traefik** to apply the changes via your configured restart method.
 
 ### Requirements
 

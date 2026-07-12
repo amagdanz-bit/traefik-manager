@@ -35,7 +35,7 @@ Add routes, manage middlewares, monitor services, and view TLS certificates - al
 - **Routes** - add, edit, clone, and enable/disable HTTP, TCP, and UDP routes from the browser
 - **Middlewares** - 24 guided wizards plus a raw YAML editor, for HTTP and TCP
 - **Multi-server** - manage unlimited remote Traefik instances through a lightweight Go agent
-- **Static config editor** - edit the full `traefik.yml` from the UI; Traefik restarts automatically
+- **Static config editor** - edit the full `traefik.yml` from the UI and apply it with a one-click Traefik restart
 - **Backups** - timestamped local backups plus git push with history, diffs, and one-click restore
 - **Monitoring** - live services, certificates, access logs, CrowdSec, and CVE advisory warnings
 - **Mobile app** - Android companion app on Google Play
@@ -124,25 +124,27 @@ Open **http://your-server:5000** - the setup wizard will guide you through the r
 ### Static Config Editor *(optional - mount `traefik.yml` read-write)*
 
 - Edit every part of `traefik.yml` from the UI - **Entrypoints, Cert Resolvers, Plugins, API, Logging, and Providers** sections, plus a raw **Monaco** YAML editor for the full file
-- Changes are staged, backed up, and Traefik is **restarted automatically** - via socket proxy (recommended), poison pill (no socket needed), or direct socket
+- Changes are staged and backed up; apply them with a **one-click Traefik restart** - via socket proxy (recommended), poison pill (no socket needed), or direct socket
 - Full-screen reconnect overlay polls until Traefik is back up
 
 ### Backups
 
 - **Timestamped backups** before every change, one-click restore, **configurable retention**
 - **Git repository backup** - auto-push your config to GitHub, Gitea, Forgejo, GitLab, or any HTTPS remote; browse commit history, view side-by-side diffs, restore any commit, set custom commit messages
+- **One repository for all servers** - agents can push to the Host's repository on their own branch, one branch per server (enforced), with per-agent history, diffs, and restore
 
 ### Multi-Server (Agents)
 
 - **Traefik Manager Agent (TMA)** - a lightweight Go daemon that runs next to Traefik on any remote server
 - **Server switcher** in the nav bar - every tab (routes, services, middlewares, backups, logs) works against the active server
 - Setup wizard generates a ready-to-paste Docker Compose or Docker Run command; API key shown once and stored encrypted
-- Per-agent git backup; manage unlimited servers from one TM - no VPN or SSH required
+- **Git backup without agent-side setup** - enable *Use Host Repository* and the Host pushes that agent's config to its git repo on a dedicated branch; or run agents autonomously via `GIT_BACKUP_*` env vars
+- Manage unlimited servers from one TM - no VPN or SSH required
 
 ### Notifications
 
 - In-app notification center for logins, config saves, restarts, backups, and CrowdSec actions
-- **Webhook forwarding** to Discord or ntfy, with a test button in Settings
+- **Webhook forwarding** to Discord, Slack, ntfy, or any generic JSON endpoint, with a test button in Settings
 
 ### Security
 

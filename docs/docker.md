@@ -112,7 +112,7 @@ services:
 
 ## Static config editor
 
-The Static Config tab lets you edit `traefik.yml` directly from the UI - entrypoints, certificate resolvers, plugins, providers, API settings, and log level. After saving, Traefik Manager can restart Traefik automatically.
+The Static Config tab lets you edit `traefik.yml` directly from the UI - entrypoints, certificate resolvers, plugins, providers, API settings, and log level. After saving, click **Restart Traefik** to apply the changes via your configured restart method.
 
 ### Requirements
 
