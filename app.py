@@ -25,7 +25,7 @@ from io import StringIO
 from cryptography.fernet import Fernet, InvalidToken
 
 GITHUB_REPO  = "chr0nzz/traefik-manager"
-APP_VERSION  = "1.6.1"
+APP_VERSION  = "1.7.0"
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -45,6 +45,8 @@ _SECRET_KEY_PATH = os.path.join(_CONFIG_DIR, '.secret_key')
 def _load_or_create_secret_key() -> bytes:
     env_key = os.environ.get('SECRET_KEY', '').strip()
     if env_key:
+        if len(env_key) < 32:
+            raise SystemExit("SECRET_KEY must be at least 32 characters. Generate one with: python3 -c \"import secrets; print(secrets.token_hex(32))\"")
         return env_key.encode()
     if os.path.exists(_SECRET_KEY_PATH):
         key = open(_SECRET_KEY_PATH, 'rb').read().strip()
@@ -54,6 +56,10 @@ def _load_or_create_secret_key() -> bytes:
     os.makedirs(os.path.dirname(_SECRET_KEY_PATH), exist_ok=True)
     with open(_SECRET_KEY_PATH, 'wb') as f:
         f.write(key)
+    try:
+        os.chmod(_SECRET_KEY_PATH, 0o600)
+    except OSError:
+        pass
     return key
 
 app.secret_key = _load_or_create_secret_key()
@@ -134,6 +140,8 @@ def _parse_agent_dict(a: dict) -> dict:
         'git_backup_token':             _decrypt_otp_secret(str(a.get('git_backup_token', ''))),
         'git_backup_auto_push':         bool(a.get('git_backup_auto_push', True)),
         'git_backup_commit_message':    str(a.get('git_backup_commit_message', 'traefik-manager: {action} at {timestamp}')).strip() or 'traefik-manager: {action} at {timestamp}',
+        'git_host_backup':              bool(a.get('git_host_backup', False)),
+        'git_host_branch':              str(a.get('git_host_branch', '')).strip(),
         'tma_port':                     str(a.get('tma_port', '')).strip(),
         'tma_rate_limit':               str(a.get('tma_rate_limit', '')).strip(),
         'domains':                      [str(d).strip() for d in (a.get('domains') or []) if str(d).strip()],
@@ -177,10 +185,17 @@ def load_agents() -> list:
 
 def save_agents_file(agents: list):
     os.makedirs(os.path.dirname(AGENTS_PATH), exist_ok=True)
-    tmp = AGENTS_PATH + '.tmp'
-    with open(tmp, 'w') as f:
-        yaml.dump({'agents': _save_agents(agents)}, f)
-    os.replace(tmp, AGENTS_PATH)
+    tmp = f"{AGENTS_PATH}.tmp.{os.getpid()}.{threading.get_ident()}"
+    try:
+        with open(tmp, 'w') as f:
+            yaml.dump({'agents': _save_agents(agents)}, f)
+        os.replace(tmp, AGENTS_PATH)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 def load_templates() -> list:
@@ -202,11 +217,18 @@ def load_templates() -> list:
 def save_templates_file(templates: list):
     import json as _json
     os.makedirs(os.path.dirname(TEMPLATES_PATH), exist_ok=True)
-    tmp = TEMPLATES_PATH + '.tmp'
+    tmp = f"{TEMPLATES_PATH}.tmp.{os.getpid()}.{threading.get_ident()}"
     safe = [{'id': t['id'], 'name': t['name'], 'yaml': t['yaml']} for t in templates]
-    with open(tmp, 'w') as f:
-        yaml.dump({'templates': _json.loads(_json.dumps(safe))}, f)
-    os.replace(tmp, TEMPLATES_PATH)
+    try:
+        with open(tmp, 'w') as f:
+            yaml.dump({'templates': _json.loads(_json.dumps(safe))}, f)
+        os.replace(tmp, TEMPLATES_PATH)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
@@ -224,11 +246,32 @@ from flask_limiter.util import get_remote_address
 limiter = Limiter(get_remote_address, app=app, default_limits=[], storage_uri="memory://")
 
 
-yaml = YAML()
-yaml.preserve_quotes = True
-yaml.indent(mapping=2, sequence=4, offset=2)
-yaml.width = 4096
-_yaml_safe = YAML(typ='safe')
+class _ThreadLocalYAML:
+    def __init__(self, typ=None):
+        self._tl = threading.local()
+        self._typ = typ
+
+    def _y(self):
+        y = getattr(self._tl, 'y', None)
+        if y is None:
+            if self._typ:
+                y = YAML(typ=self._typ)
+            else:
+                y = YAML()
+                y.preserve_quotes = True
+                y.indent(mapping=2, sequence=4, offset=2)
+                y.width = 4096
+            self._tl.y = y
+        return y
+
+    def load(self, stream):
+        return self._y().load(stream)
+
+    def dump(self, data, stream):
+        return self._y().dump(data, stream)
+
+yaml = _ThreadLocalYAML()
+_yaml_safe = _ThreadLocalYAML(typ='safe')
 
 
 BACKUP_DIR    = os.environ.get('BACKUP_DIR',    '/app/backups')
@@ -348,6 +391,40 @@ def _safe_file_path(path: str) -> str:
     logger.warning(f"Blocked unsafe file path: {path!r}")
     return ''
 
+def _readable_config_path(path: str) -> str:
+    """Realpath if within the allowed prefixes or a directory of an env-configured
+    Traefik file. Blocks reading arbitrary files via web-set path settings."""
+    if not path:
+        return ''
+    resolved = os.path.realpath(path)
+    allowed  = list(_ALLOWED_FILE_PREFIXES)
+    for _ev in ('STATIC_CONFIG_PATH', 'ACCESS_LOG_PATH', 'ACME_JSON_PATH', 'PLUGINS_DIR'):
+        _v = os.environ.get(_ev, '').strip()
+        if _v:
+            allowed.append(os.path.dirname(os.path.realpath(_v)) + os.sep)
+    if any(resolved.startswith(p) for p in allowed):
+        return resolved
+    logger.warning(f"Blocked read of unsafe path: {path!r}")
+    return ''
+
+def _ssrf_ok(url: str) -> bool:
+    """False if the URL host resolves to a link-local (cloud metadata 169.254.x),
+    multicast, reserved, or unspecified address. Private and loopback are allowed -
+    a self-hosted tool legitimately reaches internal services (Traefik, ntfy, OIDC)."""
+    try:
+        from urllib.parse import urlparse
+        import socket, ipaddress
+        host = urlparse(url).hostname
+        if not host:
+            return False
+        for res in socket.getaddrinfo(host, None):
+            ip = ipaddress.ip_address(res[4][0])
+            if ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+                return False
+        return True
+    except Exception:
+        return False
+
 def _is_safe_path(path: str) -> bool:
     """Return True if path is inside ACTIVE_CONFIG_DIR (prevents path traversal)."""
     if not ACTIVE_CONFIG_DIR:
@@ -443,6 +520,7 @@ def load_settings() -> dict:
         'oidc_allowed_emails':  '',
         'oidc_allowed_groups':  '',
         'oidc_groups_claim':    'groups',
+        'oidc_allow_any_authenticated': False,
         'webhook_url':          '',
         'webhook_type':         'discord',
         'webhook_username':     '',
@@ -562,6 +640,8 @@ def load_settings() -> dict:
             merged['oidc_allowed_emails'] = str(data['oidc_allowed_emails']).strip()
         if 'oidc_allowed_groups' in data:
             merged['oidc_allowed_groups'] = str(data['oidc_allowed_groups']).strip()
+        if 'oidc_allow_any_authenticated' in data:
+            merged['oidc_allow_any_authenticated'] = bool(data['oidc_allow_any_authenticated'])
         if 'oidc_groups_claim' in data:
             merged['oidc_groups_claim'] = str(data['oidc_groups_claim']).strip()
         if 'webhook_url' in data:
@@ -628,6 +708,7 @@ def save_settings(domains, cert_resolver, traefik_api_url,
                   oidc_enabled=None, oidc_provider_url=None, oidc_client_id=None,
                   oidc_client_secret=None, oidc_display_name=None,
                   oidc_allowed_emails=None, oidc_allowed_groups=None,
+                  oidc_allow_any_authenticated=None,
                   oidc_groups_claim=None, webhook_url=None, webhook_type=None,
                   webhook_username=None, webhook_password=None,
                   crowdsec_lapi_url=None, crowdsec_api_key=None,
@@ -675,6 +756,8 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         oidc_allowed_emails = _cur.get('oidc_allowed_emails', '')
     if oidc_allowed_groups is None:
         oidc_allowed_groups = _cur.get('oidc_allowed_groups', '')
+    if oidc_allow_any_authenticated is None:
+        oidc_allow_any_authenticated = _cur.get('oidc_allow_any_authenticated', False)
     if oidc_groups_claim is None:
         oidc_groups_claim = _cur.get('oidc_groups_claim', 'groups')
     if webhook_url is None:
@@ -724,7 +807,7 @@ def save_settings(domains, cert_resolver, traefik_api_url,
             return _json.loads(_json.dumps(v, default=str))
         except Exception:
             return v
-    tmp = SETTINGS_PATH + '.tmp'
+    tmp = f"{SETTINGS_PATH}.tmp.{os.getpid()}.{threading.get_ident()}"
     _doc = _plain({
         'domains':              domains,
         'cert_resolver':        cert_resolver,
@@ -750,6 +833,7 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         'oidc_display_name':    oidc_display_name,
         'oidc_allowed_emails':  oidc_allowed_emails,
         'oidc_allowed_groups':  oidc_allowed_groups,
+        'oidc_allow_any_authenticated': bool(oidc_allow_any_authenticated),
         'oidc_groups_claim':    oidc_groups_claim,
         'webhook_url':          webhook_url,
         'webhook_type':         webhook_type,
@@ -771,9 +855,16 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         'agent_api_rate_limit':      agent_api_rate_limit,
         'backup_keep_count':         backup_keep_count,
     })
-    with open(tmp, 'w') as f:
-        yaml.dump(_doc, f)
-    os.replace(tmp, SETTINGS_PATH)
+    try:
+        with open(tmp, 'w') as f:
+            yaml.dump(_doc, f)
+        os.replace(tmp, SETTINGS_PATH)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
     logger.info("Manager settings saved")
 
 
@@ -815,10 +906,17 @@ def _write_self_route(domain: str, service_url: str, cert_resolver: str, router_
             }
         }
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        tmp = path + '.tmp'
-        with open(tmp, 'w') as f:
-            yaml.dump(content, f)
-        os.replace(tmp, path)
+        tmp = f"{path}.tmp.{os.getpid()}.{threading.get_ident()}"
+        try:
+            with open(tmp, 'w') as f:
+                yaml.dump(content, f)
+            os.replace(tmp, path)
+        finally:
+            if os.path.exists(tmp):
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
         logger.info(f"Self-route written to new file: {path}")
     else:
         cfg = load_config(CONFIG_PATH)
@@ -911,6 +1009,12 @@ def _auth_enabled() -> bool:
         return True
     return load_settings().get('auth_enabled', True)
 
+def _oidc_active() -> bool:
+    return bool(load_settings().get('oidc_enabled'))
+
+def _auth_required() -> bool:
+    return _auth_enabled() or _oidc_active()
+
 
 def _hash_password(plaintext: str) -> str:
     import bcrypt
@@ -984,8 +1088,12 @@ logger.info(f"Static Config:  {_static_path if _static_path else 'not configured
 logger.info(f"Domains:        {_s['domains']}")
 logger.info(f"Cert Resolver:  {_s['cert_resolver'] or 'not set'}")
 logger.info(f"Auth Enabled:   {_auth_enabled()}")
-if _oidc_on:
+if _s.get('oidc_enabled'):
     logger.info(f"OIDC:           enabled ({_s.get('oidc_issuer', '')})")
+if not _auth_enabled() and not _s.get('oidc_enabled'):
+    logger.warning("SECURITY: no authentication is active - the web UI is publicly accessible. Enable a password or OIDC.")
+if _s.get('oidc_enabled') and not _s.get('oidc_allowed_emails', '').strip() and not _s.get('oidc_allowed_groups', '').strip() and not _s.get('oidc_allow_any_authenticated'):
+    logger.warning("SECURITY: OIDC is enabled with no allowed emails/groups - logins are denied until you set an allowlist or enable 'Allow any authenticated account'.")
 logger.info("===========================================")
 
 _ensure_password()
@@ -1039,6 +1147,12 @@ def _hash_api_key(key: str) -> str:
     import hashlib
     return 'sha256:' + hashlib.sha256(key.encode()).hexdigest()
 
+def _safe_next(next_url: str) -> str:
+    nu = (next_url or '').strip()
+    if nu.startswith('/') and not nu.startswith('//') and not nu.startswith('/\\'):
+        return nu
+    return url_for('index')
+
 def _verify_api_key(key: str, stored: str) -> bool:
     import hashlib
     if stored.startswith('sha256:'):
@@ -1049,7 +1163,7 @@ def _verify_api_key(key: str, stored: str) -> bool:
 
 def _is_authenticated() -> bool:
 
-    if not _auth_enabled():
+    if not _auth_required():
         return True
     return session.get('authenticated') is True
 
@@ -1145,13 +1259,14 @@ def set_security_headers(response):
 @limiter.limit("5 per minute", methods=["POST"])
 def login():
 
-    if not _auth_enabled():
+    if not _auth_required():
         return redirect(url_for('index'))
 
     if session.get('authenticated'):
         return redirect(url_for('index'))
 
     settings = load_settings()
+    local_auth = _auth_enabled()
     temp_password_hint = (
         settings.get('must_change_password', False)
         and not os.environ.get('ADMIN_PASSWORD', '').strip()
@@ -1160,6 +1275,13 @@ def login():
     error = None
     if request.method == 'POST':
         _check_csrf()
+        if not local_auth:
+            error = 'Local password login is disabled. Sign in with your identity provider.'
+            return render_template('login.html', error=error, next=request.args.get('next', ''),
+                                   csrf_token=_get_csrf_token(), temp_password_hint=False,
+                                   local_auth_enabled=False,
+                                   oidc_enabled=settings.get('oidc_enabled', False),
+                                   oidc_display_name=settings.get('oidc_display_name', 'OIDC'))
         password = request.form.get('password', '')
         pw_hash  = settings.get('password_hash', '')
         admin_pw = os.environ.get('ADMIN_PASSWORD', '').strip()
@@ -1197,10 +1319,7 @@ def login():
                 else:
                     return redirect(url_for('force_change_password'))
 
-            next_url = request.form.get('next') or url_for('index')
-            if not next_url.startswith('/'):
-                next_url = url_for('index')
-            return redirect(next_url)
+            return redirect(_safe_next(request.form.get('next')))
         else:
             error = 'Incorrect password.'
             logger.warning(f"Failed login attempt from {request.remote_addr}")
@@ -1209,13 +1328,14 @@ def login():
     return render_template('login.html', error=error, next=next_url,
                            csrf_token=_get_csrf_token(),
                            temp_password_hint=temp_password_hint,
+                           local_auth_enabled=local_auth,
                            oidc_enabled=settings.get('oidc_enabled', False),
                            oidc_display_name=settings.get('oidc_display_name', 'OIDC'))
 
 
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
-    if not _auth_enabled():
+    if not _auth_required():
         return redirect(url_for('index'))
 
     current = load_settings()
@@ -1442,7 +1562,8 @@ def api_auth_toggle():
         visible_tabs=settings['visible_tabs'],
     )
     logger.info(f"auth_enabled set to {enabled} by {request.remote_addr}")
-    return jsonify({'success': True, 'auth_enabled': enabled})
+    reauth = _auth_required() and not session.get('authenticated')
+    return jsonify({'success': True, 'auth_enabled': enabled, 'reauth_required': reauth})
 
 
 @app.route('/login/otp', methods=['GET', 'POST'])
@@ -1480,9 +1601,7 @@ def login_otp():
                 if not setup_complete:
                     return redirect(url_for('setup'))
                 return redirect(url_for('force_change_password'))
-            if not next_url.startswith('/'):
-                next_url = url_for('index')
-            return redirect(next_url)
+            return redirect(_safe_next(next_url))
         else:
             error = 'Invalid code. Please try again.'
             logger.warning(f"Failed OTP attempt from {request.remote_addr}")
@@ -1936,6 +2055,8 @@ def api_route_ping():
     fallback = request.args.get('fallback', '').strip()
     if not url or not url.startswith(('http://', 'https://')):
         return jsonify({'ok': False, 'error': 'Invalid URL'}), 400
+    if not _ssrf_ok(url):
+        return jsonify({'ok': False, 'error': 'Target address not allowed'}), 400
     host = urlparse(url).hostname or ''
     tm_host = request.host.split(':')[0].lower()
     if host.lower() == tm_host:
@@ -1946,7 +2067,7 @@ def api_route_ping():
         return jsonify({'ok': True, 'latency_ms': 0, 'status_code': 200, 'self': True})
     def _ping(target):
         t0   = _t.monotonic()
-        resp = requests.head(target, timeout=5, allow_redirects=True, verify=False)
+        resp = requests.head(target, timeout=5, allow_redirects=False, verify=False)
         ms   = round((_t.monotonic() - t0) * 1000)
         return ms, resp.status_code
     try:
@@ -2065,8 +2186,15 @@ def api_docs():
 
 @app.route('/openapi.yaml')
 def openapi_yaml():
-    from flask import send_from_directory
-    return send_from_directory('static', 'openapi.yaml')
+    import re as _re
+    try:
+        with open(os.path.join(app.static_folder, 'openapi.yaml'), 'r') as f:
+            spec = f.read()
+        spec = _re.sub(r'(?m)^(\s*version:\s*).*$', rf'\g<1>{APP_VERSION}', spec, count=1)
+        return spec, 200, {'Content-Type': 'application/yaml'}
+    except Exception:
+        from flask import send_from_directory
+        return send_from_directory('static', 'openapi.yaml')
 
 
 def _restart_via_docker() -> bool:
@@ -2113,7 +2241,7 @@ def api_static_available():
 @app.route('/api/static/config')
 @login_required
 def api_static_config_get():
-    path = _get_static_config_path()
+    path = _readable_config_path(_get_static_config_path())
     if not path or not os.path.exists(path):
         return jsonify({'error': 'Static config not found or STATIC_CONFIG_PATH not set'}), 404
     try:
@@ -2222,14 +2350,34 @@ def api_static_section_update():
                 eps.pop(name, None)
             else:
                 if action == 'edit' and old_name != name:
-                    eps.pop(old_name, None)
+                    eps[name] = eps.pop(old_name, None)
+                ep = eps.get(name)
+                if not isinstance(ep, dict):
+                    ep = {}
                 addr = str(payload.get('address', '')).strip()
-                ep = {'address': DoubleQuotedScalarString(addr) if addr else ''}
+                if addr:
+                    ep['address'] = DoubleQuotedScalarString(addr)
+                elif 'address' not in ep:
+                    ep['address'] = ''
+                http_blk = ep.get('http') if isinstance(ep.get('http'), dict) else {}
                 redirect_to = str(payload.get('redirect_to', '')).strip()
                 if redirect_to:
-                    ep['http'] = {'redirections': {'entryPoint': {'to': redirect_to, 'scheme': 'https', 'permanent': True}}}
+                    http_blk['redirections'] = {'entryPoint': {'to': redirect_to, 'scheme': 'https', 'permanent': True}}
+                else:
+                    http_blk.pop('redirections', None)
+                uhs = str(payload.get('underscore_headers', '')).strip().lower()
+                if uhs in ('delete', 'reject'):
+                    http_blk['underscoreHeadersStrategy'] = uhs
+                else:
+                    http_blk.pop('underscoreHeadersStrategy', None)
+                if http_blk:
+                    ep['http'] = http_blk
+                else:
+                    ep.pop('http', None)
                 if payload.get('http3'):
                     ep['http3'] = {}
+                else:
+                    ep.pop('http3', None)
                 eps[name] = ep
         elif section == 'resolvers':
             resolvers = config.setdefault('certificatesResolvers', {})
@@ -2356,6 +2504,8 @@ def api_setup_test_connection():
     url     = _safe_api_url(raw_url)
     if not url:
         return jsonify({'ok': False, 'error': 'Invalid URL'}), 400
+    if not _ssrf_ok(url):
+        return jsonify({'ok': False, 'error': 'Target address not allowed'}), 400
     u = str(data.get('user', '')).strip()
     p = str(data.get('password', '')).strip()
     auth = (u, p) if u and p else None
@@ -2533,8 +2683,8 @@ def api_certs():
     certs = []
     errors = []
 
-    acme_path = _get_acme_json_path()
-    if os.path.exists(acme_path):
+    acme_path = _readable_config_path(_get_acme_json_path())
+    if acme_path and os.path.exists(acme_path):
         try:
             with open(acme_path, 'r') as f:
                 raw = f.read().strip()
@@ -2564,9 +2714,9 @@ def api_certs():
 @login_required
 def api_logs():
     lines_req = min(int(request.args.get('lines', 100)), 1000)
-    log_path = _get_access_log_path()
-    if not os.path.exists(log_path):
-        return jsonify({'error': f'Access log not found at {log_path}. Set ACCESS_LOG_PATH env var or configure the path in Settings.', 'lines': []})
+    log_path = _readable_config_path(_get_access_log_path())
+    if not log_path or not os.path.exists(log_path):
+        return jsonify({'error': 'Access log not found. Set ACCESS_LOG_PATH env var or configure the path in Settings.', 'lines': []})
     try:
         lines = []
         buf_size = 8192
@@ -2675,16 +2825,44 @@ def _validated_backup_path(filename: str) -> str:
 def _git_repo_dir():
     return os.path.join(BACKUP_DIR, 'git-repo')
 
-def _git_run(args, cwd=None):
+_GIT_ALLOWED_SCHEMES = ('https://', 'http://', 'ssh://', 'git://')
+_GIT_PROTO_HARDENING = ['-c', 'protocol.ext.allow=never',
+                        '-c', 'protocol.file.allow=user',
+                        '-c', 'protocol.fd.allow=user']
+
+def _valid_git_url(url: str) -> bool:
+    return any((url or '').strip().lower().startswith(s) for s in _GIT_ALLOWED_SCHEMES)
+
+def _safe_git_branch(branch: str) -> str:
+    branch = re.sub(r'[^\w./-]', '', (branch or '').strip())
+    if not branch or branch.startswith('-'):
+        return 'main'
+    return branch
+
+def _git_askpass_path() -> str:
+    p = os.path.join(BACKUP_DIR, '.git-askpass.sh')
+    if not os.path.exists(p):
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        with open(p, 'w') as f:
+            f.write('#!/bin/sh\ncase "$1" in\n  Username*) printf "%s" "$GIT_ASKPASS_USER" ;;\n  *) printf "%s" "$GIT_ASKPASS_PASS" ;;\nesac\n')
+        os.chmod(p, 0o700)
+    return p
+
+def _git_run(args, cwd=None, credentials=None):
     env = os.environ.copy()
     env['GIT_TERMINAL_PROMPT'] = '0'
-    env['GIT_ASKPASS'] = ''
     env['GIT_AUTHOR_NAME'] = 'Traefik Manager'
     env['GIT_AUTHOR_EMAIL'] = 'traefik-manager@localhost'
     env['GIT_COMMITTER_NAME'] = 'Traefik Manager'
     env['GIT_COMMITTER_EMAIL'] = 'traefik-manager@localhost'
+    if credentials and credentials.get('token'):
+        env['GIT_ASKPASS'] = _git_askpass_path()
+        env['GIT_ASKPASS_USER'] = credentials.get('username') or 'git'
+        env['GIT_ASKPASS_PASS'] = credentials.get('token')
+    else:
+        env['GIT_ASKPASS'] = ''
     result = subprocess.run(
-        ['git'] + args,
+        ['git'] + _GIT_PROTO_HARDENING + args,
         cwd=cwd or _git_repo_dir(),
         capture_output=True,
         text=True,
@@ -2695,57 +2873,47 @@ def _git_run(args, cwd=None):
     )
     return result.stdout.strip(), result.stderr.strip(), result.returncode
 
-def _git_auth_url(repo_url, username, token):
-    if not token:
-        return repo_url
-    from urllib.parse import urlparse, urlunparse
-    p = urlparse(repo_url)
-    netloc = f"{username}:{token}@{p.hostname}" if username else f"{token}@{p.hostname}"
-    if p.port:
-        netloc += f":{p.port}"
-    return urlunparse(p._replace(netloc=netloc))
-
-def _git_ensure_repo():
-    s        = load_settings()
-    repo_url = s.get('git_backup_repo', '').strip()
-    branch   = s.get('git_backup_branch', 'main').strip() or 'main'
-    username = s.get('git_backup_username', '').strip()
-    token    = s.get('git_backup_token', '').strip()
-    auth_url = _git_auth_url(repo_url, username, token)
-    repo_dir = _git_repo_dir()
-
+def _git_ensure_repo_at(repo_dir, repo_url, branch, creds):
     def _fresh_clone():
         if os.path.exists(repo_dir):
             shutil.rmtree(repo_dir, ignore_errors=True)
         os.makedirs(repo_dir, exist_ok=True)
-        _, _, rc = _git_run(['clone', '--branch', branch, auth_url, '.'], cwd=repo_dir)
+        _, _, rc = _git_run(['clone', '--branch', branch, '--', repo_url, '.'], cwd=repo_dir, credentials=creds)
         if rc != 0:
             _git_run(['init'], cwd=repo_dir)
-            _git_run(['remote', 'add', 'origin', auth_url], cwd=repo_dir)
-            _git_run(['pull', 'origin', branch], cwd=repo_dir)
+            _git_run(['remote', 'add', 'origin', repo_url], cwd=repo_dir)
+            _git_run(['pull', 'origin', branch], cwd=repo_dir, credentials=creds)
         _git_run(['config', 'user.email', 'traefik-manager@localhost'], cwd=repo_dir)
         _git_run(['config', 'user.name', 'Traefik Manager'], cwd=repo_dir)
 
-    # A valid clone has a working .git and a usable origin remote. If either is
-    # missing (corrupt clone, interrupted write, missing remote) re-clone fresh
-    # so the push can never fail with "'origin' does not appear to be a git repository".
     valid = False
     if os.path.exists(os.path.join(repo_dir, '.git')):
-        _, _, rc = _git_run(['rev-parse', '--git-dir'])
+        _, _, rc = _git_run(['rev-parse', '--git-dir'], cwd=repo_dir)
         valid = (rc == 0)
     if not valid:
         _fresh_clone()
     else:
-        _, _, rc = _git_run(['remote', 'get-url', 'origin'])
+        _, _, rc = _git_run(['remote', 'get-url', 'origin'], cwd=repo_dir)
         if rc != 0:
-            _, _, arc = _git_run(['remote', 'add', 'origin', auth_url])
+            _, _, arc = _git_run(['remote', 'add', 'origin', repo_url], cwd=repo_dir)
             if arc != 0:
                 _fresh_clone()
         else:
-            _git_run(['remote', 'set-url', 'origin', auth_url])
-        _git_run(['config', 'user.email', 'traefik-manager@localhost'])
-        _git_run(['config', 'user.name', 'Traefik Manager'])
+            _git_run(['remote', 'set-url', 'origin', repo_url], cwd=repo_dir)
+        _git_run(['config', 'user.email', 'traefik-manager@localhost'], cwd=repo_dir)
+        _git_run(['config', 'user.name', 'Traefik Manager'], cwd=repo_dir)
     return repo_dir
+
+def _git_ensure_repo():
+    s        = load_settings()
+    repo_url = s.get('git_backup_repo', '').strip()
+    branch   = _safe_git_branch(s.get('git_backup_branch', 'main'))
+    username = s.get('git_backup_username', '').strip()
+    token    = s.get('git_backup_token', '').strip()
+    if not _valid_git_url(repo_url):
+        raise ValueError('Unsupported git repository URL scheme')
+    creds    = {'username': username, 'token': token} if token else None
+    return _git_ensure_repo_at(_git_repo_dir(), repo_url, branch, creds)
 
 @contextlib.contextmanager
 def _git_lock():
@@ -2766,45 +2934,51 @@ def _git_push_configs(action='backup', custom_message=None):
     s = load_settings()
     if not s.get('git_backup_repo', '').strip():
         return False, 'No repository configured'
-    branch = s.get('git_backup_branch', 'main').strip() or 'main'
+    branch = _safe_git_branch(s.get('git_backup_branch', 'main'))
+    token  = s.get('git_backup_token', '').strip()
+    creds  = {'username': s.get('git_backup_username', '').strip(), 'token': token} if token else None
     tmpl   = s.get('git_backup_commit_message', 'traefik-manager: {action} at {timestamp}')
+
+    def _redact(text):
+        return text.replace(token, '***') if token and text else text
+
     with _git_lock():
         try:
             repo_dir = _git_ensure_repo()
         except Exception as e:
-            return False, f'Repo init failed: {e}'
-        # Sync the local clone to the remote first so the push always fast-forwards.
-        # This self-heals a diverged clone that would otherwise reject every push.
-        _, _, frc = _git_run(['fetch', 'origin', branch])
-        if frc == 0:
-            _git_run(['reset', '--hard', 'FETCH_HEAD'])
+            return False, f'Repo init failed: {_redact(str(e))}'
         dyn_dir    = os.path.join(repo_dir, 'dynamic')
         static_dir = os.path.join(repo_dir, 'static')
-        os.makedirs(dyn_dir,    exist_ok=True)
-        os.makedirs(static_dir, exist_ok=True)
-        for p in CONFIG_PATHS:
-            if os.path.exists(p):
-                shutil.copy2(p, os.path.join(dyn_dir, os.path.basename(p)))
-        sp = _get_static_config_path()
-        if sp and os.path.exists(sp):
-            shutil.copy2(sp, os.path.join(static_dir, os.path.basename(sp)))
         ts  = time.strftime('%Y-%m-%d %H:%M:%S')
         if custom_message and custom_message.strip():
             msg = custom_message.strip()
         else:
             msg = tmpl.replace('{action}', action).replace('{timestamp}', ts)
-        _git_run(['add', '-A'])
-        _, _, rc = _git_run(['diff', '--cached', '--quiet'])
-        if rc == 0:
-            return True, 'No changes'
-        _, err, rc = _git_run(['commit', '-m', msg])
-        if rc != 0:
-            return False, f'Commit failed: {err}'
-        _, err, rc = _git_run(['push', 'origin', f'HEAD:{branch}'])
-        if rc != 0:
-            return False, f'Push failed: {err}'
-        logger.info(f"Git backup: {msg}")
-        return True, ''
+        err = ''
+        for attempt in (1, 2):
+            _, _, frc = _git_run(['fetch', 'origin', branch], credentials=creds)
+            if frc == 0:
+                _git_run(['reset', '--hard', 'FETCH_HEAD'])
+            os.makedirs(dyn_dir,    exist_ok=True)
+            os.makedirs(static_dir, exist_ok=True)
+            for p in CONFIG_PATHS:
+                if os.path.exists(p):
+                    shutil.copy2(p, os.path.join(dyn_dir, os.path.basename(p)))
+            sp = _get_static_config_path()
+            if sp and os.path.exists(sp):
+                shutil.copy2(sp, os.path.join(static_dir, os.path.basename(sp)))
+            _git_run(['add', '-A'])
+            _, _, rc = _git_run(['diff', '--cached', '--quiet'])
+            if rc == 0:
+                return True, 'No changes'
+            _, err, rc = _git_run(['commit', '-m', msg])
+            if rc != 0:
+                return False, f'Commit failed: {_redact(err)}'
+            _, err, rc = _git_run(['push', 'origin', f'HEAD:{branch}'], credentials=creds)
+            if rc == 0:
+                logger.info(f"Git backup: {msg}")
+                return True, ''
+        return False, f'Push failed: {_redact(err)}'
 
 def _git_push_if_enabled(action='backup'):
     try:
@@ -2814,25 +2988,140 @@ def _git_push_if_enabled(action='backup'):
         repo      = s.get('git_backup_repo', '').strip()
         if enabled and auto_push and repo:
             ok, err = _git_push_configs(action)
-            if ok:
+            if ok and err != 'No changes':
                 add_notification('success', f'Git backup pushed ({action})')
-            elif err == 'No changes':
-                pass
-            else:
+            elif not ok:
                 logger.warning(f"Git backup failed: {err}")
                 add_notification('error', f'Git backup failed ({action}): {err}')
     except Exception:
         logger.exception("Git push error")
 
 
+def _git_agent_repo_dir(agent_id: str) -> str:
+    safe = re.sub(r'[^\w-]', '', str(agent_id))
+    return os.path.join(BACKUP_DIR, f'git-agent-{safe}')
+
+def _agent_git_branch(agent: dict) -> str:
+    branch = (agent.get('git_host_branch') or '').strip()
+    if not branch:
+        branch = re.sub(r'[^\w.-]+', '-', (agent.get('name') or '').strip().lower()).strip('-')
+    if not branch:
+        branch = f"agent-{str(agent.get('id', ''))[:8]}"
+    return _safe_git_branch(branch)
+
+def _git_push_agent_configs(agent, action='backup', custom_message=None):
+    s        = load_settings()
+    repo_url = s.get('git_backup_repo', '').strip()
+    if not repo_url:
+        return False, 'No repository configured on the Host'
+    if not _valid_git_url(repo_url):
+        return False, 'Unsupported git repository URL scheme'
+    branch      = _agent_git_branch(agent)
+    host_branch = _safe_git_branch(s.get('git_backup_branch', 'main'))
+    if branch == host_branch:
+        return False, f'Agent branch "{branch}" must differ from the Host branch'
+    token = s.get('git_backup_token', '').strip()
+    creds = {'username': s.get('git_backup_username', '').strip(), 'token': token} if token else None
+    tmpl  = s.get('git_backup_commit_message', 'traefik-manager: {action} at {timestamp}')
+
+    def _redact(text):
+        return text.replace(token, '***') if token and text else text
+
+    try:
+        resp = _agent_request(agent, 'GET', '/api/configs')
+        resp.raise_for_status()
+        files = (resp.json() or {}).get('files') or []
+    except Exception as e:
+        return False, f'Could not read agent configs: {e}'
+    static_content = ''
+    static_name    = ''
+    try:
+        sresp = _agent_request(agent, 'GET', '/api/static')
+        if sresp.status_code == 200:
+            static_content = (sresp.json() or {}).get('content', '') or ''
+            static_name    = os.path.basename((agent.get('static_config_path') or '').strip()) or 'traefik.yml'
+    except Exception:
+        pass
+
+    repo_dir = _git_agent_repo_dir(agent['id'])
+    ts = time.strftime('%Y-%m-%d %H:%M:%S')
+    if custom_message and custom_message.strip():
+        msg = custom_message.strip()
+    else:
+        msg = tmpl.replace('{action}', action).replace('{timestamp}', ts)
+    with _git_lock():
+        try:
+            _git_ensure_repo_at(repo_dir, repo_url, branch, creds)
+        except Exception as e:
+            return False, f'Repo init failed: {_redact(str(e))}'
+        dyn_dir    = os.path.join(repo_dir, 'dynamic')
+        static_dir = os.path.join(repo_dir, 'static')
+        err = ''
+        for attempt in (1, 2):
+            _, _, frc = _git_run(['fetch', 'origin', branch], cwd=repo_dir, credentials=creds)
+            if frc == 0:
+                _git_run(['reset', '--hard', 'FETCH_HEAD'], cwd=repo_dir)
+            os.makedirs(dyn_dir,    exist_ok=True)
+            os.makedirs(static_dir, exist_ok=True)
+            for f in files:
+                name = os.path.basename(str(f.get('name') or '').strip())
+                if not name:
+                    continue
+                with open(os.path.join(dyn_dir, name), 'w') as fh:
+                    fh.write(str(f.get('content') or ''))
+            if static_content and static_name:
+                with open(os.path.join(static_dir, static_name), 'w') as fh:
+                    fh.write(static_content)
+            _git_run(['add', '-A'], cwd=repo_dir)
+            _, _, rc = _git_run(['diff', '--cached', '--quiet'], cwd=repo_dir)
+            if rc == 0:
+                return True, 'No changes'
+            _, err, rc = _git_run(['commit', '-m', msg], cwd=repo_dir)
+            if rc != 0:
+                return False, f'Commit failed: {_redact(err)}'
+            _, err, rc = _git_run(['push', 'origin', f'HEAD:{branch}'], cwd=repo_dir, credentials=creds)
+            if rc == 0:
+                logger.info(f"Git backup ({agent.get('name')}): {msg}")
+                return True, ''
+        return False, f'Push failed: {_redact(err)}'
+
+def _git_push_agent_if_enabled(agent, action='backup'):
+    try:
+        if not agent or not agent.get('git_host_backup'):
+            return
+        s = load_settings()
+        if not (s.get('git_backup_enabled') and s.get('git_backup_auto_push') and s.get('git_backup_repo', '').strip()):
+            return
+        ok, err = _git_push_agent_configs(agent, action)
+        if ok and err != 'No changes':
+            add_notification('success', f"Git backup pushed ({agent.get('name')}: {action})")
+        elif not ok:
+            logger.warning(f"Agent git backup failed: {err}")
+            add_notification('error', f"Git backup failed ({agent.get('name')}): {err}")
+    except Exception:
+        logger.exception("Agent git push error")
+
+
+def _git_req_agent():
+    agent_id = (request.args.get('agent_id') or '').strip()
+    if not agent_id:
+        return None, False
+    return _agent_by_id(agent_id), True
+
 @app.route('/api/backup/git/status')
 @login_required
 def api_git_backup_status():
+    agent, wanted = _git_req_agent()
+    if wanted and not agent:
+        return jsonify({'error': 'Agent not found'}), 404
     s          = load_settings()
     configured = bool(s.get('git_backup_repo', '').strip())
+    repo_dir   = _git_agent_repo_dir(agent['id']) if agent else _git_repo_dir()
     result     = {'enabled': bool(s.get('git_backup_enabled')), 'configured': configured, 'last_sha': None, 'last_push': None}
-    if configured and os.path.exists(os.path.join(_git_repo_dir(), '.git')):
-        out, _, rc = _git_run(['log', '-1', '--format=%H|%ci|%s'])
+    if agent:
+        result['branch'] = _agent_git_branch(agent)
+    if configured and os.path.exists(os.path.join(repo_dir, '.git')):
+        out, _, rc = _git_run(['log', '-1', '--format=%H|%ci|%s'], cwd=repo_dir)
         if rc == 0 and '|' in out:
             parts = out.split('|', 2)
             result['last_sha']  = parts[0][:8]
@@ -2843,11 +3132,17 @@ def api_git_backup_status():
 @csrf_protect
 @login_required
 def api_git_backup_push():
+    agent, wanted = _git_req_agent()
+    if wanted and not agent:
+        return jsonify({'error': 'Agent not found'}), 404
     data    = request.get_json(silent=True) or {}
     message = str(data.get('message', '')).strip()
-    ok, err = _git_push_configs('manual', custom_message=message or None)
+    if agent:
+        ok, err = _git_push_agent_configs(agent, 'manual', custom_message=message or None)
+    else:
+        ok, err = _git_push_configs('manual', custom_message=message or None)
     if ok:
-        add_notification('success', 'Git backup pushed')
+        add_notification('success', f"Git backup pushed ({agent['name']})" if agent else 'Git backup pushed')
         return jsonify({'ok': True})
     add_notification('error', f'Git push failed: {err}')
     return jsonify({'ok': False, 'error': err}), 400
@@ -2863,10 +3158,12 @@ def api_git_backup_test():
     token    = (body.get('token') or s.get('git_backup_token', '')).strip()
     if not repo_url:
         return jsonify({'ok': False, 'error': 'No repository URL configured'}), 400
-    auth_url = _git_auth_url(repo_url, username, token)
+    if not _valid_git_url(repo_url):
+        return jsonify({'ok': False, 'error': 'Unsupported URL - use https://, http://, ssh:// or git://'}), 400
+    creds = {'username': username, 'token': token} if token else None
     import tempfile
     with tempfile.TemporaryDirectory() as tmpdir:
-        _, err, rc = _git_run(['ls-remote', '--quiet', auth_url], cwd=tmpdir)
+        _, err, rc = _git_run(['ls-remote', '--quiet', '--', repo_url], cwd=tmpdir, credentials=creds)
     if rc == 0:
         return jsonify({'ok': True})
     safe_err = err.replace(token, '***') if token else err
@@ -2875,9 +3172,13 @@ def api_git_backup_test():
 @app.route('/api/backup/git/commits')
 @login_required
 def api_git_backup_commits():
-    if not os.path.exists(os.path.join(_git_repo_dir(), '.git')):
+    agent, wanted = _git_req_agent()
+    if wanted and not agent:
         return jsonify([])
-    out, _, rc = _git_run(['log', '--format=%H|%ci|%s', '-50'])
+    repo_dir = _git_agent_repo_dir(agent['id']) if agent else _git_repo_dir()
+    if not os.path.exists(os.path.join(repo_dir, '.git')):
+        return jsonify([])
+    out, _, rc = _git_run(['log', '--format=%H|%ci|%s', '-50'], cwd=repo_dir)
     if rc != 0:
         return jsonify([])
     commits = []
@@ -2892,11 +3193,15 @@ def api_git_backup_commits():
 def api_git_backup_diff(sha):
     if not re.match(r'^[0-9a-f]{7,40}$', sha):
         abort(400)
-    if not os.path.exists(os.path.join(_git_repo_dir(), '.git')):
+    agent, wanted = _git_req_agent()
+    if wanted and not agent:
+        return jsonify({'stat': '', 'files': []})
+    repo_dir = _git_agent_repo_dir(agent['id']) if agent else _git_repo_dir()
+    if not os.path.exists(os.path.join(repo_dir, '.git')):
         return jsonify({'stat': '', 'files': []})
     try:
-        stat, _, _ = _git_run(['show', '--stat', '--format=', sha])
-        changed, _, rc = _git_run(['diff-tree', '--no-commit-id', '-r', '--name-status', sha])
+        stat, _, _ = _git_run(['show', '--stat', '--format=', sha], cwd=repo_dir)
+        changed, _, rc = _git_run(['diff-tree', '--no-commit-id', '-r', '--name-status', sha], cwd=repo_dir)
         files = []
         for line in changed.splitlines():
             line = line.strip()
@@ -2906,8 +3211,8 @@ def api_git_backup_diff(sha):
             if len(parts) != 2:
                 continue
             status, filename = parts[0].strip(), parts[1].strip()
-            new_content, _, new_rc = _git_run(['show', f'{sha}:{filename}'])
-            old_content, _, old_rc = _git_run(['show', f'{sha}^:{filename}'])
+            new_content, _, new_rc = _git_run(['show', f'{sha}:{filename}'], cwd=repo_dir)
+            old_content, _, old_rc = _git_run(['show', f'{sha}^:{filename}'], cwd=repo_dir)
             files.append({
                 'filename': filename,
                 'status':   status,
@@ -2919,28 +3224,57 @@ def api_git_backup_diff(sha):
         logger.exception("Git diff error")
         return jsonify({'error': str(e)}), 500
 
+def _git_show_first(repo_dir, sha, candidates):
+    for c in candidates:
+        content, _, rc = _git_run(['show', f'{sha}:{c}'], cwd=repo_dir)
+        if rc == 0 and content:
+            return content
+    return None
+
 @app.route('/api/backup/git/restore/<sha>', methods=['POST'])
 @csrf_protect
 @login_required
 def api_git_backup_restore(sha):
     if not re.match(r'^[0-9a-f]{7,40}$', sha):
         abort(400)
-    if not os.path.exists(os.path.join(_git_repo_dir(), '.git')):
+    agent, wanted = _git_req_agent()
+    if wanted and not agent:
+        return jsonify({'error': 'Agent not found'}), 404
+    repo_dir = _git_agent_repo_dir(agent['id']) if agent else _git_repo_dir()
+    if not os.path.exists(os.path.join(repo_dir, '.git')):
         return jsonify({'error': 'Git repo not initialized'}), 400
     try:
+        if agent:
+            out, _, rc = _git_run(['ls-tree', '-r', '--name-only', sha, 'dynamic/'], cwd=repo_dir)
+            if rc != 0:
+                return jsonify({'error': 'Commit not found'}), 404
+            restored = 0
+            for fpath in out.splitlines():
+                fpath = fpath.strip()
+                if not fpath:
+                    continue
+                content, _, src = _git_run(['show', f'{sha}:{fpath}'], cwd=repo_dir)
+                if src == 0:
+                    resp = _agent_request(agent, 'POST', '/api/configs', json={'name': os.path.basename(fpath), 'content': content})
+                    resp.raise_for_status()
+                    restored += 1
+            add_notification('warning', f"Restored {agent['name']} from git commit {sha[:8]} ({restored} files)")
+            return jsonify({'ok': True})
         for p in CONFIG_PATHS:
             create_backup(p)
         sp = _get_static_config_path()
         if sp:
             create_backup(sp)
         for p in CONFIG_PATHS:
-            content, _, rc = _git_run(['show', f'{sha}:{os.path.basename(p)}'])
-            if rc == 0 and content:
+            base    = os.path.basename(p)
+            content = _git_show_first(repo_dir, sha, [f'dynamic/{base}', base])
+            if content:
                 with open(p, 'w') as f:
                     f.write(content)
         if sp:
-            content, _, rc = _git_run(['show', f'{sha}:{os.path.basename(sp)}'])
-            if rc == 0 and content:
+            base    = os.path.basename(sp)
+            content = _git_show_first(repo_dir, sha, [f'static/{base}', base])
+            if content:
                 with open(sp, 'w') as f:
                     f.write(content)
         add_notification('warning', f'Restored from git commit {sha[:8]}')
@@ -2955,7 +3289,10 @@ def api_git_backup_restore(sha):
 @csrf_protect
 @login_required
 def api_git_backup_reset():
-    repo_dir = _git_repo_dir()
+    agent, wanted = _git_req_agent()
+    if wanted and not agent:
+        return jsonify({'error': 'Agent not found'}), 404
+    repo_dir = _git_agent_repo_dir(agent['id']) if agent else _git_repo_dir()
     try:
         if os.path.exists(repo_dir):
             shutil.rmtree(repo_dir)
@@ -3011,6 +3348,7 @@ def api_notifications_add():
     return jsonify({'ok': True})
 
 @app.route('/api/notifications/update', methods=['POST'])
+@csrf_protect
 @login_required
 def api_notifications_update():
     version = (request.get_json(silent=True) or {}).get('version', '')
@@ -3048,6 +3386,7 @@ def api_tls_options_list():
 
 
 @app.route('/api/tls-options', methods=['POST'])
+@csrf_protect
 @login_required
 def api_tls_options_save():
     data = request.get_json(silent=True) or {}
@@ -3088,6 +3427,7 @@ def api_tls_options_save():
 
 
 @app.route('/api/tls-options/<name>', methods=['DELETE'])
+@csrf_protect
 @login_required
 def api_tls_options_delete(name):
     config_file = request.args.get('configFile', '').strip()
@@ -3203,8 +3543,12 @@ def api_get_settings():
     s.pop('crowdsec_api_key', None)
     s.pop('crowdsec_machine_password', None)
     s.pop('traefik_api_password', None)
+    s.pop('otp_secret', None)
+    s.pop('agents', None)
     s['traefik_api_password_set'] = bool(load_settings().get('traefik_api_password', ''))
     s['auth_enabled']             = _auth_enabled()
+    s['oidc_active']            = _oidc_active()
+    s['no_auth']                = not _auth_required()
     s['has_password']           = _has_password_set()
     s['auth_env_forced']        = os.environ.get('AUTH_ENABLED', '').strip().lower() in ('false', '0', 'no')
     s['oidc_client_secret_set'] = bool(load_settings().get('oidc_client_secret', ''))
@@ -3244,6 +3588,8 @@ def api_save_settings():
         traefik_api_password      = str(data.get('traefik_api_password', ''))
         git_backup_enabled        = bool(data['git_backup_enabled'])        if 'git_backup_enabled'        in data else None
         git_backup_repo           = str(data['git_backup_repo']).strip()   if 'git_backup_repo'           in data else None
+        if git_backup_repo and not _valid_git_url(git_backup_repo):
+            return jsonify({'error': 'Invalid git repository URL - must start with https://, http://, ssh:// or git://'}), 400
         git_backup_branch         = (str(data['git_backup_branch']).strip() or 'main') if 'git_backup_branch' in data else None
         git_backup_username       = str(data['git_backup_username']).strip() if 'git_backup_username'      in data else None
         git_backup_token          = str(data.get('git_backup_token', ''))
@@ -3287,12 +3633,10 @@ def api_save_settings():
                       git_backup_auto_push=git_backup_auto_push,
                       backup_keep_count=backup_keep_count)
         result = load_settings()
-        result.pop('password_hash', None)
-        result.pop('oidc_client_secret', None)
-        result.pop('crowdsec_api_key', None)
-        result.pop('crowdsec_machine_password', None)
-        result.pop('traefik_api_password', None)
-        result.pop('git_backup_token', None)
+        for _k in ('password_hash', 'oidc_client_secret', 'crowdsec_api_key',
+                   'crowdsec_machine_password', 'traefik_api_password', 'git_backup_token',
+                   'webhook_password', 'otp_secret', 'agents'):
+            result.pop(_k, None)
         return jsonify({'success': True, 'settings': result})
     except Exception as e:
         logger.exception("Settings save error")
@@ -3310,6 +3654,8 @@ def api_webhook_test():
     password = str(data.get('password', ''))
     if not url or not url.startswith(('http://', 'https://')):
         return jsonify({'ok': False, 'error': 'Invalid URL'}), 400
+    if not _ssrf_ok(url):
+        return jsonify({'ok': False, 'error': 'Target address not allowed'}), 400
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     try:
         _send_webhook(url, wtype, 'info', 'Traefik Manager webhook test', ts, username, password)
@@ -3326,6 +3672,8 @@ def api_settings_test_connection():
     url     = _safe_api_url(raw_url)
     if not url:
         return jsonify({'ok': False, 'error': 'Invalid URL'}), 400
+    if not _ssrf_ok(url):
+        return jsonify({'ok': False, 'error': 'Target address not allowed'}), 400
     u = str(data.get('user', '')).strip()
     p = str(data.get('password', '')).strip()
     if not p:
@@ -3566,7 +3914,7 @@ def save_config(data, path=None):
     content = stream.getvalue()
     for placeholder, original in template_map.items():
         content = content.replace(placeholder, original)
-    tmp = path + '.tmp'
+    tmp = f"{path}.tmp.{os.getpid()}.{threading.get_ident()}"
     try:
         with open(tmp, 'w') as f:
             f.write(content)
@@ -4069,6 +4417,7 @@ def api_toggle_route(route_id):
     try:
         if agent:
             _toggle_route_agent(agent, agent_id, route_id, bool(enable))
+            threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'route toggle'), daemon=True).start()
         else:
             _toggle_route(route_id, bool(enable))
             threading.Thread(target=lambda: _git_push_if_enabled('route toggle'), daemon=True).start()
@@ -4185,7 +4534,7 @@ def api_route_raw_save(route_id):
         yaml_content = stream.getvalue()
         for placeholder, original in combined_map.items():
             yaml_content = yaml_content.replace(placeholder, original)
-        tmp = target_path + '.tmp'
+        tmp = f"{target_path}.tmp.{os.getpid()}.{threading.get_ident()}"
         try:
             with open(tmp, 'w') as f:
                 f.write(yaml_content)
@@ -4224,7 +4573,8 @@ def index():
     settings    = load_settings()
     apps, middlewares = _build_all_apps(include_external=False)
     apps = [a for a in apps if not (a.get('service_name') or '').endswith('@internal')]
-    auth_on    = _auth_enabled()
+    auth_on    = _auth_required()
+    no_auth    = not _auth_required()
     login_time = session.get('login_time', '')
     config_paths_list = [{'label': os.path.basename(p), 'path': p} for p in CONFIG_PATHS]
     cert_resolvers    = [r.strip() for r in settings['cert_resolver'].split(',') if r.strip()]
@@ -4234,7 +4584,7 @@ def index():
 
     return render_template('index.html', apps=apps, domains=settings['domains'],
                            middlewares=middlewares, settings=settings,
-                           auth_enabled=auth_on, login_time=login_time,
+                           auth_enabled=auth_on, no_auth=no_auth, login_time=login_time,
                            multi_config=MULTI_CONFIG,
                            config_paths_list=config_paths_list,
                            config_dir_set=bool(ACTIVE_CONFIG_DIR),
@@ -4378,7 +4728,10 @@ def save_entry():
                 else:
                     hosts = [f"Host(`{d}`)" for d in selected_domains]
                     rule  = " || ".join(hosts)
-            target_url = target_ip if target_ip.startswith('http') else f"{scheme}://{target_ip}:{target_port}"
+            if target_ip.startswith(('http://', 'https://')):
+                target_url = target_ip
+            else:
+                target_url = f"{scheme}://{target_ip}:{target_port}" if target_port else f"{scheme}://{target_ip}"
             mws        = [m.strip() for m in middlewares_in.split(',')] if middlewares_in else []
             insecure   = request.form.get('insecureSkipVerify') == 'true'
             config.setdefault('http', {}).setdefault('routers', {})
@@ -4444,6 +4797,7 @@ def save_entry():
 
         if agent:
             _agent_write_config(agent, cfg_filename, config)
+            threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'route save'), daemon=True).start()
         else:
             save_config(_strip_empty_sections(config), target_path)
             _register_config_path(target_path)
@@ -4539,7 +4893,9 @@ def delete_entry(router_id):
                 return jsonify({'ok': False, 'message': f'Route "{plain_id}" not found'}), 404
             flash(f'Route "{plain_id}" not found', "error")
             return redirect(url_for('index'))
-        if not agent:
+        if agent:
+            threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'route delete'), daemon=True).start()
+        else:
             threading.Thread(target=lambda: _git_push_if_enabled('route delete'), daemon=True).start()
         msg = f"Deleted {plain_id}"
         add_notification('warning', f"Route {plain_id} deleted")
@@ -4621,6 +4977,7 @@ def save_middleware():
         config[mw_protocol]['middlewares'][mw_name] = parsed_mw
         if agent:
             _agent_write_config(agent, cfg_filename, config)
+            threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'middleware save'), daemon=True).start()
         else:
             save_config(_strip_empty_sections(config), target_path)
             _register_config_path(target_path)
@@ -4681,7 +5038,9 @@ def delete_middleware(mw_name):
                     create_backup(target_path)
                     save_config(_strip_empty_sections(config), target_path)
                     break
-        if not agent:
+        if agent:
+            threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'middleware delete'), daemon=True).start()
+        else:
             threading.Thread(target=lambda: _git_push_if_enabled('middleware delete'), daemon=True).start()
         msg = f"Deleted middleware {mw_name}"
         add_notification('warning', f"Middleware {mw_name} deleted")
@@ -4801,6 +5160,10 @@ def oidc_callback():
         groups = [str(groups)]
     allowed_emails = [e.strip().lower() for e in s.get('oidc_allowed_emails', '').split(',') if e.strip()]
     allowed_groups = [g.strip() for g in s.get('oidc_allowed_groups', '').split(',') if g.strip()]
+    if not allowed_emails and not allowed_groups and not s.get('oidc_allow_any_authenticated'):
+        logger.warning(f"OIDC login denied for {email!r} - no allowed emails/groups configured (set an allowlist or enable 'Allow any authenticated account')")
+        flash("OIDC is enabled but no allowed emails or groups are configured. Ask an admin to set an allowlist.", "error")
+        return redirect(url_for('login'))
     if allowed_emails and email not in allowed_emails:
         logger.warning(f"OIDC login denied for {email!r} - not in allowed emails")
         flash("Your account is not authorized to access this application.", "error")
@@ -4834,6 +5197,7 @@ def api_get_oidc():
         'oidc_display_name':    s.get('oidc_display_name', 'OIDC'),
         'oidc_allowed_emails':  s.get('oidc_allowed_emails', ''),
         'oidc_allowed_groups':  s.get('oidc_allowed_groups', ''),
+        'oidc_allow_any_authenticated': bool(s.get('oidc_allow_any_authenticated', False)),
         'oidc_groups_claim':    s.get('oidc_groups_claim', 'groups'),
     })
 
@@ -4862,9 +5226,11 @@ def api_save_oidc():
             oidc_display_name=str(data.get('oidc_display_name', 'OIDC')).strip() or 'OIDC',
             oidc_allowed_emails=str(data.get('oidc_allowed_emails', '')).strip(),
             oidc_allowed_groups=str(data.get('oidc_allowed_groups', '')).strip(),
+            oidc_allow_any_authenticated=bool(data.get('oidc_allow_any_authenticated', False)),
             oidc_groups_claim=str(data.get('oidc_groups_claim', 'groups')).strip() or 'groups',
         )
-        return jsonify({'ok': True})
+        reauth = _auth_required() and not session.get('authenticated')
+        return jsonify({'ok': True, 'reauth_required': reauth})
     except Exception:
         logger.exception("OIDC save error")
         return jsonify({'ok': False, 'error': 'Save failed'}), 500
@@ -4876,8 +5242,10 @@ def api_save_oidc():
 def api_test_oidc():
     data = request.get_json(silent=True) or {}
     url  = str(data.get('provider_url', '')).strip().rstrip('/')
-    if not url:
+    if not url or not url.startswith(('http://', 'https://')):
         return jsonify({'ok': False, 'error': 'No provider URL'})
+    if not _ssrf_ok(url):
+        return jsonify({'ok': False, 'error': 'Target address not allowed'})
     logger.info(f"OIDC provider test to {url!r} by {request.remote_addr}")
     try:
         resp = requests.get(f"{url}/.well-known/openid-configuration", timeout=5)
@@ -5146,6 +5514,19 @@ def api_agents_create():
 def api_agents_update(agent_id):
     data    = request.get_json(silent=True) or {}
     agents  = load_agents()
+    if 'git_host_branch' in data or data.get('git_host_backup'):
+        s = load_settings()
+        target = next((a for a in agents if a.get('id') == agent_id), {})
+        branch = _safe_git_branch(str(data.get('git_host_branch', target.get('git_host_branch') or '')).strip() or _agent_git_branch({**target, 'git_host_branch': ''}))
+        enabled = bool(data.get('git_host_backup', target.get('git_host_backup')))
+        if enabled:
+            if branch == _safe_git_branch(s.get('git_backup_branch', 'main')):
+                return jsonify({'ok': False, 'error': f'Branch "{branch}" is used by the Host - each server needs its own branch'}), 400
+            for other in agents:
+                if other.get('id') != agent_id and other.get('git_host_backup') and _agent_git_branch(other) == branch:
+                    return jsonify({'ok': False, 'error': f'Branch "{branch}" is already used by agent "{other.get("name")}"'}), 400
+        if 'git_host_branch' in data:
+            data['git_host_branch'] = branch
     updated = False
     for i, a in enumerate(agents):
         if a.get('id') == agent_id:
@@ -5157,6 +5538,7 @@ def api_agents_update(agent_id):
                 'crowdsec_lapi_url', 'crowdsec_machine_id', 'git_backup_enabled', 'git_backup_repo',
                 'git_backup_branch', 'git_backup_username', 'git_backup_auto_push',
                 'git_backup_commit_message', 'tma_port', 'tma_rate_limit', 'domains',
+                'git_host_backup', 'git_host_branch',
             ]
             for field in updatable:
                 if field in data:
@@ -5237,7 +5619,12 @@ def api_agents_proxy(agent_id, path):
             kwargs['json'] = request.get_json(silent=True)
         elif request.data:
             kwargs['data'] = request.data
-        resp = _agent_request(agent, request.method, '/api/' + path.lstrip('/'), **kwargs)
+        agent_path = '/api/' + path.lstrip('/')
+        resp = _agent_request(agent, request.method, agent_path, **kwargs)
+        if (request.method in ('POST', 'PUT', 'DELETE') and resp.status_code < 400
+                and not agent_path.startswith('/api/backup/git')
+                and any(agent_path.startswith(x) for x in ('/api/configs', '/api/routes', '/api/middlewares', '/api/static', '/api/restore/', '/api/backup/'))):
+            threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'config change'), daemon=True).start()
         content_type = resp.headers.get('content-type', 'application/json')
         return resp.content, resp.status_code, {'Content-Type': content_type}
     except requests.exceptions.ConnectionError:

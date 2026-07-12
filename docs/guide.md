@@ -72,7 +72,7 @@ These tabs are always visible. They let you read and write your Traefik dynamic 
 
 ## Static Config Editor
 
-Edit your Traefik static config (`traefik.yml`) directly from the UI - no SSH or file editor needed. Changes are staged, backed up automatically, and Traefik is restarted to apply them.
+Edit your Traefik static config (`traefik.yml`) directly from the UI - no SSH or file editor needed. Changes are staged and backed up automatically; a one-click restart applies them via your configured restart method.
 
 **What you can manage:**
 - Entrypoints - add, edit, and remove

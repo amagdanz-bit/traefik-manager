@@ -358,8 +358,9 @@
             <span class="logo-text">Traefik <span>Manager</span></span>
         </div>
         <div class="step-title">Sign in</div>
-        <p class="step-subtitle">Enter your password to access Traefik Manager.</p>
-        {% if temp_password_hint %}
+        {% set show_local = local_auth_enabled | default(true) %}
+        <p class="step-subtitle">{% if show_local %}Enter your password to access Traefik Manager.{% else %}Sign in with your identity provider.{% endif %}</p>
+        {% if temp_password_hint and show_local %}
         <div class="banner banner-info">
             <i class="ph-bold ph-info" style="flex-shrink:0;margin-top:1px"></i>
             A temporary password was generated at startup - check your container logs.
@@ -371,6 +372,7 @@
             {{ error }}
         </div>
         {% endif %}
+        {% if show_local %}
         <form method="POST" action="{{ url_for('login') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="next" value="{{ next }}">
@@ -389,16 +391,20 @@
                 </button>
             </div>
         </form>
+        {% endif %}
         {% if oidc_enabled %}
+        {% if show_local %}
         <div style="display:flex;align-items:center;gap:8px;margin:16px 0 12px;">
             <div style="flex:1;height:1px;background:var(--border)"></div>
             <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">or</span>
             <div style="flex:1;height:1px;background:var(--border)"></div>
         </div>
-        <a href="{{ url_for('oidc_login') }}" class="btn-secondary" style="display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;border-radius:8px;padding:10px 0;font-size:14px;font-weight:600;">
+        {% endif %}
+        <a href="{{ url_for('oidc_login') }}" class="btn-secondary" style="display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;border-radius:8px;padding:10px 0;font-size:14px;font-weight:600;{% if not show_local %}margin-top:8px;{% endif %}">
             <i class="ph-bold ph-key"></i> Sign in with {{ oidc_display_name }}
         </a>
         {% endif %}
+        {% if show_local %}
         <details class="reset-hint">
             <summary><i class="ph-bold ph-lock-key" style="font-size:11px"></i> Reset password</summary>
             <div class="reset-hint-body">
@@ -409,6 +415,7 @@
                 The new password is printed to the terminal. You'll be prompted to set a permanent one on next login.
             </div>
         </details>
+        {% endif %}
     </div>
     <div class="footer">
         <a href="https://github.com/traefik/traefik" target="_blank">Traefik</a>

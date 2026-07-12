@@ -37,9 +37,10 @@ Go to **Settings → Authentication → OIDC / SSO Login** and fill in:
 | Client ID | The client ID from your provider |
 | Client Secret | The client secret (stored encrypted at rest) |
 | Display Name | Label shown on the login button, e.g. `Keycloak` |
-| Allowed Emails | Comma-separated list of emails that can log in. Empty = any verified account |
-| Allowed Groups | Comma-separated group names required. Empty = skip group check |
+| Allowed Emails | Comma-separated list of emails that can log in. Empty = no email restriction |
+| Allowed Groups | Comma-separated group names required. Empty = no group restriction |
 | Groups Claim Key | Claim name that contains groups (default: `groups`) |
+| Allow any authenticated account | Off by default. When **both** allow-lists are empty, logins are denied unless you enable this. Turn it on only if you intend to admit every account your provider authenticates |
 
 Click **Test** next to the Provider URL to verify the discovery document is reachable, then click **Save OIDC Config** and toggle **Enable**.
 
@@ -90,7 +91,7 @@ Both filters are optional and independent:
 
 If both are set, **both** conditions must pass.
 
-Leave both empty to allow any account that successfully authenticates with your provider.
+If you leave both empty, access is **denied by default** - a successful login at your provider is not enough on its own. To intentionally allow any account your provider authenticates, enable **Allow any authenticated user**. This prevents an unrestricted OIDC configuration from silently admitting every account in a shared identity provider.
 
 ---
 

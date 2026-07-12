@@ -337,6 +337,11 @@
                             </button>
                         </div>
 
+                        <div id="noAuthWarning" style="display:none;margin:12px 16px 0;padding:10px 12px;border-radius:8px;background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.35);">
+                            <div class="text-xs font-medium" style="color:var(--red);display:flex;align-items:center;gap:6px;"><i class="ph-bold ph-warning"></i> No authentication is active</div>
+                            <div class="text-xs mt-1" style="color:var(--muted)">This interface is publicly accessible. Enable Built-in Authentication (below) or configure OIDC / SSO. API keys still work but do not protect the web UI.</div>
+                        </div>
+
                         <div id="auth-sub-password" class="auth-sub-panel" style="display:flex;">
                             <div id="authSection">
                                 <div class="flex items-center justify-between" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
@@ -495,6 +500,13 @@
                                         <div class="text-xs mb-1" style="color:var(--muted)">Claim name that contains groups. Keycloak: <code>groups</code>, some providers: <code>roles</code>.</div>
                                         <input type="text" id="oidcGroupsClaim" class="input-field text-xs" placeholder="groups">
                                     </div>
+                                    <div class="flex items-start gap-2 p-2 rounded-lg" style="background:rgba(210,153,34,0.06);border:1px solid rgba(210,153,34,0.2)">
+                                        <input type="checkbox" id="oidcAllowAny" class="rounded mt-0.5" style="accent-color:var(--yellow)">
+                                        <div>
+                                            <label for="oidcAllowAny" class="text-xs font-semibold block cursor-pointer" style="color:var(--text)">Allow any authenticated account</label>
+                                            <div class="text-xs mt-0.5" style="color:var(--muted)">Off by default. When both allowlists above are empty, OIDC logins are <b>denied</b> unless you enable this. Only turn it on if every account at your provider should have full admin access.</div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -609,7 +621,24 @@
                                 </div>
 
                                 <div id="gitEnvNote" style="display:none;background:rgba(36,161,222,0.06);border:1px solid rgba(36,161,222,0.2);color:var(--muted)" class="text-xs mb-3 px-3 py-2 rounded-lg">
-                                    <i class="ph-bold ph-info" style="color:var(--blue)"></i> Git backup on this agent is configured via environment variables (<code>GIT_BACKUP_*</code>).
+                                    <i class="ph-bold ph-info" style="color:var(--blue)"></i> This agent can also push independently using its own <code>GIT_BACKUP_*</code> environment variables.
+                                </div>
+                                <div id="gitHostAgentForm" style="display:none;flex-direction:column;gap:10px;margin-bottom:14px;">
+                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background:var(--bg);border:1px solid var(--border);">
+                                        <div>
+                                            <div class="text-xs font-medium">Use Host Repository</div>
+                                            <div class="text-xs" style="color:var(--muted)">Push this server's config to the Host's git repository on its own branch</div>
+                                        </div>
+                                        <div class="toggle-switch" id="toggle-git-host-agent" onclick="toggleGitHostAgent()"><div class="toggle-knob"></div></div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-medium block mb-1">Branch</label>
+                                        <input id="gitHostAgentBranch" type="text" class="input-field" placeholder="agent-name">
+                                        <div class="text-xs mt-1" style="color:var(--muted)">Must differ from the Host branch - each server pushes to its own branch</div>
+                                    </div>
+                                    <button id="gitHostAgentSaveBtn" onclick="saveGitHostAgent()" class="nav-btn text-xs w-full justify-center">
+                                        <i class="ph-bold ph-floppy-disk"></i> Save
+                                    </button>
                                 </div>
                                 <div id="gitConfigForm" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
                                     <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background:var(--bg);border:1px solid var(--border);">
@@ -1341,16 +1370,64 @@ function toggleGitAutoPush() {
     if (el) el.classList.toggle('on', _gitAutoPushEnabled);
 }
 
+function _gitFetch(path, opts) {
+    const isAgent = typeof _activeAgent !== 'undefined' && !!_activeAgent;
+    if (isAgent && _activeAgent.git_host_backup) {
+        const sep = path.includes('?') ? '&' : '?';
+        return fetch(path + sep + 'agent_id=' + encodeURIComponent(_activeAgent.id), opts);
+    }
+    return _backupFetch(path, opts);
+}
+
+let _gitHostAgentOn = false;
+
+function toggleGitHostAgent() {
+    _gitHostAgentOn = !_gitHostAgentOn;
+    const tog = document.getElementById('toggle-git-host-agent');
+    if (tog) tog.classList.toggle('on', _gitHostAgentOn);
+}
+
+async function saveGitHostAgent() {
+    if (!_activeAgent) return;
+    const branch = (document.getElementById('gitHostAgentBranch')?.value || '').trim();
+    try {
+        const res  = await fetch('/api/agents/' + _activeAgent.id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+            body: JSON.stringify({ git_host_backup: _gitHostAgentOn, git_host_branch: branch }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) { showToast(data.error || 'Save failed', 'error'); return; }
+        _activeAgent.git_host_backup = _gitHostAgentOn;
+        _activeAgent.git_host_branch = branch;
+        showToast('Git settings saved', 'success');
+        loadGitTab();
+    } catch (e) {
+        showToast('Save failed', 'error');
+    }
+}
+
 async function loadGitTab() {
     const isAgent = typeof _activeAgent !== 'undefined' && !!_activeAgent;
     const configForm    = document.getElementById('gitConfigForm');
     const saveBtn       = document.getElementById('gitSaveSettingsBtn');
     const resetBtn      = document.getElementById('gitResetBtn');
     const envNote       = document.getElementById('gitEnvNote');
+    const hostForm      = document.getElementById('gitHostAgentForm');
+    const testBtn       = document.getElementById('gitTestBtn');
     if (configForm) configForm.style.display = isAgent ? 'none' : 'flex';
     if (saveBtn)    saveBtn.style.display    = isAgent ? 'none' : '';
     if (resetBtn)   resetBtn.style.display   = isAgent ? 'none' : '';
+    if (testBtn)    testBtn.style.display    = isAgent ? 'none' : '';
     if (envNote)    envNote.style.display    = isAgent ? '' : 'none';
+    if (hostForm)   hostForm.style.display   = isAgent ? 'flex' : 'none';
+    if (isAgent) {
+        _gitHostAgentOn = !!_activeAgent.git_host_backup;
+        const tog = document.getElementById('toggle-git-host-agent');
+        if (tog) tog.classList.toggle('on', _gitHostAgentOn);
+        const br = document.getElementById('gitHostAgentBranch');
+        if (br) br.value = _activeAgent.git_host_branch || (_activeAgent.name || '').toLowerCase().replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '');
+    }
     if (!isAgent) {
         try {
             const res  = await fetch('/api/settings');
@@ -1375,7 +1452,7 @@ async function loadGitTab() {
 
 async function loadGitStatus() {
     try {
-        const res  = await _backupFetch('/api/backup/git/status');
+        const res  = await _gitFetch('/api/backup/git/status');
         const data = await res.json();
         const line = document.getElementById('gitStatusLine');
         if (!line) return;
@@ -1393,7 +1470,7 @@ async function loadGitCommits() {
     if (!list) return;
     list.innerHTML = `<div class="text-center py-4" style="color:var(--muted)"><i class="ph-light ph-spinner-gap animate-spin text-xl block mb-1"></i></div>`;
     try {
-        const res     = await _backupFetch('/api/backup/git/commits');
+        const res     = await _gitFetch('/api/backup/git/commits');
         const commits = await res.json();
         if (!commits.length) {
             list.innerHTML = `<div class="text-center py-6" style="color:var(--muted)"><i class="ph-light ph-git-commit text-3xl block mb-2 opacity-30"></i><p class="text-xs">No commits yet</p></div>`;
@@ -1486,7 +1563,7 @@ async function gitPushNow() {
     const msgEl   = document.getElementById('gitCommitMessage');
     const message = msgEl ? msgEl.value.trim() : '';
     try {
-        const res  = await _backupFetch('/api/backup/git/push', {
+        const res  = await _gitFetch('/api/backup/git/push', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
             body: JSON.stringify({ message }),
@@ -1514,7 +1591,7 @@ async function gitResetRepo() {
     const btn = document.getElementById('gitResetBtn');
     if (btn) { btn.disabled = true; }
     try {
-        const res  = await _backupFetch('/api/backup/git/repo', { method: 'DELETE', headers: _csrfHeaders() });
+        const res  = await _gitFetch('/api/backup/git/repo', { method: 'DELETE', headers: _csrfHeaders() });
         const data = await res.json();
         if (data.ok) {
             showToast('Repository reset - push again to re-initialize', 'success');
@@ -1533,7 +1610,7 @@ async function gitResetRepo() {
 async function gitRestoreCommit(sha, shaShort) {
     if (!await _confirm(`Restore config from commit ${shaShort}? Local backups will be created first.`, 'Git Restore', 'Restore')) return;
     try {
-        const res  = await _backupFetch(`/api/backup/git/restore/${sha}`, { method: 'POST', headers: _csrfHeaders() });
+        const res  = await _gitFetch(`/api/backup/git/restore/${sha}`, { method: 'POST', headers: _csrfHeaders() });
         const data = await res.json();
         if (data.ok) {
             showToast('Restored successfully', 'success');
@@ -1547,7 +1624,7 @@ async function gitRestoreCommit(sha, shaShort) {
 
 async function gitViewDiff(sha) {
     try {
-        const res  = await _backupFetch(`/api/backup/git/commit/${sha}/diff`);
+        const res  = await _gitFetch(`/api/backup/git/commit/${sha}/diff`);
         const data = await res.json();
         if (data.error) { showToast('Diff error: ' + data.error, 'error'); return; }
         if (!data.files || !data.files.length) { showToast('No changes in this commit', 'info'); return; }
@@ -1731,6 +1808,8 @@ async function openSettingsModal(panel) {
             }
             if (changePwForm) changePwForm.style.display = isOn ? '' : 'none';
         }
+        const noAuthWarn = document.getElementById('noAuthWarning');
+        if (noAuthWarn) noAuthWarn.style.display = data.no_auth ? '' : 'none';
     } catch(e) {
         console.error('Could not load settings', e);
     }
@@ -1797,10 +1876,12 @@ async function toggleAuth() {
         });
         const data = await res.json();
         if (data.success) {
+            if (data.reauth_required) return _redirectToLoginAfterAuthEnable('Authentication enabled');
             stateLabel.textContent = newState ? 'enabled' : 'disabled';
             stateLabel.style.color = newState ? 'var(--green)' : 'var(--muted)';
             toggleLabel.textContent = newState ? 'Disable' : 'Enable';
             if (changePwForm) changePwForm.style.display = newState ? '' : 'none';
+            const naw = document.getElementById('noAuthWarning'); if (naw) naw.style.display = 'none';
             showToast(`Authentication ${newState ? 'enabled' : 'disabled'}.`, 'success');
         } else {
             showToast(data.error || 'Failed to update auth.', 'error');
@@ -1964,6 +2045,8 @@ async function loadBackups() {
     const retEnvNote = document.getElementById('backupRetentionEnvNote');
     if (retRow)     retRow.style.display     = isAgent ? 'none' : 'flex';
     if (retEnvNote) retEnvNote.style.display = isAgent ? '' : 'none';
+    const gitPane = document.getElementById('backup-sub-git');
+    if (gitPane && gitPane.style.display !== 'none') loadGitTab();
     if (!isAgent) {
         try {
             const sres = await fetch('/api/settings');
@@ -2401,6 +2484,7 @@ async function loadOidcStatus() {
         set(['oidcAllowedEmails', data.oidc_allowed_emails]);
         set(['oidcAllowedGroups', data.oidc_allowed_groups]);
         set(['oidcGroupsClaim', data.oidc_groups_claim]);
+        const _anyEl = document.getElementById('oidcAllowAny'); if (_anyEl) _anyEl.checked = !!data.oidc_allow_any_authenticated;
         document.getElementById('oidcClientSecret') && (document.getElementById('oidcClientSecret').value = '');
         const secretLabel = document.getElementById('oidcSecretSetLabel');
         if (secretLabel) secretLabel.classList.toggle('hidden', !data.oidc_client_secret_set);
@@ -2418,14 +2502,26 @@ async function oidcToggleEnabled() {
     const ae    = document.getElementById('oidcAllowedEmails')?.value.trim() || '';
     const ag    = document.getElementById('oidcAllowedGroups')?.value.trim() || '';
     const gc    = document.getElementById('oidcGroupsClaim')?.value.trim() || 'groups';
+    const any   = document.getElementById('oidcAllowAny')?.checked || false;
     try {
         const res = await fetch('/api/auth/oidc', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfHeaders()['X-CSRF-Token']},
-            body: JSON.stringify({ oidc_enabled: !isOn, oidc_provider_url: url, oidc_client_id: id, oidc_client_secret: sec, oidc_display_name: disp, oidc_allowed_emails: ae, oidc_allowed_groups: ag, oidc_groups_claim: gc })
+            body: JSON.stringify({ oidc_enabled: !isOn, oidc_provider_url: url, oidc_client_id: id, oidc_client_secret: sec, oidc_display_name: disp, oidc_allowed_emails: ae, oidc_allowed_groups: ag, oidc_groups_claim: gc, oidc_allow_any_authenticated: any })
         });
-        if ((await res.json()).ok) loadOidcStatus();
-    } catch(e) {}
+        const data = await res.json();
+        if (data.ok) {
+            if (data.reauth_required) return _redirectToLoginAfterAuthEnable('OIDC enabled');
+            loadOidcStatus();
+        } else {
+            showToast(data.error || 'Failed to update OIDC', 'error');
+        }
+    } catch(e) { showToast('Failed to update OIDC', 'error'); }
+}
+
+function _redirectToLoginAfterAuthEnable(what) {
+    showToast(`${what} - authentication is now required, redirecting to sign in`, 'info');
+    setTimeout(() => { window.location.href = '/login'; }, 1200);
 }
 
 async function saveOidcConfig() {
@@ -2442,10 +2538,11 @@ async function saveOidcConfig() {
         const res = await fetch('/api/auth/oidc', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfHeaders()['X-CSRF-Token']},
-            body: JSON.stringify({ oidc_enabled: isOn, oidc_provider_url: url, oidc_client_id: id, oidc_client_secret: sec, oidc_display_name: disp, oidc_allowed_emails: ae, oidc_allowed_groups: ag, oidc_groups_claim: gc })
+            body: JSON.stringify({ oidc_enabled: isOn, oidc_provider_url: url, oidc_client_id: id, oidc_client_secret: sec, oidc_display_name: disp, oidc_allowed_emails: ae, oidc_allowed_groups: ag, oidc_groups_claim: gc, oidc_allow_any_authenticated: any })
         });
         const data = await res.json();
         if (data.ok) {
+            if (data.reauth_required) return _redirectToLoginAfterAuthEnable('OIDC saved');
             const msg = document.getElementById('oidcSavedMsg');
             if (msg) { msg.classList.remove('hidden'); setTimeout(() => msg.classList.add('hidden'), 2500); }
             loadOidcStatus();

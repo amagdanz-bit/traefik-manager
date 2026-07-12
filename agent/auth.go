@@ -49,10 +49,15 @@ type limiterStore struct {
 	rpm      int
 }
 
+const maxLimiterEntries = 8192
+
 func (s *limiterStore) allow(ip string) bool {
 	s.mu.Lock()
 	l, ok := s.limiters[ip]
 	if !ok {
+		if len(s.limiters) >= maxLimiterEntries {
+			s.limiters = make(map[string]*rate.Limiter)
+		}
 		rps := rate.Limit(float64(s.rpm) / 60.0)
 		l = rate.NewLimiter(rps, s.rpm)
 		s.limiters[ip] = l

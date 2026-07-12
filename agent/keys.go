@@ -23,9 +23,10 @@ type APIKey struct {
 }
 
 type keyStore struct {
-	mu   sync.RWMutex
-	path string
-	keys []APIKey
+	mu           sync.RWMutex
+	path         string
+	keys         []APIKey
+	lastUsedSave time.Time
 }
 
 func newKeyStore(dir string) *keyStore {
@@ -45,11 +46,11 @@ func (ks *keyStore) load() {
 	_ = json.Unmarshal(data, &ks.keys)
 }
 
-func (ks *keyStore) save() error {
+func (ks *keyStore) save(keys []APIKey) error {
 	if err := os.MkdirAll(filepath.Dir(ks.path), 0755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(ks.keys, "", "  ")
+	data, err := json.MarshalIndent(keys, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -69,7 +70,12 @@ func (ks *keyStore) validate(key string) bool {
 		if subtle.ConstantTimeCompare([]byte(k.KeyHash), []byte(hash)) == 1 {
 			now := time.Now().UTC()
 			ks.keys[i].LastUsedAt = &now
-			go ks.save()
+			if now.Sub(ks.lastUsedSave) > time.Minute {
+				ks.lastUsedSave = now
+				snap := make([]APIKey, len(ks.keys))
+				copy(snap, ks.keys)
+				go ks.save(snap)
+			}
 			return true
 		}
 	}
@@ -111,7 +117,9 @@ func (ks *keyStore) create(name string) (string, string, error) {
 	}
 	ks.mu.Lock()
 	ks.keys = append(ks.keys, k)
-	err := ks.save()
+	snap := make([]APIKey, len(ks.keys))
+	copy(snap, ks.keys)
+	err := ks.save(snap)
 	ks.mu.Unlock()
 	return k.ID, rawKey, err
 }
@@ -122,7 +130,9 @@ func (ks *keyStore) delete(id string) bool {
 	for i, k := range ks.keys {
 		if k.ID == id {
 			ks.keys = append(ks.keys[:i], ks.keys[i+1:]...)
-			_ = ks.save()
+			snap := make([]APIKey, len(ks.keys))
+			copy(snap, ks.keys)
+			_ = ks.save(snap)
 			return true
 		}
 	}

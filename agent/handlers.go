@@ -12,7 +12,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -746,13 +745,51 @@ func (a *App) gitRepoDir() string {
 	return filepath.Join(a.cfg.BackupDir, "git-repo")
 }
 
-func (a *App) gitRun(args []string, cwd string) (string, string, int) {
-	cmd := exec.Command("git", args...)
+type gitCreds struct {
+	username string
+	token    string
+}
+
+func validGitURL(u string) bool {
+	l := strings.ToLower(u)
+	return strings.HasPrefix(l, "https://") ||
+		strings.HasPrefix(l, "http://") ||
+		strings.HasPrefix(l, "ssh://") ||
+		strings.HasPrefix(l, "git://")
+}
+
+func (a *App) gitAskpassScript() (string, error) {
+	path := filepath.Join(a.cfg.BackupDir, ".git-askpass.sh")
+	if _, err := os.Stat(path); err == nil {
+		return path, nil
+	}
+	if err := os.MkdirAll(a.cfg.BackupDir, 0o755); err != nil {
+		return "", err
+	}
+	script := "#!/bin/sh\ncase \"$1\" in\n*Username*) printf '%s' \"$GIT_ASKPASS_USER\" ;;\n*) printf '%s' \"$GIT_ASKPASS_PASS\" ;;\nesac\n"
+	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func (a *App) gitRun(args []string, cwd string, creds ...gitCreds) (string, string, int) {
+	full := append([]string{"-c", "protocol.ext.allow=never", "-c", "protocol.file.allow=user", "-c", "protocol.fd.allow=user"}, args...)
+	cmd := exec.Command("git", full...)
 	if cwd == "" {
 		cwd = a.gitRepoDir()
 	}
 	cmd.Dir = cwd
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	if len(creds) > 0 && creds[0].token != "" {
+		if script, err := a.gitAskpassScript(); err == nil {
+			cmd.Env = append(cmd.Env,
+				"GIT_ASKPASS="+script,
+				"GIT_ASKPASS_USER="+creds[0].username,
+				"GIT_ASKPASS_PASS="+creds[0].token,
+			)
+		}
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -768,29 +805,15 @@ func (a *App) gitRun(args []string, cwd string) (string, string, int) {
 	return strings.TrimSpace(stdout.String()), strings.TrimSpace(stderr.String()), rc
 }
 
-func (a *App) gitAuthURL() string {
-	repo := a.cfg.GitBackupRepo
-	token := a.cfg.GitBackupToken
-	if token == "" {
-		return repo
-	}
-	u, err := url.Parse(repo)
-	if err != nil {
-		return repo
-	}
-	if a.cfg.GitBackupUsername != "" {
-		u.User = url.UserPassword(a.cfg.GitBackupUsername, token)
-	} else {
-		u.User = url.User(token)
-	}
-	return u.String()
-}
-
 func (a *App) gitEnsureRepo() (string, error) {
 	repoDir := a.gitRepoDir()
 	gitDir := filepath.Join(repoDir, ".git")
 	branch := a.cfg.GitBackupBranch
-	authURL := a.gitAuthURL()
+	repoURL := a.cfg.GitBackupRepo
+	if !validGitURL(repoURL) {
+		return "", fmt.Errorf("invalid repository URL scheme")
+	}
+	creds := gitCreds{username: a.cfg.GitBackupUsername, token: a.cfg.GitBackupToken}
 
 	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
 		if entries, err := os.ReadDir(repoDir); err == nil && len(entries) > 0 {
@@ -800,16 +823,16 @@ func (a *App) gitEnsureRepo() (string, error) {
 		if err := os.MkdirAll(repoDir, 0o755); err != nil {
 			return "", err
 		}
-		_, _, rc := a.gitRun([]string{"clone", "--branch", branch, authURL, "."}, repoDir)
+		_, _, rc := a.gitRun([]string{"clone", "--branch", branch, "--", repoURL, "."}, repoDir, creds)
 		if rc != 0 {
 			a.gitRun([]string{"init"}, repoDir)
-			a.gitRun([]string{"remote", "add", "origin", authURL}, repoDir)
+			a.gitRun([]string{"remote", "add", "origin", repoURL}, repoDir)
 			a.gitRun([]string{"config", "user.email", "traefik-manager-agent@localhost"}, repoDir)
 			a.gitRun([]string{"config", "user.name", "Traefik Manager Agent"}, repoDir)
-			a.gitRun([]string{"pull", "origin", branch}, repoDir)
+			a.gitRun([]string{"pull", "origin", branch}, repoDir, creds)
 		}
 	} else {
-		a.gitRun([]string{"remote", "set-url", "origin", authURL}, repoDir)
+		a.gitRun([]string{"remote", "set-url", "origin", repoURL}, repoDir)
 		a.gitRun([]string{"config", "user.email", "traefik-manager-agent@localhost"}, repoDir)
 		a.gitRun([]string{"config", "user.name", "Traefik Manager Agent"}, repoDir)
 	}
@@ -820,14 +843,15 @@ func (a *App) gitPush(action string, customMsg string) error {
 	if a.cfg.GitBackupRepo == "" {
 		return fmt.Errorf("no repository configured")
 	}
+	if !validGitURL(a.cfg.GitBackupRepo) {
+		return fmt.Errorf("invalid repository URL scheme")
+	}
 	repoDir, err := a.gitEnsureRepo()
 	if err != nil {
 		return fmt.Errorf("repo init failed: %w", err)
 	}
 	dynDir := filepath.Join(repoDir, "dynamic")
 	staticDir := filepath.Join(repoDir, "static")
-	os.MkdirAll(dynDir, 0o755)
-	os.MkdirAll(staticDir, 0o755)
 
 	copyToDir := func(src, destDir string) {
 		info, err := os.Stat(src)
@@ -852,36 +876,46 @@ func (a *App) gitPush(action string, customMsg string) error {
 		}
 	}
 
-	copyToDir(a.cfg.ConfigPath, dynDir)
-	if a.cfg.StaticConfigPath != "" {
-		copyToDir(a.cfg.StaticConfigPath, staticDir)
-	}
-
 	ts := time.Now().Format("2006-01-02 15:04:05")
 	msg := strings.NewReplacer("{action}", action, "{timestamp}", ts).Replace(a.cfg.GitBackupCommitMsg)
 	if strings.TrimSpace(customMsg) != "" {
 		msg = strings.TrimSpace(customMsg)
 	}
 
-	a.gitRun([]string{"add", "-A"}, repoDir)
-	_, _, rc := a.gitRun([]string{"diff", "--cached", "--quiet"}, repoDir)
-	if rc == 0 {
-		return nil
-	}
-	_, errOut, rc := a.gitRun([]string{"commit", "-m", msg}, repoDir)
-	if rc != 0 {
-		return fmt.Errorf("commit failed: %s", errOut)
-	}
-	_, errOut, rc = a.gitRun([]string{"push", "-u", "origin", a.cfg.GitBackupBranch}, repoDir)
-	if rc != 0 {
-		token := a.cfg.GitBackupToken
-		if token != "" {
-			errOut = strings.ReplaceAll(errOut, token, "***")
+	creds := gitCreds{username: a.cfg.GitBackupUsername, token: a.cfg.GitBackupToken}
+	var errOut string
+	for attempt := 0; attempt < 2; attempt++ {
+		_, _, frc := a.gitRun([]string{"fetch", "origin", a.cfg.GitBackupBranch}, repoDir, creds)
+		if frc == 0 {
+			a.gitRun([]string{"reset", "--hard", "FETCH_HEAD"}, repoDir)
 		}
-		return fmt.Errorf("push failed: %s", errOut)
+		os.MkdirAll(dynDir, 0o755)
+		os.MkdirAll(staticDir, 0o755)
+		copyToDir(a.cfg.ConfigPath, dynDir)
+		if a.cfg.StaticConfigPath != "" {
+			copyToDir(a.cfg.StaticConfigPath, staticDir)
+		}
+		a.gitRun([]string{"add", "-A"}, repoDir)
+		_, _, rc := a.gitRun([]string{"diff", "--cached", "--quiet"}, repoDir)
+		if rc == 0 {
+			return nil
+		}
+		var commitErr string
+		_, commitErr, rc = a.gitRun([]string{"commit", "-m", msg}, repoDir)
+		if rc != 0 {
+			return fmt.Errorf("commit failed: %s", commitErr)
+		}
+		_, errOut, rc = a.gitRun([]string{"push", "-u", "origin", a.cfg.GitBackupBranch}, repoDir, creds)
+		if rc == 0 {
+			log.Printf("git backup pushed: %s", msg)
+			return nil
+		}
 	}
-	log.Printf("git backup pushed: %s", msg)
-	return nil
+	token := a.cfg.GitBackupToken
+	if token != "" {
+		errOut = strings.ReplaceAll(errOut, token, "***")
+	}
+	return fmt.Errorf("push failed: %s", errOut)
 }
 
 var shaRe = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
@@ -942,17 +976,9 @@ func (a *App) gitTestHandler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "no repository URL configured", http.StatusBadRequest)
 		return
 	}
-	u, err := url.Parse(repo)
-	if err != nil {
-		jsonError(w, "invalid repo URL", http.StatusBadRequest)
+	if !validGitURL(repo) {
+		jsonError(w, "invalid repository URL scheme", http.StatusBadRequest)
 		return
-	}
-	if token != "" {
-		if username != "" {
-			u.User = url.UserPassword(username, token)
-		} else {
-			u.User = url.User(token)
-		}
 	}
 	tmpDir, err := os.MkdirTemp("", "tma-git-test-*")
 	if err != nil {
@@ -960,7 +986,8 @@ func (a *App) gitTestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer os.RemoveAll(tmpDir)
-	_, errOut, rc := a.gitRun([]string{"ls-remote", "--quiet", u.String()}, tmpDir)
+	creds := gitCreds{username: username, token: token}
+	_, errOut, rc := a.gitRun([]string{"ls-remote", "--quiet", "--", repo}, tmpDir, creds)
 	if rc != 0 {
 		if token != "" {
 			errOut = strings.ReplaceAll(errOut, token, "***")
@@ -1205,6 +1232,10 @@ func (a *App) routeRawGetHandler(w http.ResponseWriter, r *http.Request, routeID
 
 	var scanPaths []string
 	if cf != "" {
+		if strings.Contains(cf, "/") || strings.Contains(cf, "..") {
+			jsonError(w, "invalid config file", http.StatusBadRequest)
+			return
+		}
 		scanPaths = []string{filepath.Join(a.cfg.ConfigPath, cf)}
 	} else {
 		scanPaths = a.configFiles()
@@ -1276,6 +1307,10 @@ func (a *App) routeRawSaveHandler(w http.ResponseWriter, r *http.Request, routeI
 
 	var targetPath string
 	if cf != "" {
+		if strings.Contains(cf, "/") || strings.Contains(cf, "..") {
+			jsonError(w, "invalid config file", http.StatusBadRequest)
+			return
+		}
 		targetPath = filepath.Join(a.cfg.ConfigPath, cf)
 	} else {
 		for _, p := range a.configFiles() {

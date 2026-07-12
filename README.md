@@ -8,12 +8,19 @@
 
 Add routes, manage middlewares, monitor services, and view TLS certificates - all without touching a YAML file by hand.
 
-[![Docker Image](https://img.shields.io/badge/ghcr.io-chr0nzz%2Ftraefik--manager-blue?logo=docker&logoColor=white)](https://github.com/chr0nzz/traefik-manager/pkgs/container/traefik-manager)
-[![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Version](https://img.shields.io/github/v/release/chr0nzz/traefik-manager)](https://github.com/chr0nzz/traefik-manager/releases)
-[![Docs](https://img.shields.io/badge/docs-github.io-blue)](https://traefik-manager.xyzlab.dev/)
+[![Build](https://img.shields.io/github/actions/workflow/status/chr0nzz/traefik-manager/docker.yml?logo=githubactions&logoColor=white&label=build)](https://github.com/chr0nzz/traefik-manager/actions/workflows/docker.yml)
+[![Docker Image](https://img.shields.io/badge/ghcr.io-chr0nzz%2Ftraefik--manager-blue?logo=docker&logoColor=white)](https://github.com/chr0nzz/traefik-manager/pkgs/container/traefik-manager)
+[![Image Size](https://ghcr-badge.egpl.dev/chr0nzz/traefik-manager/size?label=image%20size)](https://github.com/chr0nzz/traefik-manager/pkgs/container/traefik-manager)
+[![Last Commit](https://img.shields.io/github/last-commit/chr0nzz/traefik-manager/dev?label=last%20commit)](https://github.com/chr0nzz/traefik-manager/commits/dev)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-xyzlab.dev-blue)](https://traefik-manager.xyzlab.dev/)
+
+[![Stars](https://img.shields.io/github/stars/chr0nzz/traefik-manager?logo=github&color=e3b341)](https://github.com/chr0nzz/traefik-manager/stargazers)
+[![Issues](https://img.shields.io/github/issues/chr0nzz/traefik-manager?logo=github)](https://github.com/chr0nzz/traefik-manager/issues)
 [![Mobile App](https://img.shields.io/badge/mobile-repo-green?logo=android&logoColor=white)](https://github.com/chr0nzz/traefik-manager-mobile)
 [![Google Play](https://img.shields.io/badge/Google_Play-Available-blue?logo=google-play&logoColor=white)](https://play.google.com/store/apps/details?id=dev.chr0nzz.traefikmanager)
+[![Play Downloads](https://playbadges.pavi2410.me/badge/downloads?id=dev.chr0nzz.traefikmanager)](https://play.google.com/store/apps/details?id=dev.chr0nzz.traefikmanager)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Sponsor-ff5f5f?logo=ko-fi&logoColor=white)](https://ko-fi.com/chr0nzz)
 
 </div>
@@ -23,315 +30,15 @@ Add routes, manage middlewares, monitor services, and view TLS certificates - al
 
 ---
 
-## Interface Gallery
+## Highlights
 
-<details>
-<summary><b>Initial Setup Workflow</b></summary>
-<table>
-<tr>
-<td width="33%">
-<a href="docs/public/images/dark-login.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-login.png">
-  <img src="docs/public/images/light-login.png" alt="Login" />
-</picture></a>
-<br /><b>1. Login</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-setup-welcome.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-setup-welcome.png">
-  <img src="docs/public/images/light-setup-welcome.png" alt="Welcome" />
-</picture></a>
-<br /><b>2. Welcome</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-setup-connection.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-setup-connection.png">
-  <img src="docs/public/images/light-setup-connection.png" alt="Connection &amp; domains" />
-</picture></a>
-<br /><b>3. Connection &amp; domains</b>
-</td>
-</tr>
-<tr>
-<td>
-<a href="docs/public/images/dark-setup-self-route.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-setup-self-route.png">
-  <img src="docs/public/images/light-setup-self-route.png" alt="Self route" />
-</picture></a>
-<br /><b>4. Self route</b>
-</td>
-<td>
-<a href="docs/public/images/dark-setup-monitoring.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-setup-monitoring.png">
-  <img src="docs/public/images/light-setup-monitoring.png" alt="Optional tabs" />
-</picture></a>
-<br /><b>5. Optional tabs</b>
-</td>
-<td>
-<a href="docs/public/images/dark-setup-password.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-setup-password.png">
-  <img src="docs/public/images/light-setup-password.png" alt="Set password" />
-</picture></a>
-<br /><b>6. Set password</b>
-</td>
-</tr>
-</table>
-</details>
-
-<details>
-<summary><b>Dashboard</b></summary>
-<p align="center">
-<a href="docs/public/images/dark-dashboard.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-dashboard.png">
-  <img src="docs/public/images/light-dashboard.png" width="80%" alt="Dashboard" />
-</picture></a>
-</p>
-</details>
-
-<details>
-<summary><b>Routes</b></summary>
-<table>
-<tr>
-<td width="33%">
-<a href="docs/public/images/dark-routes-cards.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-routes-cards.png">
-  <img src="docs/public/images/light-routes-cards.png" alt="Routes – card view" />
-</picture></a>
-<br /><b>Card View</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-routes-list.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-routes-list.png">
-  <img src="docs/public/images/light-routes-list.png" alt="Routes – list view" />
-</picture></a>
-<br /><b>List View</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-routes-add-http.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-routes-add-http.png">
-  <img src="docs/public/images/light-routes-add-http.png" alt="Add HTTP route" />
-</picture></a>
-<br /><b>Add HTTP</b>
-</td>
-</tr>
-<tr>
-<td>
-<a href="docs/public/images/dark-routes-add-tcp.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-routes-add-tcp.png">
-  <img src="docs/public/images/light-routes-add-tcp.png" alt="Add TCP route" />
-</picture></a>
-<br /><b>Add TCP</b>
-</td>
-<td>
-<a href="docs/public/images/dark-routes-add-udp.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-routes-add-udp.png">
-  <img src="docs/public/images/light-routes-add-udp.png" alt="Add UDP route" />
-</picture></a>
-<br /><b>Add UDP</b>
-</td>
-<td></td>
-</tr>
-</table>
-</details>
-
-<details>
-<summary><b>Services</b></summary>
-<p align="center">
-<a href="docs/public/images/dark-services-cards.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-services-cards.png">
-  <img src="docs/public/images/light-services-cards.png" width="48%" alt="Services – card view" />
-</picture></a>
-<a href="docs/public/images/dark-services-list.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-services-list.png">
-  <img src="docs/public/images/light-services-list.png" width="48%" alt="Services – list view" />
-</picture></a>
-</p>
-</details>
-
-<details>
-<summary><b>Middlewares</b></summary>
-<table>
-<tr>
-<td width="33%">
-<a href="docs/public/images/dark-middlewares-cards.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-middlewares-cards.png">
-  <img src="docs/public/images/light-middlewares-cards.png" alt="Middlewares – card view" />
-</picture></a>
-<br /><b>Card View</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-middlewares-list.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-middlewares-list.png">
-  <img src="docs/public/images/light-middlewares-list.png" alt="Middlewares – list view" />
-</picture></a>
-<br /><b>List View</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-middlewares-add.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-middlewares-add.png">
-  <img src="docs/public/images/light-middlewares-add.png" alt="Add middleware" />
-</picture></a>
-<br /><b>Add</b>
-</td>
-</tr>
-</table>
-</details>
-
-<details>
-<summary><b>Plugins</b></summary>
-<p align="center">
-<a href="docs/public/images/dark-plugins.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-plugins.png">
-  <img src="docs/public/images/light-plugins.png" width="48%" alt="Plugins" />
-</picture></a>
-<a href="docs/public/images/dark-plugins-add.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-plugins-add.png">
-  <img src="docs/public/images/light-plugins-add.png" width="48%" alt="Plugins – add" />
-</picture></a>
-</p>
-</details>
-
-
-<details>
-<summary><b>Route Map</b></summary>
-<p align="center">
-<a href="docs/public/images/dark-route-map.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-route-map.png">
-  <img src="docs/public/images/light-route-map.png" width="80%" alt="Route Map" />
-</picture></a>
-</p>
-</details>
-
-<details>
-<summary><b>Settings</b></summary>
-<table>
-<tr>
-<td width="33%">
-<a href="docs/public/images/dark-settings-interface.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-settings-interface.png">
-  <img src="docs/public/images/light-settings-interface.png" alt="Settings – interface" />
-</picture></a>
-<br /><b>Interface</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-settings-auth-password.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-settings-auth-password.png">
-  <img src="docs/public/images/light-settings-auth-password.png" alt="Settings – auth" />
-</picture></a>
-<br /><b>Authentication</b>
-</td>
-<td width="33%">
-<a href="docs/public/images/dark-settings-auth-apikeys.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-settings-auth-apikeys.png">
-  <img src="docs/public/images/light-settings-auth-apikeys.png" alt="Settings – API keys" />
-</picture></a>
-<br /><b>API Keys</b>
-</td>
-</tr>
-<tr>
-<td>
-<a href="docs/public/images/dark-settings-static-config.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-settings-static-config.png">
-  <img src="docs/public/images/light-settings-static-config.png" alt="Settings – static config" />
-</picture></a>
-<br /><b>Static Config</b>
-</td>
-<td>
-<a href="docs/public/images/dark-settings-connection.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-settings-connection.png">
-  <img src="docs/public/images/light-settings-connection.png" alt="Settings – connection" />
-</picture></a>
-<br /><b>Connection</b>
-</td>
-<td>
-<a href="docs/public/images/dark-settings-backups.png" target="_blank"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/dark-settings-backups.png">
-  <img src="docs/public/images/light-settings-backups.png" alt="Settings – backups" />
-</picture></a>
-<br /><b>Backups</b>
-</td>
-</tr>
-</table>
-</details>
-
----
-
-## Features
-
-**Routing & Middleware**
-- Add, edit, delete, and **enable/disable** HTTP, TCP, and UDP routes - no YAML editing required
-- **Advanced rule editor** - toggle between a domain chip builder and a free-text rule input for complex expressions (`PathPrefix`, `HostRegexp`, `&&` / `||` compounds, etc.)
-- **Multiple domains per route** - select any combination of your configured domains; generates multi-host Traefik rules (`Host(\`sub.d1\`) || Host(\`sub.d2\`)`)
-- **Per-service insecureSkipVerify** - checkbox adds a named `serversTransport` for backends with self-signed certs (Proxmox, Kasm, etc.); yellow TLS skip badge shown on route cards
-- **Wildcard certificate domains** - "Request wildcard certificate" checkbox auto-fills `tls.domains` from the selected domain; use with DNS challenge resolvers to request `*.domain.com` certs
-- **TLS Options tab** - create and manage named `tls.options` profiles (min/max version, cipher suites, curve preferences, SNI strict, ALPN, mTLS client auth); assign a profile to any route via the route form
-- **23 middleware wizard templates** with guided form fields (Basic Auth, Forward Auth, Rate Limit, IP Allowlist, Secure Headers, CORS, Redirect, Strip/Add Prefix, Retry, Circuit Breaker, Buffering, and more) - toggle to raw YAML for anything else
-- **Route clone** - duplicate a route into the add modal pre-filled with its service URL, middlewares, and entrypoints
-- **Multi-config file support** - mount several dynamic config files with `CONFIG_DIR` or `CONFIG_PATHS`; a dropdown selects which file each route or middleware is saved to; **create new files on the fly** when `CONFIG_DIR` is set
-- **Timestamped backups** before every change; one-click restore from Settings; `POST /api/backup/create` and `POST /api/backup/static/create` for automation
-- **Git Repository Backup** - push your Traefik configuration to a remote Git repository (GitHub, Gitea, Forgejo, GitLab, or any HTTPS host) after every change; browse the full commit history, view per-file side-by-side diffs, and restore any commit with one click; access token stored encrypted at rest; auto-push on every route, middleware, or static config save; manual push and Test Connection available in Settings → Backups → Git
-- **App icons on routes** *(optional, off by default)* - toggle in Settings → Interface → Routes to show an app icon next to each route name in grid and list view, reusing the Dashboard's selfh.st icons and per-route custom overrides; applies to the Host and remote agents
-
-**Live Dashboard**
-- Real-time stats: router counts, service health, entrypoints, Traefik version
-- Provider tabs: Docker, Kubernetes, Swarm, Nomad, ECS, Consul Catalog, Redis, etcd, Consul KV, ZooKeeper, HTTP Provider, File - all API-based, no extra mounts; **each tab shows provider middlewares** in a read-only section
-- **Filter live services** by protocol (HTTP/TCP/UDP) and provider (docker, file, kubernetes…)
-- **List view toggle** on Routes, Middlewares, and Services tabs - switch between card grid and compact table
-
-**Visualizations** *(optional, toggle in Settings)*
-- **Dashboard tab** - routes grouped by category (Media, Monitoring, Infrastructure, etc.) with app icons sourced from [selfh.st/icons](https://selfh.st/icons/), cached locally, and per-card editing (display name, icon override, group override)
-- **Route Map tab** - 4-column topology view (Entry Points - Routes - Middlewares - Services) with Bezier curve connections, hover-to-highlight, and route tooltips
-
-**Static Config Editor** *(optional - mount `traefik.yml` read-write)*
-- Edit Traefik's static configuration directly from the UI - entrypoints, certificate resolvers, plugins, and a raw YAML editor (Monaco/VS Code engine) for anything else
-- Changes are staged with a pending banner, backed up before saving, and Traefik is restarted automatically
-- Three restart methods: **socket proxy** (recommended - sidecar with minimal socket exposure), **poison pill** (no socket needed - shared signal file), **direct socket**
-- Full-screen reconnect overlay polls until Traefik is back up and dismisses automatically
-
-**System Monitoring** *(optional)*
-- **Certs** - `acme.json` certificates with expiry tracking
-- **Plugins** - plugins from your static `traefik.yml`; add, edit, and remove plugins when static config editor is enabled
-- **Logs** - parsed access log cards showing method, status, path, IP, service, and duration; click any card for a full detail panel with all fields and the raw log line
-- **CrowdSec** - active decisions and recent alerts from a CrowdSec LAPI; add manual bans/captchas/bypasses or unban IPs with one click; stats cards show total alerts, active decisions, LAPI status, and type breakdown. Configure via `CROWDSEC_LAPI_URL` / `CROWDSEC_API_KEY` env vars or **Settings → System Monitoring → CrowdSec**
-- **Configurable file paths** - set `acme.json`, access log, and static config paths from **Settings → File Paths** without a container restart; UI setting takes priority over env vars
-
-**Multi-Server Management**
-- **Traefik Manager Agent (TMA)** - lightweight Go daemon that runs alongside Traefik on any remote server; install it in seconds with the one-liner installer
-- **Server switcher** in the nav bar - switch between local and remote agents; all data tabs show that server's routes, services, middlewares, backups, and logs
-- **Settings → Agents** multi-step wizard - generates a ready-to-paste Docker Compose or Docker Run command with all env vars pre-filled; API key shown once and stored encrypted
-- **Per-server git backup** - each agent handles its own autonomous git cycle via env vars; viewed from TM when that agent is active
-- Manage unlimited remote Traefik instances from a single TM - no VPN or SSH required
-
-**Security**
-- bcrypt passwords (cost 12), CSRF protection, session management with session fixation protection
-- Optional TOTP 2FA · 7-day remember me · configurable inactivity timeout
-- Auto-generated password on first start · CLI recovery with `flask reset-password`
-- **OIDC / SSO** - sign in with Keycloak, Google, Authentik, or any OIDC-compliant provider alongside password login; access restricted to specific emails or groups; client secret stored encrypted at rest
-- **Per-device API keys** - up to 10 named keys (e.g. "My Phone"), each independently revocable via `X-Api-Key` header
-- **Traefik API basic auth** - set `TRAEFIK_API_USER` / `TRAEFIK_API_PASSWORD` (or via Settings) for Traefik dashboards with `api.insecure: false`
-- **Rate limiting** on login and auth endpoints (Flask-Limiter)
-- **Atomic config writes** - crash-safe YAML saves via temp file + rename
-- **Encrypted OTP secret** - TOTP seed encrypted at rest with Fernet
-
-
----
-
-## Mobile App
-
-**traefik-manager-mobile** is a React Native companion app for managing Traefik Manager from your phone. Requires **Traefik Manager v1.0.0 or higher**.
-
-|          |                                                                                                |
-| ----------| ------------------------------------------------------------------------------------------------|
-| Repo     | [github.com/chr0nzz/traefik-manager-mobile](https://github.com/chr0nzz/traefik-manager-mobile) |
-| Download | [Latest release](https://github.com/chr0nzz/traefik-manager-mobile/releases/latest)            |
-| Auth     | Per-device API key - generate one in **Settings → Authentication → App / Mobile API Keys**     |
-
-<a href="https://play.google.com/store/apps/details?id=dev.chr0nzz.traefikmanager">
-  <img src="static/icons/GetItOnGooglePlay.svg" alt="Get it on Google Play" height="60" />
-</a>
-
-Features: browse routes, middlewares, and services · enable/disable routes · add and edit routes and middlewares (23 middleware templates with guided wizards) · multiple domains per route · per-service insecureSkipVerify · backend scheme + pass host header controls · multi-config file picker · edit mode for bulk actions · CrowdSec tab · system light/dark theme.
-
----
+- **Routes** - add, edit, clone, and enable/disable HTTP, TCP, and UDP routes from the browser
+- **Middlewares** - 24 guided wizards plus a raw YAML editor, for HTTP and TCP
+- **Multi-server** - manage unlimited remote Traefik instances through a lightweight Go agent
+- **Static config editor** - edit the full `traefik.yml` from the UI and apply it with a one-click Traefik restart
+- **Backups** - timestamped local backups plus git push with history, diffs, and one-click restore
+- **Monitoring** - live services, certificates, access logs, CrowdSec, and CVE advisory warnings
+- **Mobile app** - Android companion app on Google Play
 
 ## Quick Start
 
@@ -367,6 +74,88 @@ Open **http://your-server:5000** - the setup wizard will guide you through the r
 
 ---
 
+## Screenshots
+
+<p align="center">
+<a href="https://traefik-manager.xyzlab.dev/ui-examples.html"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/readme-carousel-dark.gif">
+  <img src="docs/public/images/readme-carousel-light.gif" width="85%" alt="Traefik Manager - Dashboard, Routes, Middlewares, and Route Map" />
+</picture></a>
+</p>
+
+---
+
+## Features
+
+### Routes
+
+- Add, edit, clone, delete, and enable/disable **HTTP, TCP, and UDP** routes
+- **Multiple domains per route** with a chip builder, or switch to the **advanced rule editor** for complex expressions (`PathPrefix`, `HostRegexp`, `&&` / `||`)
+- **Per-route certificate resolver** - pick any configured resolver, request **wildcard certificates**, or disable TLS
+- **TLS options profiles** - create named `tls.options` (min/max version, ciphers, mTLS, SNI strict) and assign them per route
+- **insecureSkipVerify per service** for backends with self-signed certs (Proxmox, Kasm, etc.)
+- **Multi-config file support** - mount several dynamic files via `CONFIG_DIR` / `CONFIG_PATHS`, choose the target file per route, create new files from the UI
+- Optional **app icons** on route cards and lists, shared with the Dashboard tab
+
+### Middlewares
+
+- **24 guided wizards**: Basic/Digest Auth, Forward Auth (with Authentik, Authelia, and Gatekeeper presets), OIDC Auth, Rate Limit, In-Flight Requests, IP Allowlist, Secure Headers, CORS, Redirects, Strip/Add/Replace Prefix, Retry, Circuit Breaker, Buffering, Compress, Chain, Encoded Characters, and more
+- **Raw YAML editor** for anything the wizards don't cover
+- **TCP middlewares** alongside HTTP
+- **Provider middlewares** (Docker, Kubernetes, etc.) shown read-only in the provider tabs
+
+### Live Dashboard & Monitoring
+
+- Real-time stats: router counts, service health, entrypoints, Traefik version
+- **Provider tabs**: Docker, Kubernetes, Swarm, Nomad, ECS, Consul Catalog, Redis, etcd, Consul KV, ZooKeeper, HTTP, File - all API-based, no extra mounts
+- **Traefik CVE advisory warnings** - flags known security advisories affecting your running Traefik version
+- Optional tabs (toggle in Settings) - API-based, no mounts:
+  - **Dashboard** - routes grouped by category with app icons from [selfh.st/icons](https://selfh.st/icons/) (cached locally), per-card name/icon/group overrides
+  - **Route Map** - entry points, routes, middlewares, and services in a visual topology
+  - **TLS Options** - create and manage named `tls.options` profiles, assignable per route
+  - **CrowdSec** - decisions and alerts from a LAPI; ban, captcha, bypass, or unban IPs with one click
+- Optional tabs that read a mounted file:
+  - **Certs** *(mount `acme.json`)* - TLS certificates with expiry tracking
+  - **Plugins** *(mount `traefik.yml`)* - view plugins declared in your static config, and **install new ones** by pasting the snippet from the plugin catalog - TM writes the static config, optionally creates the matching middleware, and prompts a restart
+  - **Logs** *(mount the Traefik access log)* - parsed access log cards with full-detail panel
+- **Configurable file paths** - set the `acme.json`, access log, and static config paths from **Settings → File Paths** without a container restart; UI settings override env vars
+- Card/list view toggle on Routes, Middlewares, and Services
+
+### Static Config Editor *(optional - mount `traefik.yml` read-write)*
+
+- Edit every part of `traefik.yml` from the UI - **Entrypoints, Cert Resolvers, Plugins, API, Logging, and Providers** sections, plus a raw **Monaco** YAML editor for the full file
+- Changes are staged and backed up; apply them with a **one-click Traefik restart** - via socket proxy (recommended), poison pill (no socket needed), or direct socket
+- Full-screen reconnect overlay polls until Traefik is back up
+
+### Backups
+
+- **Timestamped backups** before every change, one-click restore, **configurable retention**
+- **Git repository backup** - auto-push your config to GitHub, Gitea, Forgejo, GitLab, or any HTTPS remote; browse commit history, view side-by-side diffs, restore any commit, set custom commit messages
+- **One repository for all servers** - agents can push to the Host's repository on their own branch, one branch per server (enforced), with per-agent history, diffs, and restore
+
+### Multi-Server (Agents)
+
+- **Traefik Manager Agent (TMA)** - a lightweight Go daemon that runs next to Traefik on any remote server
+- **Server switcher** in the nav bar - every tab (routes, services, middlewares, backups, logs) works against the active server
+- Setup wizard generates a ready-to-paste Docker Compose or Docker Run command; API key shown once and stored encrypted
+- **Git backup without agent-side setup** - enable *Use Host Repository* and the Host pushes that agent's config to its git repo on a dedicated branch; or run agents autonomously via `GIT_BACKUP_*` env vars
+- Manage unlimited servers from one TM - no VPN or SSH required
+
+### Notifications
+
+- In-app notification center for logins, config saves, restarts, backups, and CrowdSec actions
+- **Webhook forwarding** to Discord, Slack, ntfy, or any generic JSON endpoint, with a test button in Settings
+
+### Security
+
+- **bcrypt passwords** (cost 12), optional **TOTP 2FA**, session fixation protection, configurable inactivity timeout
+- **OIDC / SSO** - Keycloak, Google, Authentik, or any OIDC provider; restrict by email or group; can run as the **sole login method** with built-in auth disabled
+- **Per-device API keys** (up to 10, individually revocable) - the mobile app keeps working in every auth mode
+- CSRF protection, rate limiting, SSRF and git-transport hardening, secrets encrypted at rest (Fernet), atomic config writes
+- See the [security](https://traefik-manager.xyzlab.dev/security.html) and [Traefik hardening](https://traefik-manager.xyzlab.dev/hardening.html) docs
+
+---
+
 ## Deployment
 
 | Runtime                                                                                                              | Guide                                                                                                                 |
@@ -391,13 +180,32 @@ Full documentation at **[traefik-manager.xyzlab.dev](https://traefik-manager.xyz
 | [Configuration](https://traefik-manager.xyzlab.dev/manager-yml.html)      | `manager.yml` reference                               |
 | [Environment Variables](https://traefik-manager.xyzlab.dev/env-vars.html) | `CONFIG_DIR`, `CONFIG_PATHS`, auth, domains, and more |
 | [Security](https://traefik-manager.xyzlab.dev/security.html)              | API keys, sessions, CSRF, rate limits, and hardening  |
+| [Traefik Hardening](https://traefik-manager.xyzlab.dev/hardening.html)    | CVE advisories, header aliases, forwardAuth limits    |
 | [API Reference](https://traefik-manager.xyzlab.dev/api.html)              | REST API for integrations and the mobile app          |
 | [OIDC / SSO](https://traefik-manager.xyzlab.dev/oidc.html)                | OIDC setup, provider examples, and access control     |
 | [Git Repository Backup](https://traefik-manager.xyzlab.dev/git-backup.html) | Auto-push, commit history, diff viewer, and one-click restore |
 | [Mobile App](https://traefik-manager.xyzlab.dev/mobile.html)              | Android companion app setup and features              |
 | [Reset Password](https://traefik-manager.xyzlab.dev/reset-password.html)  | CLI reset, TOTP recovery, manual reset                |
 | [UI Examples](https://traefik-manager.xyzlab.dev/ui-examples.html)        | Screenshots and walkthroughs                          |
-| [Provider Tabs](https://traefik-manager.xyzlab.dev/tab-docker.html)                      | Docker, Kubernetes, Swarm, Nomad, ECS, and more       |
+| [Provider Tabs](https://traefik-manager.xyzlab.dev/tab-docker.html)       | Docker, Kubernetes, Swarm, Nomad, ECS, and more       |
+
+---
+
+## Mobile App
+
+**traefik-manager-mobile** is a React Native companion app for managing Traefik Manager from your phone. Requires **Traefik Manager v1.0.0 or higher**.
+
+|          |                                                                                                |
+| ----------| ------------------------------------------------------------------------------------------------|
+| Repo     | [github.com/chr0nzz/traefik-manager-mobile](https://github.com/chr0nzz/traefik-manager-mobile) |
+| Download | [Latest release](https://github.com/chr0nzz/traefik-manager-mobile/releases/latest)            |
+| Auth     | Per-device API key - generate one in **Settings → Authentication → App / Mobile API Keys**     |
+
+<a href="https://play.google.com/store/apps/details?id=dev.chr0nzz.traefikmanager">
+  <img src="static/icons/GetItOnGooglePlay.svg" alt="Get it on Google Play" height="60" />
+</a>
+
+Features: browse routes, middlewares, and services · enable/disable routes · add and edit routes and middlewares with guided wizards · multiple domains per route · per-service insecureSkipVerify · multi-config file picker · edit mode for bulk actions · CrowdSec tab · system light/dark theme.
 
 ---
 
@@ -419,16 +227,6 @@ Full documentation at **[traefik-manager.xyzlab.dev](https://traefik-manager.xyz
 ## Contributing
 
 Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to report bugs, suggest features, and run the project locally.
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=chr0nzz%2Ftraefik-manager&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=chr0nzz/traefik-manager&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=chr0nzz/traefik-manager&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=chr0nzz/traefik-manager&type=date&legend=top-left" />
- </picture>
-</a>
 
 ## License
 

@@ -26,7 +26,7 @@ When a remote agent is active:
 - **Route Map** - The route map diagram renders the agent's routes and services.
 - **Tab visibility** - Provider and monitoring tab toggles (Docker, Kubernetes, Certs, Plugins, etc.) are stored per-server in the browser. Changes made while on an agent do not affect the Host or other agents.
 - **Static Config** (Settings - Static Config) - Available if the agent has `STATIC_CONFIG_PATH` set. Raw YAML editing is supported; section-based editing (entrypoints, cert resolvers, etc.) is available only on the Host. Traefik restart works if the agent has `RESTART_METHOD` configured.
-- **Backups** (Settings - Backups) - Shows the agent's local `.bak` backup files. The agent creates a `.bak` automatically before every config write; you can also create a manual backup at any time. Restore, delete, and git history operations all proxy through the agent. Git backup configuration fields are hidden (managed via `GIT_BACKUP_*` env vars on the agent). The Static Config backup sub-tab is not shown for agents.
+- **Backups** (Settings - Backups) - Shows the agent's local `.bak` backup files. The agent creates a `.bak` automatically before every config write; you can also create a manual backup at any time. In the Git sub-tab you can enable **Use Host Repository** to have the Host push this agent's config to the Host's git repository on a dedicated branch (no agent-side git config needed), or leave the agent autonomous via its `GIT_BACKUP_*` env vars. The Static Config backup sub-tab is not shown for agents.
 - **Logs** - The Logs tab shows the agent's access log when `ACCESS_LOG_PATH` is set on the agent. When installed via the installer script alongside Traefik, this is set automatically.
 - **Certificates** - The Certificates tab shows certs from the agent's `acme.json` when `ACME_JSON_PATH` is set. When installed via the installer script alongside Traefik, this is set automatically.
 - **CrowdSec** - If the agent has `CROWDSEC_LAPI_URL` and `CROWDSEC_API_KEY` configured, the CrowdSec tab shows that server's decisions and alerts.
@@ -209,6 +209,14 @@ sudo ufw allow from <subnet> to any port <crowdsec-port> proto tcp
 | `GIT_BACKUP_TOKEN` | - | Git access token |
 | `GIT_BACKUP_COMMIT_MESSAGE` | `traefik-manager: {action} at {timestamp}` | Commit message template |
 | `GIT_BACKUP_AUTO_PUSH` | `true` | Push after every config write |
+
+::: warning
+Do not point multiple servers (Host or agents) at the same repository and branch - they push to the same file paths and will overwrite each other. Use a separate repository or a distinct `GIT_BACKUP_BRANCH` per server (e.g. `agent-vps1`). See [Git Repository Backup](git-backup.md).
+:::
+
+::: tip Prefer Host-managed backup
+Instead of configuring `GIT_BACKUP_*` on every agent, you can enable **Use Host Repository** in Settings - Backups - Git while the agent is active: the Host pushes the agent's config to its own repository on a per-agent branch, using the Host's credentials.
+:::
 
 ### Agent server
 

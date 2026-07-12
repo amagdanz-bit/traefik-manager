@@ -1,6 +1,6 @@
 # Static Config Editor
 
-The **Static Config** editor lets you view and edit Traefik's static configuration (`traefik.yml`) directly from the Traefik Manager UI. Access it via **Settings → Static Config**. Changes are staged, backed up before saving, and Traefik is restarted automatically using whichever restart method you configure.
+The **Static Config** editor lets you view and edit Traefik's static configuration (`traefik.yml`) directly from the Traefik Manager UI. Access it via **Settings → Static Config**. Changes are staged and backed up before saving; a banner then prompts you to restart Traefik with one click, using whichever restart method you configure.
 
 The editor is only visible when `STATIC_CONFIG_PATH` is set and the file exists.
 
@@ -23,7 +23,7 @@ Traefik's static configuration controls settings that cannot be changed at runti
 
 | Section               | Description                                                                                                                                          |
 | -----------------------| ------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Entrypoints           | Add, edit, and remove entrypoints - port, protocol, optional HTTP-to-HTTPS redirect                                                                  |
+| Entrypoints           | Add, edit, and remove entrypoints - port, protocol, optional HTTP-to-HTTPS redirect, and the [Underscore Headers](hardening.md#header-alias-spoofing-underscore-headers) strategy (Traefik 3.6.20 / 3.7.6+). Edits merge into the existing entrypoint, preserving keys the form does not manage. |
 | Certificate Resolvers | ACME email, storage path, DNS or HTTP challenge type and credentials                                                                                 |
 | Plugins               | Install and remove experimental plugins; view installed plugins                                                                                      |
 | API                   | Enable or disable the Traefik API and Dashboard, insecure mode, and debug mode                                                                       |

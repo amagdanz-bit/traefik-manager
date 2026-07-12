@@ -56,6 +56,12 @@
 </head>
 <body class="min-h-screen font-sans">
 
+{% if no_auth %}
+<div style="background:var(--red);color:#fff;text-align:center;padding:8px 16px;font-size:13px;font-weight:600;position:sticky;top:0;z-index:99997;">
+    <i class="ph-bold ph-warning" style="margin-right:6px"></i>
+    No authentication is active - this interface is publicly accessible. Enable a password or OIDC in Settings - Authentication.
+</div>
+{% endif %}
 
 <div id="customConfirmOverlay" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.5);backdrop-filter:blur(3px);align-items:center;justify-content:center;">
     <div style="max-width:380px;width:90%;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:24px;box-shadow:0 16px 48px rgba(0,0,0,0.4);">
@@ -128,6 +134,20 @@
             <a id="tmUpdatePopupLink" href="#" target="_blank" rel="noopener" class="text-xs mt-2 inline-block" style="color:var(--blue)">View release notes</a>
         </div>
         <button onclick="dismissTmUpdatePopup()" style="color:var(--muted);background:none;border:none;cursor:pointer;padding:0;line-height:1;flex-shrink:0">
+            <i class="ph-bold ph-x text-sm"></i>
+        </button>
+    </div>
+</div>
+
+<div id="securityAdvisoryPopup" class="hidden" style="position:fixed;bottom:24px;right:24px;z-index:10000;background:var(--card);border:1px solid var(--red);border-radius:10px;padding:14px 16px;min-width:260px;max-width:340px;box-shadow:0 4px 24px rgba(0,0,0,0.25);">
+    <div class="flex items-start gap-3">
+        <i class="ph-bold ph-shield-warning" style="color:var(--red);font-size:20px;flex-shrink:0;margin-top:1px"></i>
+        <div style="flex:1;min-width:0;">
+            <div class="text-sm font-medium" style="color:var(--text)">Traefik security advisory</div>
+            <div class="text-xs mt-0.5" style="color:var(--muted)"><span id="securityAdvisoryText"></span></div>
+            <a id="securityAdvisoryLink" href="#" target="_blank" rel="noopener" class="text-xs mt-2 inline-block" style="color:var(--blue)">View advisory</a>
+        </div>
+        <button onclick="dismissSecurityAdvisory()" style="color:var(--muted);background:none;border:none;cursor:pointer;padding:0;line-height:1;flex-shrink:0">
             <i class="ph-bold ph-x text-sm"></i>
         </button>
     </div>
@@ -1023,7 +1043,7 @@ function setMwMode(mode) {
     }
 }
 
-const _wizardTemplates = new Set(['basicAuth','digestAuth','forwardAuth','forwardAuthAuthentik','forwardAuthAuthelia','forwardAuthGatekeeper','oidcAuth','ipAllowList','ipAllowListPrivate','rateLimit','secureHeaders','corsHeaders','redirectScheme','redirectRegex','stripPrefix','addPrefix','replacePath','compress','retry','circuitBreaker','buffering','chain','inFlightReq']);
+const _wizardTemplates = new Set(['basicAuth','digestAuth','forwardAuth','forwardAuthAuthentik','forwardAuthAuthelia','forwardAuthGatekeeper','oidcAuth','ipAllowList','ipAllowListPrivate','rateLimit','secureHeaders','corsHeaders','encodedCharacters','redirectScheme','redirectRegex','stripPrefix','addPrefix','replacePath','compress','retry','circuitBreaker','buffering','chain','inFlightReq']);
 
 const _wizKeyMap = {
     forwardAuthAuthentik: 'forwardAuth', forwardAuthAuthelia: 'forwardAuth',
@@ -1083,8 +1103,10 @@ function buildYamlFromWizard() {
         const addr  = _val('wizFaAddress');
         const trust = _chk('wizFaTrust', true);
         const hdrs  = _lines('wizFaHeaders');
+        const maxBody = _val('wizFaMaxBody');
         yaml = 'forwardAuth:\n  address: "' + addr + '"\n  trustForwardHeader: ' + trust;
         if (hdrs.length) yaml += '\n  authResponseHeaders:\n' + hdrs.map(h => '    - "' + h + '"').join('\n');
+        if (maxBody && /^\d+$/.test(maxBody)) yaml += '\n  maxResponseBodySize: ' + maxBody;
 
     } else if (key === 'forwardAuthGatekeeper') {
         const url    = _val('wizGkUrl').replace(/\/+$/, '');
@@ -1094,8 +1116,10 @@ function buildYamlFromWizard() {
         const auth   = _chk('wizGkAuthorization', false);
         const hdrs   = _lines('wizGkHeaders');
         const allHdrs = auth ? ['Authorization', ...hdrs.filter(h => h !== 'Authorization')] : hdrs;
+        const gkMaxBody = _val('wizGkMaxBody');
         yaml = 'forwardAuth:\n  address: "' + addr + '"\n  trustForwardHeader: ' + trust;
         if (allHdrs.length) yaml += '\n  authResponseHeaders:\n' + allHdrs.map(h => '    - "' + h + '"').join('\n');
+        if (gkMaxBody && /^\d+$/.test(gkMaxBody)) yaml += '\n  maxResponseBodySize: ' + gkMaxBody;
 
     } else if (key === 'oidcAuth') {
         const providerUrl    = _val('wizOidcProviderUrl');
@@ -1157,6 +1181,20 @@ function buildYamlFromWizard() {
         lines.push('  accessControlMaxAge: ' + maxAge);
         if (vary) lines.push('  addVaryHeader: true');
         yaml = lines.join('\n');
+
+    } else if (key === 'encodedCharacters') {
+        const opts = [
+            ['allowEncodedSlash', 'wizEcSlash'],
+            ['allowEncodedBackSlash', 'wizEcBackSlash'],
+            ['allowEncodedSemicolon', 'wizEcSemicolon'],
+            ['allowEncodedPercent', 'wizEcPercent'],
+            ['allowEncodedQuestionMark', 'wizEcQuestion'],
+            ['allowEncodedHash', 'wizEcHash'],
+        ];
+        const enabled = opts.filter(([k, id]) => _chk(id, false)).map(([k]) => k);
+        yaml = enabled.length
+            ? 'encodedCharacters:\n' + enabled.map(k => '  ' + k + ': true').join('\n')
+            : 'encodedCharacters: {}';
 
     } else if (key === 'redirectScheme') {
         yaml = 'redirectScheme:\n  scheme: ' + _val('wizRsScheme','https') + '\n  permanent: ' + _chk('wizRsPermanent',true);
@@ -2423,9 +2461,10 @@ async function loadOverviewStats() {
                 document.getElementById('versionBadgeMobile')?.classList.add('flex');
             }
             checkForUpdate(_currentVersion);
+            checkTraefikAdvisories(_currentVersion);
         }
 
-        
+
         const apiStatusMap = {};
 
         function pct(n, total) { return total === 0 ? '0%' : Math.round(n / total * 100) + '%'; }
@@ -2620,7 +2659,7 @@ async function loadOverviewStats() {
                 const isHttps = ['443','8443'].includes(port);
                 const color = isHttps ? 'badge-green' : isHttp ? 'badge-http' : 'badge-muted';
                 return `<div class="ep-pill">
-                    <span class="badge ${color} text-xs">${ep.name}</span>
+                    <span class="badge ${color} text-xs">${_esc(ep.name)}</span>
                     <span class="font-mono text-xs" style="color:var(--muted)">${addr}</span>
                 </div>`;
             }).join('');
@@ -2787,6 +2826,61 @@ function dismissTmUpdatePopup() {
     const vEl = document.getElementById('tmUpdatePopupVersion');
     const ver = (vEl?.textContent || '').match(/v([\d.]+)/)?.[1];
     if (ver) localStorage.setItem('tmUpdateDismissed', ver);
+}
+
+const TRAEFIK_ADVISORIES = [
+    {
+        id: 'CVE-2026-39858',
+        severity: 'High',
+        url: 'https://github.com/traefik/traefik/security/advisories/GHSA-5m6w-wvh7-57vm',
+        forwardAuthRelated: true,
+        summary: 'ForwardAuth authentication bypass via forwarded header aliases',
+        // Fixed in 2.11.43 / 3.6.14 / 3.7.0-rc.2. Any 3.x below 3.6.14 (3.7.0+ is above) or 2.x below 2.11.43 is affected.
+        affected: (p) => {
+            const [maj, min, pat] = p;
+            if (maj < 2) return true;
+            if (maj === 2) return (min < 11) || (min === 11 && pat < 43);
+            if (maj === 3) return (min < 6) || (min === 6 && pat < 14);
+            return false;
+        },
+    },
+];
+
+function _configHasForwardAuth() {
+    try {
+        return (typeof _allMiddlewares !== 'undefined' ? _allMiddlewares : [])
+            .some(m => /forward[_-]?auth/i.test(m.yaml || '') || /forward[_-]?auth/i.test(m.name || ''));
+    } catch (e) { return false; }
+}
+
+function checkTraefikAdvisories(version) {
+    const p = _semverParts(version);
+    if (!p) return;
+    const hit = TRAEFIK_ADVISORIES.find(a => a.affected(p));
+    if (!hit) return;
+    const dismissKey = 'traefikAdvisoryDismissed_' + hit.id;
+    if (localStorage.getItem(dismissKey) === version) return;
+    const popup = document.getElementById('securityAdvisoryPopup');
+    const txt   = document.getElementById('securityAdvisoryText');
+    const link  = document.getElementById('securityAdvisoryLink');
+    if (!popup || !txt) return;
+    const fa = hit.forwardAuthRelated && _configHasForwardAuth();
+    txt.innerHTML = `Your Traefik <b>v${_esc(version)}</b> is affected by <b>${_esc(hit.id)}</b> (${_esc(hit.severity)}) - ${_esc(hit.summary)}.`
+        + (fa ? ` A forwardAuth middleware is in use, so this is high priority.` : ``)
+        + ` Update Traefik to a patched version.`;
+    if (link) link.href = hit.url;
+    popup.dataset.advisory = hit.id;
+    popup.dataset.version = version;
+    popup.classList.remove('hidden');
+}
+
+function dismissSecurityAdvisory() {
+    const popup = document.getElementById('securityAdvisoryPopup');
+    if (!popup) return;
+    popup.classList.add('hidden');
+    if (popup.dataset.advisory && popup.dataset.version) {
+        localStorage.setItem('traefikAdvisoryDismissed_' + popup.dataset.advisory, popup.dataset.version);
+    }
 }
 
 let _mwFilter = 'all';
@@ -3530,8 +3624,8 @@ function renderDetailPanel(app, protocol, liveRouter, liveService, entrypoints) 
 
     const serversList = liveService ? (liveService.loadBalancer?.servers || []) : [];
     const serversHtml = serversList.length > 0
-        ? serversList.map(s => `<div class="font-mono text-xs break-all mt-1 px-2 py-1 rounded" style="color:var(--green);background:var(--input-bg);word-break:break-all">${s.url || s.address || '-'}</div>`).join('')
-        : `<div class="font-mono text-xs break-all mt-1 px-2 py-1 rounded" style="color:var(--green);background:var(--input-bg);word-break:break-all">${app.target}</div>`;
+        ? serversList.map(s => `<div class="font-mono text-xs break-all mt-1 px-2 py-1 rounded" style="color:var(--green);background:var(--input-bg);word-break:break-all">${_esc(s.url || s.address || '-')}</div>`).join('')
+        : `<div class="font-mono text-xs break-all mt-1 px-2 py-1 rounded" style="color:var(--green);background:var(--input-bg);word-break:break-all">${_esc(app.target)}</div>`;
 
     const flowHtml = `
     <div class="mb-5">
@@ -3541,14 +3635,14 @@ function renderDetailPanel(app, protocol, liveRouter, liveService, entrypoints) 
             <div class="flow-arrow">→</div>
             <div class="flow-box active-box text-center flex-1">
                 <div class="text-xs font-bold uppercase tracking-wider mb-1" style="color:var(--blue)">Router</div>
-                <div class="font-bold text-sm" style="color:var(--text)">${app.name}</div>
+                <div class="font-bold text-sm" style="color:var(--text)">${_esc(app.name)}</div>
                 ${tlsInfo}
                 <div class="mt-1.5">${statusBadge}</div>
             </div>
             <div class="flow-arrow">→</div>
             <div class="flow-box text-center flex-1">
                 <div class="text-xs font-bold uppercase tracking-wider mb-1" style="color:var(--muted)">Service</div>
-                <div class="font-bold text-sm truncate" style="color:var(--text)">${app.service_name}</div>
+                <div class="font-bold text-sm truncate" style="color:var(--text)">${_esc(app.service_name)}</div>
                 <div class="mt-2">${serversHtml}</div>
             </div>
         </div>
@@ -5677,10 +5771,33 @@ function switchStaticSection(section) {
     requestAnimationFrame(_updateStaticTabArrows);
 }
 
+function _semverParts(v) {
+    const m = String(v || '').match(/(\d+)\.(\d+)\.(\d+)/);
+    return m ? [+m[1], +m[2], +m[3]] : null;
+}
+
+function _traefikSupportsUnderscoreStrategy() {
+    const p = _semverParts(typeof _currentVersion !== 'undefined' ? _currentVersion : '');
+    if (!p) return true;
+    const [maj, min, pat] = p;
+    if (maj > 3) return true;
+    if (maj < 3) return false;
+    if (min > 7) return true;
+    if (min === 7) return pat >= 6;
+    if (min === 6) return pat >= 20;
+    return false;
+}
+
+function _updateEpUnderscoreVisibility() {
+    const row = document.getElementById('sfEpUnderscoreRow');
+    if (row) row.style.display = _traefikSupportsUnderscoreStrategy() ? 'block' : 'none';
+}
+
 function openStaticAddForm(section) {
     if (_staticEditState.section) closeStaticForm(_staticEditState.section);
     _staticEditState = { section, name: null };
     _resetStaticForm(section);
+    if (section === 'entrypoints') _updateEpUnderscoreVisibility();
     const f = document.getElementById('staticForm-' + section);
     if (f) f.style.display = 'block';
     const btn = document.getElementById('sf' + _sfFormKey(section) + 'Btn');
@@ -5694,6 +5811,7 @@ function openStaticEditForm(section, name) {
     if (_staticEditState.section) closeStaticForm(_staticEditState.section);
     _staticEditState = { section, name };
     _prefillStaticForm(section, name);
+    if (section === 'entrypoints') _updateEpUnderscoreVisibility();
     const f = document.getElementById('staticForm-' + section);
     if (f) f.style.display = 'block';
     const btn = document.getElementById('sf' + _sfFormKey(section) + 'Btn');
@@ -5734,6 +5852,8 @@ function _prefillStaticForm(section, name) {
         document.getElementById('sfEpAddr').value    = ep.address || '';
         document.getElementById('sfEpRedirect').value = ep.http?.redirections?.entryPoint?.to || '';
         const h3chk = document.getElementById('sfEpHttp3'); if (h3chk) h3chk.checked = !!ep.http3;
+        const uhsSel = document.getElementById('sfEpUnderscore');
+        if (uhsSel) uhsSel.value = ep.http?.underscoreHeadersStrategy || '';
     } else if (section === 'resolvers') {
         const acme = ((d.certificatesResolvers || {})[name] || {}).acme || {};
         document.getElementById('sfResName').value    = name;
@@ -5790,7 +5910,7 @@ async function submitStaticSection(section) {
     let name, payload;
     if (section === 'entrypoints') {
         name    = document.getElementById('sfEpName').value.trim();
-        payload = { address: document.getElementById('sfEpAddr').value.trim(), redirect_to: document.getElementById('sfEpRedirect').value.trim(), http3: document.getElementById('sfEpHttp3')?.checked || false };
+        payload = { address: document.getElementById('sfEpAddr').value.trim(), redirect_to: document.getElementById('sfEpRedirect').value.trim(), http3: document.getElementById('sfEpHttp3')?.checked || false, underscore_headers: document.getElementById('sfEpUnderscore')?.value || '' };
     } else if (section === 'resolvers') {
         name    = document.getElementById('sfResName').value.trim();
         payload = { email: document.getElementById('sfResEmail').value.trim(), storage: document.getElementById('sfResStorage').value.trim(), challenge_type: document.getElementById('sfResChallenge').value, provider: document.getElementById('sfResProvider').value.trim(), http_entrypoint: document.getElementById('sfResHttpEp').value.trim() };
@@ -5826,6 +5946,8 @@ function _renderStaticEntrypoints(eps) {
         const ep    = eps[name] || {};
         const addr  = ep.address || '';
         const redir = ep.http?.redirections?.entryPoint?.to || '';
+        const uhs   = ep.http?.underscoreHeadersStrategy || '';
+        const http3 = !!ep.http3;
         const port  = addr.replace(/^.*:/, '');
         const proto = port === '443' ? 'HTTPS' : port === '80' ? 'HTTP' : port ? port : '';
         const nd    = JSON.stringify(name);
@@ -5836,6 +5958,8 @@ function _renderStaticEntrypoints(eps) {
                 <span class="text-xs font-mono px-2 py-0.5 rounded-md flex-shrink-0" style="background:rgba(36,161,222,0.1);color:var(--blue)">${_esc(addr)}</span>
                 ${proto ? `<span class="text-xs px-1.5 py-0.5 rounded font-semibold flex-shrink-0" style="background:rgba(36,161,222,0.07);color:var(--blue)">${proto}</span>` : ''}
                 ${redir ? `<span class="text-xs flex-shrink-0" style="color:var(--muted)">→ <span class="font-mono" style="color:var(--text)">${_esc(redir)}</span></span>` : ''}
+                ${http3 ? `<span class="text-xs px-1.5 py-0.5 rounded font-semibold flex-shrink-0" style="background:rgba(163,113,247,0.1);color:var(--purple)">HTTP/3</span>` : ''}
+                ${uhs ? `<span class="text-xs px-1.5 py-0.5 rounded font-semibold flex-shrink-0" style="background:rgba(63,185,80,0.12);color:var(--green)" title="underscoreHeadersStrategy: ${_esc(uhs)}"><i class="ph-bold ph-shield-check" style="font-size:10px"></i> ${_esc(uhs)}</span>` : ''}
             </div>
             <div class="flex gap-1 flex-shrink-0">
                 <button onclick='openStaticEditForm("entrypoints",${nd})' class="btn-icon text-xs" title="Edit"><i class="ph-bold ph-pencil-simple"></i></button>
@@ -6168,6 +6292,15 @@ function _buildStaticTabHTML() {
                 <input type="checkbox" id="sfEpHttp3" class="rounded" style="accent-color:var(--blue)">
                 <span class="text-xs" style="color:var(--text)">Enable HTTP/3 (QUIC)</span>
                 <span class="text-xs" style="color:var(--muted)">- adds <code class="font-mono">http3: {}</code> to this entrypoint</span>
+            </div>
+            <div id="sfEpUnderscoreRow" style="display:none">
+                <label class="text-xs block mb-1" style="color:var(--muted)">Underscore Headers <span style="color:var(--muted);font-weight:400">(security)</span></label>
+                <select id="sfEpUnderscore" class="input-field text-sm">
+                    <option value="">Keep (default)</option>
+                    <option value="delete">Delete - strip underscore headers</option>
+                    <option value="reject">Reject - 400 on underscore headers</option>
+                </select>
+                <p class="text-xs mt-1" style="color:var(--muted)">Stops underscore header aliases (e.g. <code class="font-mono">X_Auth_User</code>) from bypassing forwardAuth. <code class="font-mono">Delete</code> recommended. <a href="https://traefik-manager.xyzlab.dev/hardening.html" target="_blank" style="color:var(--blue)">Learn more</a></p>
             </div>
             <div class="flex gap-2 justify-end pt-1">
                 <button onclick="closeStaticForm('entrypoints')" class="btn-secondary text-xs">Cancel</button>
