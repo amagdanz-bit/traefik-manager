@@ -140,6 +140,8 @@ def _parse_agent_dict(a: dict) -> dict:
         'git_backup_token':             _decrypt_otp_secret(str(a.get('git_backup_token', ''))),
         'git_backup_auto_push':         bool(a.get('git_backup_auto_push', True)),
         'git_backup_commit_message':    str(a.get('git_backup_commit_message', 'traefik-manager: {action} at {timestamp}')).strip() or 'traefik-manager: {action} at {timestamp}',
+        'git_host_backup':              bool(a.get('git_host_backup', False)),
+        'git_host_branch':              str(a.get('git_host_branch', '')).strip(),
         'tma_port':                     str(a.get('tma_port', '')).strip(),
         'tma_rate_limit':               str(a.get('tma_rate_limit', '')).strip(),
         'domains':                      [str(d).strip() for d in (a.get('domains') or []) if str(d).strip()],
@@ -2871,17 +2873,7 @@ def _git_run(args, cwd=None, credentials=None):
     )
     return result.stdout.strip(), result.stderr.strip(), result.returncode
 
-def _git_ensure_repo():
-    s        = load_settings()
-    repo_url = s.get('git_backup_repo', '').strip()
-    branch   = _safe_git_branch(s.get('git_backup_branch', 'main'))
-    username = s.get('git_backup_username', '').strip()
-    token    = s.get('git_backup_token', '').strip()
-    if not _valid_git_url(repo_url):
-        raise ValueError('Unsupported git repository URL scheme')
-    creds    = {'username': username, 'token': token} if token else None
-    repo_dir = _git_repo_dir()
-
+def _git_ensure_repo_at(repo_dir, repo_url, branch, creds):
     def _fresh_clone():
         if os.path.exists(repo_dir):
             shutil.rmtree(repo_dir, ignore_errors=True)
@@ -2896,21 +2888,32 @@ def _git_ensure_repo():
 
     valid = False
     if os.path.exists(os.path.join(repo_dir, '.git')):
-        _, _, rc = _git_run(['rev-parse', '--git-dir'])
+        _, _, rc = _git_run(['rev-parse', '--git-dir'], cwd=repo_dir)
         valid = (rc == 0)
     if not valid:
         _fresh_clone()
     else:
-        _, _, rc = _git_run(['remote', 'get-url', 'origin'])
+        _, _, rc = _git_run(['remote', 'get-url', 'origin'], cwd=repo_dir)
         if rc != 0:
-            _, _, arc = _git_run(['remote', 'add', 'origin', repo_url])
+            _, _, arc = _git_run(['remote', 'add', 'origin', repo_url], cwd=repo_dir)
             if arc != 0:
                 _fresh_clone()
         else:
-            _git_run(['remote', 'set-url', 'origin', repo_url])
-        _git_run(['config', 'user.email', 'traefik-manager@localhost'])
-        _git_run(['config', 'user.name', 'Traefik Manager'])
+            _git_run(['remote', 'set-url', 'origin', repo_url], cwd=repo_dir)
+        _git_run(['config', 'user.email', 'traefik-manager@localhost'], cwd=repo_dir)
+        _git_run(['config', 'user.name', 'Traefik Manager'], cwd=repo_dir)
     return repo_dir
+
+def _git_ensure_repo():
+    s        = load_settings()
+    repo_url = s.get('git_backup_repo', '').strip()
+    branch   = _safe_git_branch(s.get('git_backup_branch', 'main'))
+    username = s.get('git_backup_username', '').strip()
+    token    = s.get('git_backup_token', '').strip()
+    if not _valid_git_url(repo_url):
+        raise ValueError('Unsupported git repository URL scheme')
+    creds    = {'username': username, 'token': token} if token else None
+    return _git_ensure_repo_at(_git_repo_dir(), repo_url, branch, creds)
 
 @contextlib.contextmanager
 def _git_lock():
@@ -2985,25 +2988,140 @@ def _git_push_if_enabled(action='backup'):
         repo      = s.get('git_backup_repo', '').strip()
         if enabled and auto_push and repo:
             ok, err = _git_push_configs(action)
-            if ok:
+            if ok and err != 'No changes':
                 add_notification('success', f'Git backup pushed ({action})')
-            elif err == 'No changes':
-                pass
-            else:
+            elif not ok:
                 logger.warning(f"Git backup failed: {err}")
                 add_notification('error', f'Git backup failed ({action}): {err}')
     except Exception:
         logger.exception("Git push error")
 
 
+def _git_agent_repo_dir(agent_id: str) -> str:
+    safe = re.sub(r'[^\w-]', '', str(agent_id))
+    return os.path.join(BACKUP_DIR, f'git-agent-{safe}')
+
+def _agent_git_branch(agent: dict) -> str:
+    branch = (agent.get('git_host_branch') or '').strip()
+    if not branch:
+        branch = re.sub(r'[^\w.-]+', '-', (agent.get('name') or '').strip().lower()).strip('-')
+    if not branch:
+        branch = f"agent-{str(agent.get('id', ''))[:8]}"
+    return _safe_git_branch(branch)
+
+def _git_push_agent_configs(agent, action='backup', custom_message=None):
+    s        = load_settings()
+    repo_url = s.get('git_backup_repo', '').strip()
+    if not repo_url:
+        return False, 'No repository configured on the Host'
+    if not _valid_git_url(repo_url):
+        return False, 'Unsupported git repository URL scheme'
+    branch      = _agent_git_branch(agent)
+    host_branch = _safe_git_branch(s.get('git_backup_branch', 'main'))
+    if branch == host_branch:
+        return False, f'Agent branch "{branch}" must differ from the Host branch'
+    token = s.get('git_backup_token', '').strip()
+    creds = {'username': s.get('git_backup_username', '').strip(), 'token': token} if token else None
+    tmpl  = s.get('git_backup_commit_message', 'traefik-manager: {action} at {timestamp}')
+
+    def _redact(text):
+        return text.replace(token, '***') if token and text else text
+
+    try:
+        resp = _agent_request(agent, 'GET', '/api/configs')
+        resp.raise_for_status()
+        files = (resp.json() or {}).get('files') or []
+    except Exception as e:
+        return False, f'Could not read agent configs: {e}'
+    static_content = ''
+    static_name    = ''
+    try:
+        sresp = _agent_request(agent, 'GET', '/api/static')
+        if sresp.status_code == 200:
+            static_content = (sresp.json() or {}).get('content', '') or ''
+            static_name    = os.path.basename((agent.get('static_config_path') or '').strip()) or 'traefik.yml'
+    except Exception:
+        pass
+
+    repo_dir = _git_agent_repo_dir(agent['id'])
+    ts = time.strftime('%Y-%m-%d %H:%M:%S')
+    if custom_message and custom_message.strip():
+        msg = custom_message.strip()
+    else:
+        msg = tmpl.replace('{action}', action).replace('{timestamp}', ts)
+    with _git_lock():
+        try:
+            _git_ensure_repo_at(repo_dir, repo_url, branch, creds)
+        except Exception as e:
+            return False, f'Repo init failed: {_redact(str(e))}'
+        dyn_dir    = os.path.join(repo_dir, 'dynamic')
+        static_dir = os.path.join(repo_dir, 'static')
+        err = ''
+        for attempt in (1, 2):
+            _, _, frc = _git_run(['fetch', 'origin', branch], cwd=repo_dir, credentials=creds)
+            if frc == 0:
+                _git_run(['reset', '--hard', 'FETCH_HEAD'], cwd=repo_dir)
+            os.makedirs(dyn_dir,    exist_ok=True)
+            os.makedirs(static_dir, exist_ok=True)
+            for f in files:
+                name = os.path.basename(str(f.get('name') or '').strip())
+                if not name:
+                    continue
+                with open(os.path.join(dyn_dir, name), 'w') as fh:
+                    fh.write(str(f.get('content') or ''))
+            if static_content and static_name:
+                with open(os.path.join(static_dir, static_name), 'w') as fh:
+                    fh.write(static_content)
+            _git_run(['add', '-A'], cwd=repo_dir)
+            _, _, rc = _git_run(['diff', '--cached', '--quiet'], cwd=repo_dir)
+            if rc == 0:
+                return True, 'No changes'
+            _, err, rc = _git_run(['commit', '-m', msg], cwd=repo_dir)
+            if rc != 0:
+                return False, f'Commit failed: {_redact(err)}'
+            _, err, rc = _git_run(['push', 'origin', f'HEAD:{branch}'], cwd=repo_dir, credentials=creds)
+            if rc == 0:
+                logger.info(f"Git backup ({agent.get('name')}): {msg}")
+                return True, ''
+        return False, f'Push failed: {_redact(err)}'
+
+def _git_push_agent_if_enabled(agent, action='backup'):
+    try:
+        if not agent or not agent.get('git_host_backup'):
+            return
+        s = load_settings()
+        if not (s.get('git_backup_enabled') and s.get('git_backup_auto_push') and s.get('git_backup_repo', '').strip()):
+            return
+        ok, err = _git_push_agent_configs(agent, action)
+        if ok and err != 'No changes':
+            add_notification('success', f"Git backup pushed ({agent.get('name')}: {action})")
+        elif not ok:
+            logger.warning(f"Agent git backup failed: {err}")
+            add_notification('error', f"Git backup failed ({agent.get('name')}): {err}")
+    except Exception:
+        logger.exception("Agent git push error")
+
+
+def _git_req_agent():
+    agent_id = (request.args.get('agent_id') or '').strip()
+    if not agent_id:
+        return None, False
+    return _agent_by_id(agent_id), True
+
 @app.route('/api/backup/git/status')
 @login_required
 def api_git_backup_status():
+    agent, wanted = _git_req_agent()
+    if wanted and not agent:
+        return jsonify({'error': 'Agent not found'}), 404
     s          = load_settings()
     configured = bool(s.get('git_backup_repo', '').strip())
+    repo_dir   = _git_agent_repo_dir(agent['id']) if agent else _git_repo_dir()
     result     = {'enabled': bool(s.get('git_backup_enabled')), 'configured': configured, 'last_sha': None, 'last_push': None}
-    if configured and os.path.exists(os.path.join(_git_repo_dir(), '.git')):
-        out, _, rc = _git_run(['log', '-1', '--format=%H|%ci|%s'])
+    if agent:
+        result['branch'] = _agent_git_branch(agent)
+    if configured and os.path.exists(os.path.join(repo_dir, '.git')):
+        out, _, rc = _git_run(['log', '-1', '--format=%H|%ci|%s'], cwd=repo_dir)
         if rc == 0 and '|' in out:
             parts = out.split('|', 2)
             result['last_sha']  = parts[0][:8]
@@ -3014,11 +3132,17 @@ def api_git_backup_status():
 @csrf_protect
 @login_required
 def api_git_backup_push():
+    agent, wanted = _git_req_agent()
+    if wanted and not agent:
+        return jsonify({'error': 'Agent not found'}), 404
     data    = request.get_json(silent=True) or {}
     message = str(data.get('message', '')).strip()
-    ok, err = _git_push_configs('manual', custom_message=message or None)
+    if agent:
+        ok, err = _git_push_agent_configs(agent, 'manual', custom_message=message or None)
+    else:
+        ok, err = _git_push_configs('manual', custom_message=message or None)
     if ok:
-        add_notification('success', 'Git backup pushed')
+        add_notification('success', f"Git backup pushed ({agent['name']})" if agent else 'Git backup pushed')
         return jsonify({'ok': True})
     add_notification('error', f'Git push failed: {err}')
     return jsonify({'ok': False, 'error': err}), 400
@@ -3048,9 +3172,13 @@ def api_git_backup_test():
 @app.route('/api/backup/git/commits')
 @login_required
 def api_git_backup_commits():
-    if not os.path.exists(os.path.join(_git_repo_dir(), '.git')):
+    agent, wanted = _git_req_agent()
+    if wanted and not agent:
         return jsonify([])
-    out, _, rc = _git_run(['log', '--format=%H|%ci|%s', '-50'])
+    repo_dir = _git_agent_repo_dir(agent['id']) if agent else _git_repo_dir()
+    if not os.path.exists(os.path.join(repo_dir, '.git')):
+        return jsonify([])
+    out, _, rc = _git_run(['log', '--format=%H|%ci|%s', '-50'], cwd=repo_dir)
     if rc != 0:
         return jsonify([])
     commits = []
@@ -3065,11 +3193,15 @@ def api_git_backup_commits():
 def api_git_backup_diff(sha):
     if not re.match(r'^[0-9a-f]{7,40}$', sha):
         abort(400)
-    if not os.path.exists(os.path.join(_git_repo_dir(), '.git')):
+    agent, wanted = _git_req_agent()
+    if wanted and not agent:
+        return jsonify({'stat': '', 'files': []})
+    repo_dir = _git_agent_repo_dir(agent['id']) if agent else _git_repo_dir()
+    if not os.path.exists(os.path.join(repo_dir, '.git')):
         return jsonify({'stat': '', 'files': []})
     try:
-        stat, _, _ = _git_run(['show', '--stat', '--format=', sha])
-        changed, _, rc = _git_run(['diff-tree', '--no-commit-id', '-r', '--name-status', sha])
+        stat, _, _ = _git_run(['show', '--stat', '--format=', sha], cwd=repo_dir)
+        changed, _, rc = _git_run(['diff-tree', '--no-commit-id', '-r', '--name-status', sha], cwd=repo_dir)
         files = []
         for line in changed.splitlines():
             line = line.strip()
@@ -3079,8 +3211,8 @@ def api_git_backup_diff(sha):
             if len(parts) != 2:
                 continue
             status, filename = parts[0].strip(), parts[1].strip()
-            new_content, _, new_rc = _git_run(['show', f'{sha}:{filename}'])
-            old_content, _, old_rc = _git_run(['show', f'{sha}^:{filename}'])
+            new_content, _, new_rc = _git_run(['show', f'{sha}:{filename}'], cwd=repo_dir)
+            old_content, _, old_rc = _git_run(['show', f'{sha}^:{filename}'], cwd=repo_dir)
             files.append({
                 'filename': filename,
                 'status':   status,
@@ -3092,28 +3224,57 @@ def api_git_backup_diff(sha):
         logger.exception("Git diff error")
         return jsonify({'error': str(e)}), 500
 
+def _git_show_first(repo_dir, sha, candidates):
+    for c in candidates:
+        content, _, rc = _git_run(['show', f'{sha}:{c}'], cwd=repo_dir)
+        if rc == 0 and content:
+            return content
+    return None
+
 @app.route('/api/backup/git/restore/<sha>', methods=['POST'])
 @csrf_protect
 @login_required
 def api_git_backup_restore(sha):
     if not re.match(r'^[0-9a-f]{7,40}$', sha):
         abort(400)
-    if not os.path.exists(os.path.join(_git_repo_dir(), '.git')):
+    agent, wanted = _git_req_agent()
+    if wanted and not agent:
+        return jsonify({'error': 'Agent not found'}), 404
+    repo_dir = _git_agent_repo_dir(agent['id']) if agent else _git_repo_dir()
+    if not os.path.exists(os.path.join(repo_dir, '.git')):
         return jsonify({'error': 'Git repo not initialized'}), 400
     try:
+        if agent:
+            out, _, rc = _git_run(['ls-tree', '-r', '--name-only', sha, 'dynamic/'], cwd=repo_dir)
+            if rc != 0:
+                return jsonify({'error': 'Commit not found'}), 404
+            restored = 0
+            for fpath in out.splitlines():
+                fpath = fpath.strip()
+                if not fpath:
+                    continue
+                content, _, src = _git_run(['show', f'{sha}:{fpath}'], cwd=repo_dir)
+                if src == 0:
+                    resp = _agent_request(agent, 'POST', '/api/configs', json={'name': os.path.basename(fpath), 'content': content})
+                    resp.raise_for_status()
+                    restored += 1
+            add_notification('warning', f"Restored {agent['name']} from git commit {sha[:8]} ({restored} files)")
+            return jsonify({'ok': True})
         for p in CONFIG_PATHS:
             create_backup(p)
         sp = _get_static_config_path()
         if sp:
             create_backup(sp)
         for p in CONFIG_PATHS:
-            content, _, rc = _git_run(['show', f'{sha}:{os.path.basename(p)}'])
-            if rc == 0 and content:
+            base    = os.path.basename(p)
+            content = _git_show_first(repo_dir, sha, [f'dynamic/{base}', base])
+            if content:
                 with open(p, 'w') as f:
                     f.write(content)
         if sp:
-            content, _, rc = _git_run(['show', f'{sha}:{os.path.basename(sp)}'])
-            if rc == 0 and content:
+            base    = os.path.basename(sp)
+            content = _git_show_first(repo_dir, sha, [f'static/{base}', base])
+            if content:
                 with open(sp, 'w') as f:
                     f.write(content)
         add_notification('warning', f'Restored from git commit {sha[:8]}')
@@ -3128,7 +3289,10 @@ def api_git_backup_restore(sha):
 @csrf_protect
 @login_required
 def api_git_backup_reset():
-    repo_dir = _git_repo_dir()
+    agent, wanted = _git_req_agent()
+    if wanted and not agent:
+        return jsonify({'error': 'Agent not found'}), 404
+    repo_dir = _git_agent_repo_dir(agent['id']) if agent else _git_repo_dir()
     try:
         if os.path.exists(repo_dir):
             shutil.rmtree(repo_dir)
@@ -4253,6 +4417,7 @@ def api_toggle_route(route_id):
     try:
         if agent:
             _toggle_route_agent(agent, agent_id, route_id, bool(enable))
+            threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'route toggle'), daemon=True).start()
         else:
             _toggle_route(route_id, bool(enable))
             threading.Thread(target=lambda: _git_push_if_enabled('route toggle'), daemon=True).start()
@@ -4632,6 +4797,7 @@ def save_entry():
 
         if agent:
             _agent_write_config(agent, cfg_filename, config)
+            threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'route save'), daemon=True).start()
         else:
             save_config(_strip_empty_sections(config), target_path)
             _register_config_path(target_path)
@@ -4727,7 +4893,9 @@ def delete_entry(router_id):
                 return jsonify({'ok': False, 'message': f'Route "{plain_id}" not found'}), 404
             flash(f'Route "{plain_id}" not found', "error")
             return redirect(url_for('index'))
-        if not agent:
+        if agent:
+            threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'route delete'), daemon=True).start()
+        else:
             threading.Thread(target=lambda: _git_push_if_enabled('route delete'), daemon=True).start()
         msg = f"Deleted {plain_id}"
         add_notification('warning', f"Route {plain_id} deleted")
@@ -4809,6 +4977,7 @@ def save_middleware():
         config[mw_protocol]['middlewares'][mw_name] = parsed_mw
         if agent:
             _agent_write_config(agent, cfg_filename, config)
+            threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'middleware save'), daemon=True).start()
         else:
             save_config(_strip_empty_sections(config), target_path)
             _register_config_path(target_path)
@@ -4869,7 +5038,9 @@ def delete_middleware(mw_name):
                     create_backup(target_path)
                     save_config(_strip_empty_sections(config), target_path)
                     break
-        if not agent:
+        if agent:
+            threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'middleware delete'), daemon=True).start()
+        else:
             threading.Thread(target=lambda: _git_push_if_enabled('middleware delete'), daemon=True).start()
         msg = f"Deleted middleware {mw_name}"
         add_notification('warning', f"Middleware {mw_name} deleted")
@@ -5343,6 +5514,19 @@ def api_agents_create():
 def api_agents_update(agent_id):
     data    = request.get_json(silent=True) or {}
     agents  = load_agents()
+    if 'git_host_branch' in data or data.get('git_host_backup'):
+        s = load_settings()
+        target = next((a for a in agents if a.get('id') == agent_id), {})
+        branch = _safe_git_branch(str(data.get('git_host_branch', target.get('git_host_branch') or '')).strip() or _agent_git_branch({**target, 'git_host_branch': ''}))
+        enabled = bool(data.get('git_host_backup', target.get('git_host_backup')))
+        if enabled:
+            if branch == _safe_git_branch(s.get('git_backup_branch', 'main')):
+                return jsonify({'ok': False, 'error': f'Branch "{branch}" is used by the Host - each server needs its own branch'}), 400
+            for other in agents:
+                if other.get('id') != agent_id and other.get('git_host_backup') and _agent_git_branch(other) == branch:
+                    return jsonify({'ok': False, 'error': f'Branch "{branch}" is already used by agent "{other.get("name")}"'}), 400
+        if 'git_host_branch' in data:
+            data['git_host_branch'] = branch
     updated = False
     for i, a in enumerate(agents):
         if a.get('id') == agent_id:
@@ -5354,6 +5538,7 @@ def api_agents_update(agent_id):
                 'crowdsec_lapi_url', 'crowdsec_machine_id', 'git_backup_enabled', 'git_backup_repo',
                 'git_backup_branch', 'git_backup_username', 'git_backup_auto_push',
                 'git_backup_commit_message', 'tma_port', 'tma_rate_limit', 'domains',
+                'git_host_backup', 'git_host_branch',
             ]
             for field in updatable:
                 if field in data:
@@ -5434,7 +5619,12 @@ def api_agents_proxy(agent_id, path):
             kwargs['json'] = request.get_json(silent=True)
         elif request.data:
             kwargs['data'] = request.data
-        resp = _agent_request(agent, request.method, '/api/' + path.lstrip('/'), **kwargs)
+        agent_path = '/api/' + path.lstrip('/')
+        resp = _agent_request(agent, request.method, agent_path, **kwargs)
+        if (request.method in ('POST', 'PUT', 'DELETE') and resp.status_code < 400
+                and not agent_path.startswith('/api/backup/git')
+                and any(agent_path.startswith(x) for x in ('/api/configs', '/api/routes', '/api/middlewares', '/api/static', '/api/restore/', '/api/backup/'))):
+            threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'config change'), daemon=True).start()
         content_type = resp.headers.get('content-type', 'application/json')
         return resp.content, resp.status_code, {'Content-Type': content_type}
     except requests.exceptions.ConnectionError:

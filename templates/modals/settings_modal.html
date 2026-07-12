@@ -621,7 +621,24 @@
                                 </div>
 
                                 <div id="gitEnvNote" style="display:none;background:rgba(36,161,222,0.06);border:1px solid rgba(36,161,222,0.2);color:var(--muted)" class="text-xs mb-3 px-3 py-2 rounded-lg">
-                                    <i class="ph-bold ph-info" style="color:var(--blue)"></i> Git backup on this agent is configured via environment variables (<code>GIT_BACKUP_*</code>).
+                                    <i class="ph-bold ph-info" style="color:var(--blue)"></i> This agent can also push independently using its own <code>GIT_BACKUP_*</code> environment variables.
+                                </div>
+                                <div id="gitHostAgentForm" style="display:none;flex-direction:column;gap:10px;margin-bottom:14px;">
+                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background:var(--bg);border:1px solid var(--border);">
+                                        <div>
+                                            <div class="text-xs font-medium">Use Host Repository</div>
+                                            <div class="text-xs" style="color:var(--muted)">Push this server's config to the Host's git repository on its own branch</div>
+                                        </div>
+                                        <div class="toggle-switch" id="toggle-git-host-agent" onclick="toggleGitHostAgent()"><div class="toggle-knob"></div></div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-medium block mb-1">Branch</label>
+                                        <input id="gitHostAgentBranch" type="text" class="input-field" placeholder="agent-name">
+                                        <div class="text-xs mt-1" style="color:var(--muted)">Must differ from the Host branch - each server pushes to its own branch</div>
+                                    </div>
+                                    <button id="gitHostAgentSaveBtn" onclick="saveGitHostAgent()" class="nav-btn text-xs w-full justify-center">
+                                        <i class="ph-bold ph-floppy-disk"></i> Save
+                                    </button>
                                 </div>
                                 <div id="gitConfigForm" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
                                     <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background:var(--bg);border:1px solid var(--border);">
@@ -1353,16 +1370,64 @@ function toggleGitAutoPush() {
     if (el) el.classList.toggle('on', _gitAutoPushEnabled);
 }
 
+function _gitFetch(path, opts) {
+    const isAgent = typeof _activeAgent !== 'undefined' && !!_activeAgent;
+    if (isAgent && _activeAgent.git_host_backup) {
+        const sep = path.includes('?') ? '&' : '?';
+        return fetch(path + sep + 'agent_id=' + encodeURIComponent(_activeAgent.id), opts);
+    }
+    return _backupFetch(path, opts);
+}
+
+let _gitHostAgentOn = false;
+
+function toggleGitHostAgent() {
+    _gitHostAgentOn = !_gitHostAgentOn;
+    const tog = document.getElementById('toggle-git-host-agent');
+    if (tog) tog.classList.toggle('on', _gitHostAgentOn);
+}
+
+async function saveGitHostAgent() {
+    if (!_activeAgent) return;
+    const branch = (document.getElementById('gitHostAgentBranch')?.value || '').trim();
+    try {
+        const res  = await fetch('/api/agents/' + _activeAgent.id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+            body: JSON.stringify({ git_host_backup: _gitHostAgentOn, git_host_branch: branch }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) { showToast(data.error || 'Save failed', 'error'); return; }
+        _activeAgent.git_host_backup = _gitHostAgentOn;
+        _activeAgent.git_host_branch = branch;
+        showToast('Git settings saved', 'success');
+        loadGitTab();
+    } catch (e) {
+        showToast('Save failed', 'error');
+    }
+}
+
 async function loadGitTab() {
     const isAgent = typeof _activeAgent !== 'undefined' && !!_activeAgent;
     const configForm    = document.getElementById('gitConfigForm');
     const saveBtn       = document.getElementById('gitSaveSettingsBtn');
     const resetBtn      = document.getElementById('gitResetBtn');
     const envNote       = document.getElementById('gitEnvNote');
+    const hostForm      = document.getElementById('gitHostAgentForm');
+    const testBtn       = document.getElementById('gitTestBtn');
     if (configForm) configForm.style.display = isAgent ? 'none' : 'flex';
     if (saveBtn)    saveBtn.style.display    = isAgent ? 'none' : '';
     if (resetBtn)   resetBtn.style.display   = isAgent ? 'none' : '';
+    if (testBtn)    testBtn.style.display    = isAgent ? 'none' : '';
     if (envNote)    envNote.style.display    = isAgent ? '' : 'none';
+    if (hostForm)   hostForm.style.display   = isAgent ? 'flex' : 'none';
+    if (isAgent) {
+        _gitHostAgentOn = !!_activeAgent.git_host_backup;
+        const tog = document.getElementById('toggle-git-host-agent');
+        if (tog) tog.classList.toggle('on', _gitHostAgentOn);
+        const br = document.getElementById('gitHostAgentBranch');
+        if (br) br.value = _activeAgent.git_host_branch || (_activeAgent.name || '').toLowerCase().replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '');
+    }
     if (!isAgent) {
         try {
             const res  = await fetch('/api/settings');
@@ -1387,7 +1452,7 @@ async function loadGitTab() {
 
 async function loadGitStatus() {
     try {
-        const res  = await _backupFetch('/api/backup/git/status');
+        const res  = await _gitFetch('/api/backup/git/status');
         const data = await res.json();
         const line = document.getElementById('gitStatusLine');
         if (!line) return;
@@ -1405,7 +1470,7 @@ async function loadGitCommits() {
     if (!list) return;
     list.innerHTML = `<div class="text-center py-4" style="color:var(--muted)"><i class="ph-light ph-spinner-gap animate-spin text-xl block mb-1"></i></div>`;
     try {
-        const res     = await _backupFetch('/api/backup/git/commits');
+        const res     = await _gitFetch('/api/backup/git/commits');
         const commits = await res.json();
         if (!commits.length) {
             list.innerHTML = `<div class="text-center py-6" style="color:var(--muted)"><i class="ph-light ph-git-commit text-3xl block mb-2 opacity-30"></i><p class="text-xs">No commits yet</p></div>`;
@@ -1498,7 +1563,7 @@ async function gitPushNow() {
     const msgEl   = document.getElementById('gitCommitMessage');
     const message = msgEl ? msgEl.value.trim() : '';
     try {
-        const res  = await _backupFetch('/api/backup/git/push', {
+        const res  = await _gitFetch('/api/backup/git/push', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
             body: JSON.stringify({ message }),
@@ -1526,7 +1591,7 @@ async function gitResetRepo() {
     const btn = document.getElementById('gitResetBtn');
     if (btn) { btn.disabled = true; }
     try {
-        const res  = await _backupFetch('/api/backup/git/repo', { method: 'DELETE', headers: _csrfHeaders() });
+        const res  = await _gitFetch('/api/backup/git/repo', { method: 'DELETE', headers: _csrfHeaders() });
         const data = await res.json();
         if (data.ok) {
             showToast('Repository reset - push again to re-initialize', 'success');
@@ -1545,7 +1610,7 @@ async function gitResetRepo() {
 async function gitRestoreCommit(sha, shaShort) {
     if (!await _confirm(`Restore config from commit ${shaShort}? Local backups will be created first.`, 'Git Restore', 'Restore')) return;
     try {
-        const res  = await _backupFetch(`/api/backup/git/restore/${sha}`, { method: 'POST', headers: _csrfHeaders() });
+        const res  = await _gitFetch(`/api/backup/git/restore/${sha}`, { method: 'POST', headers: _csrfHeaders() });
         const data = await res.json();
         if (data.ok) {
             showToast('Restored successfully', 'success');
@@ -1559,7 +1624,7 @@ async function gitRestoreCommit(sha, shaShort) {
 
 async function gitViewDiff(sha) {
     try {
-        const res  = await _backupFetch(`/api/backup/git/commit/${sha}/diff`);
+        const res  = await _gitFetch(`/api/backup/git/commit/${sha}/diff`);
         const data = await res.json();
         if (data.error) { showToast('Diff error: ' + data.error, 'error'); return; }
         if (!data.files || !data.files.length) { showToast('No changes in this commit', 'info'); return; }
@@ -1980,6 +2045,8 @@ async function loadBackups() {
     const retEnvNote = document.getElementById('backupRetentionEnvNote');
     if (retRow)     retRow.style.display     = isAgent ? 'none' : 'flex';
     if (retEnvNote) retEnvNote.style.display = isAgent ? '' : 'none';
+    const gitPane = document.getElementById('backup-sub-git');
+    if (gitPane && gitPane.style.display !== 'none') loadGitTab();
     if (!isAgent) {
         try {
             const sres = await fetch('/api/settings');
