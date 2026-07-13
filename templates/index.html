@@ -14,8 +14,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Traefik Manager">
     <script>
+        window.TM_DEFAULT_THEME = '{{ default_theme }}' || 'dark';
         (function() {
-            var t = localStorage.getItem('tm-theme') || 'dark';
+            var t = localStorage.getItem('tm-theme') || window.TM_DEFAULT_THEME;
             var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
             var isDark = t === 'dark' || (t === 'system' && prefersDark);
             document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
@@ -3791,19 +3792,27 @@ function applyTheme(theme) {
 function setTheme(theme) {
     localStorage.setItem('tm-theme', theme);
     applyTheme(theme);
+    window.TM_DEFAULT_THEME = theme;
+    const sel = document.getElementById('defaultThemeSelect');
+    if (sel) sel.value = theme;
+    fetch('/api/settings/theme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+        body: JSON.stringify({ default_theme: theme })
+    }).catch(() => {});
 }
 
 function cycleTheme() {
-    const cur = localStorage.getItem('tm-theme') || 'dark';
+    const cur = localStorage.getItem('tm-theme') || window.TM_DEFAULT_THEME || 'dark';
     const next = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
     setTheme(next);
 }
 
 (function() {
-    const saved = localStorage.getItem('tm-theme') || 'dark';
+    const saved = localStorage.getItem('tm-theme') || window.TM_DEFAULT_THEME || 'dark';
     applyTheme(saved);
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        if (localStorage.getItem('tm-theme') === 'system') applyTheme('system');
+        if ((localStorage.getItem('tm-theme') || window.TM_DEFAULT_THEME) === 'system') applyTheme('system');
     });
 })();
 

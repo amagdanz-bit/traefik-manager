@@ -25,7 +25,7 @@ from io import StringIO
 from cryptography.fernet import Fernet, InvalidToken
 
 GITHUB_REPO  = "chr0nzz/traefik-manager"
-APP_VERSION  = "1.7.1"
+APP_VERSION  = "1.7.2"
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -521,6 +521,7 @@ def load_settings() -> dict:
         'oidc_allowed_groups':  '',
         'oidc_groups_claim':    'groups',
         'oidc_allow_any_authenticated': False,
+        'default_theme':        'dark',
         'webhook_url':          '',
         'webhook_type':         'discord',
         'webhook_username':     '',
@@ -644,6 +645,9 @@ def load_settings() -> dict:
             merged['oidc_allow_any_authenticated'] = bool(data['oidc_allow_any_authenticated'])
         if 'oidc_groups_claim' in data:
             merged['oidc_groups_claim'] = str(data['oidc_groups_claim']).strip()
+        if 'default_theme' in data:
+            _dt = str(data['default_theme']).strip().lower()
+            merged['default_theme'] = _dt if _dt in ('dark', 'light', 'system') else 'dark'
         if 'webhook_url' in data:
             merged['webhook_url'] = str(data['webhook_url']).strip()
         if 'webhook_type' in data:
@@ -718,7 +722,8 @@ def save_settings(domains, cert_resolver, traefik_api_url,
                   git_backup_branch=None, git_backup_username=None,
                   git_backup_token=None, git_backup_commit_message=None,
                   git_backup_auto_push=None,
-                  agent_api_rate_limit=None, backup_keep_count=None):
+                  agent_api_rate_limit=None, backup_keep_count=None,
+                  default_theme=None):
     if visible_tabs is None:
         visible_tabs = {t: False for t in OPTIONAL_TABS}
     _cur = load_settings()
@@ -738,6 +743,11 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         disabled_routes = _cur.get('disabled_routes', {})
     if acme_json_path is None:
         acme_json_path = _cur.get('acme_json_path', '')
+    if default_theme is None:
+        default_theme = _cur.get('default_theme', 'dark')
+    default_theme = str(default_theme).strip().lower()
+    if default_theme not in ('dark', 'light', 'system'):
+        default_theme = 'dark'
     if access_log_path is None:
         access_log_path = _cur.get('access_log_path', '')
     if static_config_path is None:
@@ -834,6 +844,7 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         'oidc_allowed_emails':  oidc_allowed_emails,
         'oidc_allowed_groups':  oidc_allowed_groups,
         'oidc_allow_any_authenticated': bool(oidc_allow_any_authenticated),
+        'default_theme':        default_theme,
         'oidc_groups_claim':    oidc_groups_claim,
         'webhook_url':          webhook_url,
         'webhook_type':         webhook_type,
@@ -1098,6 +1109,13 @@ logger.info("===========================================")
 
 _ensure_password()
 
+
+@app.context_processor
+def _inject_theme():
+    try:
+        return {'default_theme': load_settings().get('default_theme', 'dark')}
+    except Exception:
+        return {'default_theme': 'dark'}
 
 def _get_csrf_token() -> str:
     if 'csrf_token' not in session:
@@ -3596,6 +3614,7 @@ def api_save_settings():
         git_backup_commit_message = (str(data['git_backup_commit_message']).strip() or 'traefik-manager: {action} at {timestamp}') if 'git_backup_commit_message' in data else None
         git_backup_auto_push      = bool(data['git_backup_auto_push'])     if 'git_backup_auto_push'      in data else None
         backup_keep_count         = max(0, int(data['backup_keep_count'])) if str(data.get('backup_keep_count', '')).strip() != '' else None
+        default_theme             = str(data['default_theme']).strip().lower() if 'default_theme' in data else None
         existing = load_settings()
         if not webhook_password:
             webhook_password = existing.get('webhook_password', '')
@@ -3631,7 +3650,8 @@ def api_save_settings():
                       git_backup_token=git_backup_token,
                       git_backup_commit_message=git_backup_commit_message,
                       git_backup_auto_push=git_backup_auto_push,
-                      backup_keep_count=backup_keep_count)
+                      backup_keep_count=backup_keep_count,
+                      default_theme=default_theme)
         result = load_settings()
         for _k in ('password_hash', 'oidc_client_secret', 'crowdsec_api_key',
                    'crowdsec_machine_password', 'traefik_api_password', 'git_backup_token',
@@ -3725,6 +3745,31 @@ def api_save_tabs():
     except Exception as e:
         logger.exception("Tab settings save error")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/settings/theme', methods=['POST'])
+@csrf_protect
+@login_required
+def api_save_theme():
+    try:
+        data  = request.get_json(silent=True) or {}
+        theme = str(data.get('default_theme', '')).strip().lower()
+        if theme not in ('dark', 'light', 'system'):
+            return jsonify({'success': False, 'error': 'Invalid theme'}), 400
+        existing = load_settings()
+        save_settings(
+            domains=existing['domains'],
+            cert_resolver=existing['cert_resolver'],
+            traefik_api_url=existing['traefik_api_url'],
+            auth_enabled=existing['auth_enabled'],
+            password_hash=existing['password_hash'],
+            visible_tabs=existing['visible_tabs'],
+            default_theme=theme,
+        )
+        return jsonify({'success': True, 'default_theme': theme})
+    except Exception:
+        logger.exception("Theme save error")
+        return jsonify({'success': False, 'error': 'Save failed'}), 500
 
 
 @app.route('/api/settings/backup-retention', methods=['POST'])

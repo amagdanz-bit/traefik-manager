@@ -757,6 +757,22 @@
 
                 <div class="modal-panel active" id="mpanel-ui">
                     <div style="margin-bottom:12px;">
+                        <div class="text-xs font-medium mb-2" style="color:var(--muted);display:flex;align-items:center;gap:5px;"><i class="ph-bold ph-paint-brush"></i> APPEARANCE</div>
+                        <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                            <div class="flex items-center justify-between" style="padding:10px 12px;">
+                                <div>
+                                    <div class="text-xs font-medium" style="color:var(--text)">Default theme</div>
+                                    <div class="text-xs" style="color:var(--muted)">Also set by the theme toggle in the nav bar</div>
+                                </div>
+                                <select id="defaultThemeSelect" class="input-field" style="width:auto;min-width:110px" onchange="saveDefaultTheme()">
+                                    <option value="dark">Dark</option>
+                                    <option value="light">Light</option>
+                                    <option value="system">System</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-bottom:12px;">
                         <div class="text-xs font-medium mb-2" style="color:var(--muted);display:flex;align-items:center;gap:5px;"><i class="ph-bold ph-squares-four"></i> DASHBOARD</div>
                         <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
                             <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
@@ -1750,6 +1766,8 @@ async function openSettingsModal(panel) {
         const res  = await fetch('/api/settings');
         const data = await res.json();
         document.getElementById('settingsDomains').value          = (data.domains || []).join(', ');
+        const themeSel = document.getElementById('defaultThemeSelect');
+        if (themeSel) themeSel.value = data.default_theme || 'dark';
         document.getElementById('settingsCertResolver').value     = data.cert_resolver || '';
         document.getElementById('settingsApiUrl').value           = data.traefik_api_url || '';
         document.getElementById('settingsApiUser').value          = data.traefik_api_user || '';
@@ -1910,6 +1928,11 @@ async function testWebhook() {
         const d = await r.json();
         if (res) { res.style.color = d.ok ? 'var(--green)' : 'var(--red)'; res.textContent = d.ok ? 'Delivered.' : (d.error || 'Failed.'); }
     } catch(e) { if (res) { res.style.color='var(--red)'; res.textContent='Request failed.'; } }
+}
+
+function saveDefaultTheme() {
+    const val = document.getElementById('defaultThemeSelect')?.value || 'dark';
+    setTheme(val);
 }
 
 async function saveSettings() {

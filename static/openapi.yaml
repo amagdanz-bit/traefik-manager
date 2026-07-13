@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Traefik Manager API
-  version: 1.7.1
+  version: 1.7.2
   description: |
     REST API powering the Traefik Manager web UI and official mobile app.
 
@@ -123,10 +123,10 @@ tags:
     description: In-app event log.
   - name: Static Config
     description: Read and edit Traefik's static config (`traefik.yml`) via the Static Config editor.
+  - name: CrowdSec
+    description: Active decisions and alerts from a CrowdSec LAPI, with unban support.
   - name: Utility
     description: Version info, router names, and connection testing.
-  - name: CrowdSec
-    description: Active decisions and alerts from a CrowdSec LAPI, with add and unban support.
 
 paths:
 
@@ -677,6 +677,8 @@ paths:
                 scheme: { type: string, enum: [http, https], default: "http" }
                 passHostHeader: { type: boolean, default: true }
                 certResolver: { type: string, description: "ACME resolver name. Use `none` or `__none__` for external/custom certs (writes `tls: {}` with no resolver)." }
+                tlsWildcardMain: { type: string, description: "Main domain for tls.domains (e.g. example.com). Use with DNS challenge resolvers for wildcard certs." }
+                tlsWildcardSans: { type: string, description: "Newline-separated SANs for tls.domains (e.g. *.example.com)." }
                 configFile: { type: string, description: "Target config file basename (multi-config only)" }
                 isEdit: { type: boolean }
                 originalId: { type: string }
@@ -836,15 +838,23 @@ paths:
                   domains: { type: array, items: { type: string } }
                   cert_resolver: { type: string }
                   traefik_api_url: { type: string }
+                  traefik_api_user: { type: string }
+                  traefik_api_password_set: { type: boolean, description: "true if a Traefik API password is saved" }
                   acme_json_path: { type: string }
                   access_log_path: { type: string }
                   static_config_path: { type: string }
                   auth_enabled: { type: boolean }
                   oidc_enabled: { type: boolean }
                   visible_tabs: { type: object }
+                  default_theme: { type: string, enum: [dark, light, system] }
+                  crowdsec_lapi_url: { type: string }
+                  crowdsec_api_key_set: { type: boolean, description: "true if a CrowdSec API key is saved" }
+                  crowdsec_enabled: { type: boolean, description: "true if both LAPI URL and API key are configured" }
     post:
       tags: [Settings]
       summary: Update settings
+      description: |
+        Update application settings. Leave password fields blank to keep existing values.
       requestBody:
         required: true
         content:
@@ -855,9 +865,13 @@ paths:
                 domains: { type: array, items: { type: string } }
                 cert_resolver: { type: string }
                 traefik_api_url: { type: string }
+                traefik_api_user: { type: string }
+                traefik_api_password: { type: string, description: "Leave blank to keep existing password" }
                 acme_json_path: { type: string }
                 access_log_path: { type: string }
                 static_config_path: { type: string }
+                crowdsec_lapi_url: { type: string }
+                crowdsec_api_key: { type: string, description: "Leave blank to keep existing key" }
       responses:
         "200":
           description: Success
@@ -924,6 +938,158 @@ paths:
                   success: { type: boolean }
                   visible_tabs: { type: object }
 
+  /api/settings/theme:
+    post:
+      tags: [Settings]
+      summary: Set default theme
+      description: Set the default UI theme, stored as `default_theme` in `manager.yml`. Also saved by the theme toggle in the nav bar.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [default_theme]
+              properties:
+                default_theme: { type: string, enum: [dark, light, system] }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  default_theme: { type: string }
+        "400":
+          description: Invalid theme
+
+  /api/settings/backup-retention:
+    post:
+      tags: [Settings]
+      summary: Set backup retention
+      description: How many timestamped backups to keep per config file. 0 keeps all backups.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                backup_keep_count: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Saved
+
+  /api/settings/test-connection:
+    post:
+      tags: [Settings]
+      summary: Test Traefik API connection
+      description: Test connectivity to a Traefik API URL using optional credentials. Does not save any settings.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, example: "http://traefik:8080" }
+                user: { type: string, description: "Basic auth username" }
+                password: { type: string, description: "Basic auth password" }
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  version: { type: string, example: "3.2.0" }
+                  error: { type: string }
+
+  # ─── TLS Options ──────────────────────────────────────────────────────────
+
+  /api/tls-options:
+    get:
+      tags: [TLS Options]
+      summary: List TLS option profiles
+      responses:
+        "200":
+          description: Array of TLS option profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name: { type: string }
+                    configFile: { type: string }
+                    minVersion: { type: string }
+                    maxVersion: { type: string }
+                    sniStrict: { type: boolean }
+                    cipherSuites: { type: array, items: { type: string } }
+                    curvePreferences: { type: array, items: { type: string } }
+                    alpnProtocols: { type: array, items: { type: string } }
+                    clientAuthType: { type: string }
+                    clientAuthCAs: { type: array, items: { type: string } }
+                    yaml: { type: string }
+    post:
+      tags: [TLS Options]
+      summary: Create or update a TLS option profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                configFile: { type: string }
+                minVersion: { type: string }
+                maxVersion: { type: string }
+                sniStrict: { type: boolean }
+                cipherSuites: { type: array, items: { type: string } }
+                curvePreferences: { type: array, items: { type: string } }
+                alpnProtocols: { type: array, items: { type: string } }
+                clientAuthType: { type: string }
+                clientAuthCAs: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: Profile saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/tls-options/{name}:
+    delete:
+      tags: [TLS Options]
+      summary: Delete a TLS option profile
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+        - in: query
+          name: configFile
+          schema: { type: string }
+      responses:
+        "200":
+          description: Profile deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
   # ─── Backups ──────────────────────────────────────────────────────────────
 
   /api/backups:
@@ -954,6 +1120,24 @@ paths:
                 properties:
                   success: { type: boolean }
                   name: { type: string, example: "backup_2026-03-24T22-05-00.yml" }
+
+  /api/backup/static/create:
+    post:
+      tags: [Backups]
+      summary: Create static config backup
+      description: Create a manual backup of the static Traefik config (`traefik.yml`). Requires `STATIC_CONFIG_PATH` to be configured.
+      responses:
+        "200":
+          description: Backup created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  name: { type: string, example: "traefik.yml.20260601_120000.bak" }
+        "400":
+          description: Static config not configured or file not found
 
   /api/restore/{filename}:
     post:
@@ -987,6 +1171,167 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  # ─── Git Backup ───────────────────────────────────────────────────────────
+
+  /api/backup/git/status:
+    get:
+      tags: [Backups]
+      summary: Git backup status
+      description: Whether git backup is configured, and the last pushed commit. Pass `agent_id` to query a remote agent's Host-managed git backup.
+      parameters:
+        - name: agent_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled: { type: boolean }
+                  configured: { type: boolean }
+                  last_sha: { type: string, nullable: true }
+                  last_push: { type: string, nullable: true }
+                  branch: { type: string, description: Only present for agents }
+
+  /api/backup/git/push:
+    post:
+      tags: [Backups]
+      summary: Push git backup
+      description: Commit and push the current configuration to the configured repository. Pass `agent_id` to push a remote agent's configuration to its branch.
+      parameters:
+        - name: agent_id
+          in: query
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { type: string, description: Custom commit message for this push only }
+      responses:
+        "200":
+          description: Pushed
+        "400":
+          description: Push failed
+
+  /api/backup/git/test:
+    post:
+      tags: [Backups]
+      summary: Test git connection
+      description: Verify the repository URL and credentials with git ls-remote.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                repo_url: { type: string }
+                username: { type: string }
+                token: { type: string }
+      responses:
+        "200":
+          description: Reachable
+        "400":
+          description: Unreachable or invalid URL
+
+  /api/backup/git/commits:
+    get:
+      tags: [Backups]
+      summary: List git commits
+      description: Last 50 commits in the backup repository. Pass `agent_id` for a remote agent's history.
+      parameters:
+        - name: agent_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Commit list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    sha: { type: string }
+                    sha_short: { type: string }
+                    timestamp: { type: string }
+                    message: { type: string }
+
+  /api/backup/git/commit/{sha}/diff:
+    get:
+      tags: [Backups]
+      summary: Get commit diff
+      description: Per-file old and new contents for a commit. Pass `agent_id` for a remote agent's repository.
+      parameters:
+        - name: sha
+          in: path
+          required: true
+          schema: { type: string }
+        - name: agent_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Diff
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stat: { type: string }
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        filename: { type: string }
+                        status: { type: string }
+                        old: { type: string }
+                        new: { type: string }
+
+  /api/backup/git/restore/{sha}:
+    post:
+      tags: [Backups]
+      summary: Restore from git commit
+      description: Restore configuration files from a commit. Local backups are created first. With `agent_id`, the commit's dynamic config files are written back to the agent.
+      parameters:
+        - name: sha
+          in: path
+          required: true
+          schema: { type: string }
+        - name: agent_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Restored
+
+  /api/backup/git/repo:
+    delete:
+      tags: [Backups]
+      summary: Reset git repository
+      description: Delete the local clone; it is re-initialized on the next push. Pass `agent_id` to reset a remote agent's clone.
+      parameters:
+        - name: agent_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Reset
 
   # ─── Notifications ────────────────────────────────────────────────────────
 
@@ -1184,6 +1529,121 @@ paths:
                   raw: { type: string }
                   parsed: { type: object }
 
+  # ─── CrowdSec ─────────────────────────────────────────────────────────────
+
+  /api/crowdsec/decisions:
+    get:
+      tags: [CrowdSec]
+      summary: List active decisions
+      description: Returns all active CrowdSec decisions (bans, captchas, bypasses), paginated from the LAPI. Expired decisions are filtered out. Returns an empty list if CrowdSec is not configured.
+      responses:
+        "200":
+          description: Decision list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    value: { type: string, example: "1.2.3.4" }
+                    type: { type: string, example: "ban" }
+                    duration: { type: string, example: "3h59m" }
+                    until: { type: string, format: date-time }
+                    scenario: { type: string, example: "crowdsecurity/http-bf" }
+                    origin: { type: string, example: "CAPI" }
+    post:
+      tags: [CrowdSec]
+      summary: Add a manual decision
+      description: Creates a manual ban, captcha, or bypass decision via the CrowdSec LAPI. Requires the bouncer key to have write permissions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value, type, duration]
+              properties:
+                value:
+                  type: string
+                  description: IP address or CIDR range
+                  example: "1.2.3.4"
+                type:
+                  type: string
+                  enum: [ban, captcha, bypass]
+                  example: "ban"
+                duration:
+                  type: string
+                  description: Decision duration (e.g. 24h, 7d)
+                  example: "24h"
+                reason:
+                  type: string
+                  description: Optional reason/scenario label
+                  example: "manual ban from Traefik Manager"
+      responses:
+        "200":
+          description: Decision created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        "400":
+          description: Invalid input
+        "502":
+          description: LAPI unreachable or returned an error
+
+  /api/crowdsec/alerts:
+    get:
+      tags: [CrowdSec]
+      summary: List recent alerts
+      description: Returns up to 50 recent CrowdSec alerts.
+      responses:
+        "200":
+          description: Alert list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    startAt: { type: string, format: date-time }
+                    source:
+                      type: object
+                      properties:
+                        ip: { type: string, example: "1.2.3.4" }
+                    scenario: { type: string, example: "crowdsecurity/http-bf" }
+                    decisions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          type: { type: string }
+                          duration: { type: string }
+
+  /api/crowdsec/decisions/{id}:
+    delete:
+      tags: [CrowdSec]
+      summary: Delete a decision (unban)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  error: { type: string }
+
   # ─── Utility ──────────────────────────────────────────────────────────────
 
   /api/manager/version:
@@ -1242,103 +1702,3 @@ paths:
                 properties:
                   ok: { type: boolean }
                   version: { type: string, example: "3.2.0" }
-
-  # ─── CrowdSec ─────────────────────────────────────────────────────────────
-
-  /api/crowdsec/decisions:
-    get:
-      tags: [CrowdSec]
-      summary: List active decisions
-      description: Returns all active CrowdSec decisions (bans, captchas, bypasses), paginated from the LAPI. Expired decisions are filtered out.
-      responses:
-        "200":
-          description: Decision list
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id: { type: integer }
-                    value: { type: string, example: "1.2.3.4" }
-                    type: { type: string, example: "ban" }
-                    duration: { type: string, example: "3h59m" }
-                    until: { type: string, format: date-time }
-                    scenario: { type: string, example: "crowdsecurity/http-bf" }
-                    origin: { type: string, example: "CAPI" }
-    post:
-      tags: [CrowdSec]
-      summary: Add a manual decision
-      description: Creates a manual ban, captcha, or bypass decision via the CrowdSec LAPI.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [value, type, duration]
-              properties:
-                value: { type: string, example: "1.2.3.4" }
-                type: { type: string, enum: [ban, captcha, bypass] }
-                duration: { type: string, example: "24h" }
-                reason: { type: string, example: "manual ban from Traefik Manager" }
-      responses:
-        "200":
-          description: Decision created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok: { type: boolean }
-        "400": { description: Invalid input }
-        "502": { description: LAPI unreachable or returned an error }
-
-  /api/crowdsec/alerts:
-    get:
-      tags: [CrowdSec]
-      summary: List recent alerts
-      description: Returns recent CrowdSec alerts, paginated from the LAPI.
-      responses:
-        "200":
-          description: Alert list
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    startAt: { type: string, format: date-time }
-                    source:
-                      type: object
-                      properties:
-                        ip: { type: string, example: "1.2.3.4" }
-                    scenario: { type: string, example: "crowdsecurity/http-bf" }
-                    decisions:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          type: { type: string }
-                          duration: { type: string }
-
-  /api/crowdsec/decisions/{id}:
-    delete:
-      tags: [CrowdSec]
-      summary: Delete a decision (unban)
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer }
-      responses:
-        "200":
-          description: Result
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok: { type: boolean }

@@ -53,6 +53,7 @@ webhook_url: ""
 webhook_type: "discord"
 webhook_username: ""
 webhook_password: ""
+default_theme: "dark"
 visible_tabs:
   dashboard: false
   routemap: false
@@ -357,6 +358,16 @@ static_config_path: /etc/traefik/traefik.yml
 ---
 
 ## UI & Tabs
+
+### `default_theme`
+
+**Type:** string - **Default:** `dark`
+
+The default theme for the UI and the login page. One of `dark`, `light`, or `system` (follows the OS preference). Set by the theme toggle in the nav bar or in **Settings - Interface - Appearance**.
+
+```yaml
+default_theme: light
+```
 
 ### `visible_tabs`
 

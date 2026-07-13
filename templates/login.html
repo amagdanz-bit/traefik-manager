@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="/static/vendor/phosphor.css">
     <script>
         (function() {
-            var t = localStorage.getItem('tm-theme') || 'dark';
+            var t = localStorage.getItem('tm-theme') || '{{ default_theme }}' || 'dark';
             var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
             var isDark = t === 'dark' || (t === 'system' && prefersDark);
             document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');

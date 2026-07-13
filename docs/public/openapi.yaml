@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Traefik Manager API
-  version: 1.7.1
+  version: 1.7.2
   description: |
     REST API powering the Traefik Manager web UI and official mobile app.
 
@@ -846,6 +846,7 @@ paths:
                   auth_enabled: { type: boolean }
                   oidc_enabled: { type: boolean }
                   visible_tabs: { type: object }
+                  default_theme: { type: string, enum: [dark, light, system] }
                   crowdsec_lapi_url: { type: string }
                   crowdsec_api_key_set: { type: boolean, description: "true if a CrowdSec API key is saved" }
                   crowdsec_enabled: { type: boolean, description: "true if both LAPI URL and API key are configured" }
@@ -936,6 +937,50 @@ paths:
                 properties:
                   success: { type: boolean }
                   visible_tabs: { type: object }
+
+  /api/settings/theme:
+    post:
+      tags: [Settings]
+      summary: Set default theme
+      description: Set the default UI theme, stored as `default_theme` in `manager.yml`. Also saved by the theme toggle in the nav bar.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [default_theme]
+              properties:
+                default_theme: { type: string, enum: [dark, light, system] }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  default_theme: { type: string }
+        "400":
+          description: Invalid theme
+
+  /api/settings/backup-retention:
+    post:
+      tags: [Settings]
+      summary: Set backup retention
+      description: How many timestamped backups to keep per config file. 0 keeps all backups.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                backup_keep_count: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Saved
 
   /api/settings/test-connection:
     post:
@@ -1126,6 +1171,167 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SuccessResponse" }
+
+  # ─── Git Backup ───────────────────────────────────────────────────────────
+
+  /api/backup/git/status:
+    get:
+      tags: [Backups]
+      summary: Git backup status
+      description: Whether git backup is configured, and the last pushed commit. Pass `agent_id` to query a remote agent's Host-managed git backup.
+      parameters:
+        - name: agent_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled: { type: boolean }
+                  configured: { type: boolean }
+                  last_sha: { type: string, nullable: true }
+                  last_push: { type: string, nullable: true }
+                  branch: { type: string, description: Only present for agents }
+
+  /api/backup/git/push:
+    post:
+      tags: [Backups]
+      summary: Push git backup
+      description: Commit and push the current configuration to the configured repository. Pass `agent_id` to push a remote agent's configuration to its branch.
+      parameters:
+        - name: agent_id
+          in: query
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { type: string, description: Custom commit message for this push only }
+      responses:
+        "200":
+          description: Pushed
+        "400":
+          description: Push failed
+
+  /api/backup/git/test:
+    post:
+      tags: [Backups]
+      summary: Test git connection
+      description: Verify the repository URL and credentials with git ls-remote.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                repo_url: { type: string }
+                username: { type: string }
+                token: { type: string }
+      responses:
+        "200":
+          description: Reachable
+        "400":
+          description: Unreachable or invalid URL
+
+  /api/backup/git/commits:
+    get:
+      tags: [Backups]
+      summary: List git commits
+      description: Last 50 commits in the backup repository. Pass `agent_id` for a remote agent's history.
+      parameters:
+        - name: agent_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Commit list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    sha: { type: string }
+                    sha_short: { type: string }
+                    timestamp: { type: string }
+                    message: { type: string }
+
+  /api/backup/git/commit/{sha}/diff:
+    get:
+      tags: [Backups]
+      summary: Get commit diff
+      description: Per-file old and new contents for a commit. Pass `agent_id` for a remote agent's repository.
+      parameters:
+        - name: sha
+          in: path
+          required: true
+          schema: { type: string }
+        - name: agent_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Diff
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stat: { type: string }
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        filename: { type: string }
+                        status: { type: string }
+                        old: { type: string }
+                        new: { type: string }
+
+  /api/backup/git/restore/{sha}:
+    post:
+      tags: [Backups]
+      summary: Restore from git commit
+      description: Restore configuration files from a commit. Local backups are created first. With `agent_id`, the commit's dynamic config files are written back to the agent.
+      parameters:
+        - name: sha
+          in: path
+          required: true
+          schema: { type: string }
+        - name: agent_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Restored
+
+  /api/backup/git/repo:
+    delete:
+      tags: [Backups]
+      summary: Reset git repository
+      description: Delete the local clone; it is re-initialized on the next push. Pass `agent_id` to reset a remote agent's clone.
+      parameters:
+        - name: agent_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Reset
 
   # ─── Notifications ────────────────────────────────────────────────────────
 
