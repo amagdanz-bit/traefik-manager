@@ -2532,6 +2532,7 @@ async function saveOidcConfig() {
     const ae   = document.getElementById('oidcAllowedEmails')?.value.trim() || '';
     const ag   = document.getElementById('oidcAllowedGroups')?.value.trim() || '';
     const gc   = document.getElementById('oidcGroupsClaim')?.value.trim() || 'groups';
+    const any  = document.getElementById('oidcAllowAny')?.checked || false;
     const label = document.getElementById('oidcStatusLabel');
     const isOn  = label && label.textContent.trim() === 'Enabled';
     try {

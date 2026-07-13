@@ -33,8 +33,9 @@ export default defineConfig({
       { text: 'API', link: '/api' },
       { text: 'UI Examples', link: '/ui-examples' },
       {
-        text: 'v1.7.0',
+        text: 'v1.7.1',
         items: [
+          { text: 'v1.7.1', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.7.1' },
           { text: 'v1.7.0', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.7.0' },
           { text: 'v1.6.1', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.6.1' },
           { text: 'v1.6.0', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.6.0' },
