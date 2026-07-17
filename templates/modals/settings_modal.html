@@ -773,6 +773,26 @@
                         </div>
                     </div>
                     <div style="margin-bottom:12px;">
+                        <div class="text-xs font-medium mb-2" style="color:var(--muted);display:flex;align-items:center;gap:5px;"><i class="ph-bold ph-globe-hemisphere-west"></i> GEOLOCATION</div>
+                        <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                            <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
+                                <div>
+                                    <div class="text-xs font-medium" style="color:var(--text)">IP geolocation</div>
+                                    <div class="text-xs" style="color:var(--muted)">Show country flags and a world map in the Logs and CrowdSec tabs. Lookups run on the server against a local database - no IPs leave your server.</div>
+                                </div>
+                                <div class="toggle-switch" id="toggle-geoip" onclick="toggleGeoip()"><div class="toggle-knob"></div></div>
+                            </div>
+                            <div class="flex items-center justify-between" style="padding:10px 12px;">
+                                <div style="min-width:0">
+                                    <div class="text-xs font-medium" style="color:var(--text)">Database</div>
+                                    <div class="text-xs" id="geoipDbStatus" style="color:var(--muted)">Not downloaded</div>
+                                </div>
+                                <button onclick="updateGeoipDb(this)" id="geoipUpdateBtn" class="btn-secondary text-xs py-1 px-2.5"><i class="ph-bold ph-download-simple text-xs"></i> Download</button>
+                            </div>
+                        </div>
+                        <div class="text-xs mt-1.5" style="color:var(--muted)">Free <a href="https://db-ip.com" target="_blank" rel="noopener" style="color:var(--blue)">IP Geolocation by DB-IP</a> (CC-BY 4.0), refreshed monthly. Set <code class="font-mono">GEOIP_DB_PATH</code> to use your own MaxMind/DB-IP <code class="font-mono">.mmdb</code> instead.</div>
+                    </div>
+                    <div style="margin-bottom:12px;">
                         <div class="text-xs font-medium mb-2" style="color:var(--muted);display:flex;align-items:center;gap:5px;"><i class="ph-bold ph-squares-four"></i> DASHBOARD</div>
                         <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
                             <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
@@ -1935,6 +1955,59 @@ function saveDefaultTheme() {
     setTheme(val);
 }
 
+let _geoipEnabledState = false;
+
+async function loadGeoipSettings() {
+    try {
+        const r = await fetch('/api/geoip/status').then(r => r.json());
+        _geoipEnabledState = !!r.enabled;
+        const tog = document.getElementById('toggle-geoip');
+        if (tog) tog.classList.toggle('on', _geoipEnabledState);
+        const st = document.getElementById('geoipDbStatus');
+        if (st) st.textContent = r.available ? `Ready${r.db_date ? ' - ' + r.db_date : ''}` : 'Not downloaded';
+        const btn = document.getElementById('geoipUpdateBtn');
+        if (btn) btn.innerHTML = r.available ? '<i class="ph-bold ph-arrows-clockwise text-xs"></i> Update' : '<i class="ph-bold ph-download-simple text-xs"></i> Download';
+    } catch(_) {}
+}
+
+async function toggleGeoip() {
+    _geoipEnabledState = !_geoipEnabledState;
+    const tog = document.getElementById('toggle-geoip');
+    if (tog) tog.classList.toggle('on', _geoipEnabledState);
+    try {
+        const sv = await fetch('/api/settings/geoip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+            body: JSON.stringify({ geoip_enabled: _geoipEnabledState })
+        }).then(r => r.json());
+        if (!sv || sv.success === false) throw new Error();
+        if (typeof _geoStatusLoaded !== 'undefined') { try { await loadGeoStatus(true); } catch(_) {} }
+        if (_geoipEnabledState) {
+            const r = await fetch('/api/geoip/status').then(r => r.json());
+            if (!r.available) { showToast('Geolocation on - downloading database...', 'info'); updateGeoipDb(); }
+        }
+        loadGeoipSettings();
+    } catch(_) {
+        _geoipEnabledState = !_geoipEnabledState;
+        if (tog) tog.classList.toggle('on', _geoipEnabledState);
+        showToast('Failed to save', 'error');
+    }
+}
+
+async function updateGeoipDb(btn) {
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph-bold ph-spinner-gap animate-spin text-xs"></i> Downloading...'; }
+    try {
+        const r = await fetch('/api/geoip/update', { method: 'POST', headers: _csrfHeaders() }).then(r => r.json());
+        if (r.success) {
+            showToast(`GeoIP database updated (DB-IP ${r.db_month})`, 'success');
+            if (typeof _geoStatusLoaded !== 'undefined') { _geoStatusLoaded = false; try { await loadGeoStatus(true); } catch(_) {} }
+        } else {
+            showToast(r.error || 'Download failed', 'error');
+        }
+    } catch(_) { showToast('Download failed', 'error'); }
+    finally { if (btn) btn.disabled = false; loadGeoipSettings(); }
+}
+
 async function saveSettings() {
     const domains          = document.getElementById('settingsDomains').value.split(',').map(d => d.trim()).filter(Boolean);
     const resolver         = document.getElementById('settingsCertResolver').value.trim();
@@ -2391,6 +2464,7 @@ function loadUiTogglesIntoModal() {
     if (sh) sh.classList.toggle('on', localStorage.getItem('showShortcutsBtn') !== 'false');
     const ri = document.getElementById('toggle-route-icons');
     if (ri) ri.classList.toggle('on', localStorage.getItem('showRouteIcons') === 'true');
+    loadGeoipSettings();
 }
 
 function toggleUiPref(key) {

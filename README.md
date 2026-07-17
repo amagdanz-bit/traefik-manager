@@ -114,6 +114,7 @@ Open **http://your-server:5000** - the setup wizard will guide you through the r
   - **Route Map** - entry points, routes, middlewares, and services in a visual topology
   - **TLS Options** - create and manage named `tls.options` profiles, assignable per route
   - **CrowdSec** - decisions and alerts from a LAPI; ban, captcha, bypass, or unban IPs with one click
+- **IP geolocation** *(optional, off by default)* - country flags and a shaded, clickable **world map** of where your traffic and bans come from, on the Logs and CrowdSec tabs; lookups run on the server against a local [DB-IP](https://db-ip.com) database (no IPs leave your machine), or point `GEOIP_DB_PATH` at your own MaxMind `.mmdb`
 - Optional tabs that read a mounted file:
   - **Certs** *(mount `acme.json`)* - TLS certificates with expiry tracking
   - **Plugins** *(mount `traefik.yml`)* - view plugins declared in your static config, and **install new ones** by pasting the snippet from the plugin catalog - TM writes the static config, optionally creates the matching middleware, and prompts a restart

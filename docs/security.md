@@ -143,6 +143,12 @@ Private and loopback targets are still allowed, because reaching internal servic
 
 ---
 
+## IP geolocation
+
+[IP geolocation](geoip.md) (off by default) resolves client IPs to countries entirely **on the server against a local database** - IP addresses are never sent to any third-party geolocation API. The only outbound request is to download the database file itself (once a month, from `download.db-ip.com`), and only when the feature is enabled. Point `GEOIP_DB_PATH` at your own `.mmdb` to avoid the download entirely and run fully offline.
+
+---
+
 ## Git backup safety
 
 When you configure git backup:

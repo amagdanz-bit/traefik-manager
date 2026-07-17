@@ -62,6 +62,7 @@ Variables marked ✅ **override** the corresponding `manager.yml` field on every
 |---|---|---|---|
 | `ACME_JSON_PATH` | `/app/acme.json` | - | Path to `acme.json` for the Certificates tab |
 | `ACCESS_LOG_PATH` | `/app/logs/access.log` | - | Path to access log for the Logs tab |
+| `GEOIP_DB_PATH` | _(auto-downloaded)_ | ✅ `geoip_db_path` | Path to a custom GeoIP `.mmdb` for [IP geolocation](geoip.md) |
 | `CROWDSEC_LAPI_URL` | _(unset)_ | ✅ `crowdsec_lapi_url` | CrowdSec LAPI base URL (e.g. `http://crowdsec:8080`) |
 | `CROWDSEC_API_KEY` | _(unset)_ | ✅ `crowdsec_api_key` | CrowdSec bouncer API key, reads decisions (stored encrypted) |
 | `CROWDSEC_MACHINE_ID` | _(unset)_ | ✅ `crowdsec_machine_id` | CrowdSec machine login, enables the Alerts view and unban |
@@ -543,6 +544,29 @@ volumes:
 == Linux (systemd)
 ```ini
 Environment=ACCESS_LOG_PATH=/var/log/traefik/access.log
+```
+:::
+
+---
+
+### `GEOIP_DB_PATH`
+
+**Default:** _(auto-downloaded to `CONFIG_DIR/geoip/dbip-country-lite.mmdb`)_
+**Overrides:** `geoip_db_path` in `manager.yml`
+
+Path to a MaxMind DB format (`.mmdb`) GeoIP database for [IP geolocation](geoip.md) in the Logs and CrowdSec tabs. Leave unset to use the free DB-IP Lite country database that TM downloads automatically. Set it to use your own database (e.g. MaxMind GeoLite2). Geolocation must be enabled in **Settings → Interface → Geolocation**.
+
+:::tabs
+== Docker / Podman
+```yaml
+environment:
+  - GEOIP_DB_PATH=/data/GeoLite2-Country.mmdb
+volumes:
+  - /path/to/GeoLite2-Country.mmdb:/data/GeoLite2-Country.mmdb:ro
+```
+== Linux (systemd)
+```ini
+Environment=GEOIP_DB_PATH=/var/lib/traefik-manager/GeoLite2-Country.mmdb
 ```
 :::
 

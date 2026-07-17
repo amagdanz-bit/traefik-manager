@@ -965,6 +965,98 @@ paths:
         "400":
           description: Invalid theme
 
+  /api/settings/geoip:
+    post:
+      tags: [Settings]
+      summary: Save geolocation settings
+      description: Enable/disable IP geolocation and optionally set a custom database path. Does not require the full settings payload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                geoip_enabled: { type: boolean }
+                geoip_db_path: { type: string }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  status: { type: object }
+
+  /api/geoip/status:
+    get:
+      tags: [Settings]
+      summary: GeoIP status
+      description: Whether IP geolocation is enabled and whether the local database is present.
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled: { type: boolean }
+                  available: { type: boolean }
+                  db_path: { type: string }
+                  db_date: { type: string, nullable: true, description: Database file date (YYYY-MM-DD) }
+
+  /api/geoip/lookup:
+    post:
+      tags: [Settings]
+      summary: Look up countries for IPs
+      description: Resolve a batch of IP addresses to countries against the local database. Runs entirely on the server - IPs are never sent to a third party. Returns an empty result set if geolocation is disabled or the database is missing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ips: { type: array, items: { type: string }, description: Up to 2000 IP addresses }
+      responses:
+        "200":
+          description: Lookup results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled: { type: boolean }
+                  available: { type: boolean }
+                  results:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        country_code: { type: string, example: US }
+                        country_name: { type: string, example: United States }
+
+  /api/geoip/update:
+    post:
+      tags: [Settings]
+      summary: Download / refresh GeoIP database
+      description: Download the latest free DB-IP Lite country database (or your configured source) and reload it.
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  db_month: { type: string, example: "2026-07" }
+        "502":
+          description: Download failed
+
   /api/settings/backup-retention:
     post:
       tags: [Settings]

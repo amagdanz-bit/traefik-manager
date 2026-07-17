@@ -110,6 +110,7 @@ export default defineConfig({
           { text: 'Plugins', link: '/tab-plugins' },
           { text: 'Logs', link: '/tab-logs' },
           { text: 'CrowdSec', link: '/tab-crowdsec' },
+          { text: 'IP Geolocation', link: '/geoip' },
         ],
       },
       {

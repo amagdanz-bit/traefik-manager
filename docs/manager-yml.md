@@ -54,6 +54,8 @@ webhook_type: "discord"
 webhook_username: ""
 webhook_password: ""
 default_theme: "dark"
+geoip_enabled: false
+geoip_db_path: ""
 visible_tabs:
   dashboard: false
   routemap: false
@@ -367,6 +369,26 @@ The default theme for the UI and the login page. One of `dark`, `light`, or `sys
 
 ```yaml
 default_theme: light
+```
+
+### `geoip_enabled`
+
+**Type:** boolean - **Default:** `false`
+
+Enables [IP geolocation](geoip.md) - country flags and a world map in the Logs and CrowdSec tabs. Toggle in **Settings - Interface - Geolocation**.
+
+```yaml
+geoip_enabled: true
+```
+
+### `geoip_db_path`
+
+**Type:** string - **Default:** `""` (auto-download DB-IP Lite)
+
+Path to a custom GeoIP `.mmdb` database. Leave empty to use the free DB-IP Lite country database TM downloads automatically. Also settable via the `GEOIP_DB_PATH` environment variable.
+
+```yaml
+geoip_db_path: /data/GeoLite2-Country.mmdb
 ```
 
 ### `visible_tabs`

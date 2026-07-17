@@ -278,6 +278,7 @@ BACKUP_DIR    = os.environ.get('BACKUP_DIR',    '/app/backups')
 SETTINGS_PATH      = os.environ.get('SETTINGS_PATH', '/app/config/manager.yml')
 _CONFIG_DIR        = os.path.dirname(os.path.abspath(SETTINGS_PATH))
 GROUPS_CACHE_DIR   = os.path.join(_CONFIG_DIR, 'cache')
+GEOIP_DIR          = os.path.join(_CONFIG_DIR, 'geoip')
 GROUPS_CONFIG_FILE  = os.path.join(_CONFIG_DIR, 'dashboard.yml')
 NOTIFICATIONS_PATH  = os.path.join(_CONFIG_DIR, 'notifications.yml')
 AGENTS_PATH        = os.path.join(_CONFIG_DIR, 'agents.yml')
@@ -484,6 +485,135 @@ def _get_static_config_path() -> str:
 def _get_restart_method() -> str:
     return os.environ.get('RESTART_METHOD', 'proxy').lower()
 
+_DBIP_URL = 'https://download.db-ip.com/free/dbip-country-lite-{ym}.mmdb.gz'
+_geoip_lock  = threading.Lock()
+_geoip_state = {'reader': None, 'path': None, 'mtime': None}
+_geoip_cache = {}
+
+def _geoip_enabled() -> bool:
+    s = load_settings()
+    return bool(s.get('geoip_enabled', False))
+
+def _geoip_db_path() -> str:
+    s = load_settings()
+    return (s.get('geoip_db_path') or '').strip() or os.environ.get('GEOIP_DB_PATH', '').strip() or os.path.join(GEOIP_DIR, 'dbip-country-lite.mmdb')
+
+def _geoip_reader():
+    path = _geoip_db_path()
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return None
+    with _geoip_lock:
+        st = _geoip_state
+        if st['reader'] is not None and st['path'] == path and st['mtime'] == mtime:
+            return st['reader']
+        try:
+            import maxminddb
+            reader = maxminddb.open_database(path)
+        except Exception:
+            logger.exception("GeoIP database open failed")
+            return None
+        if st['reader'] is not None:
+            try:
+                st['reader'].close()
+            except Exception:
+                pass
+        st.update({'reader': reader, 'path': path, 'mtime': mtime})
+        _geoip_cache.clear()
+        return reader
+
+_GEOIP_SENTINEL = object()
+
+def _geoip_lookup(ip: str, reader=_GEOIP_SENTINEL):
+    if not ip:
+        return None
+    cached = _geoip_cache.get(ip)
+    if cached is not None:
+        return cached or None
+    if reader is _GEOIP_SENTINEL:
+        reader = _geoip_reader()
+    if reader is None:
+        return None
+    try:
+        rec = reader.get(ip) or {}
+    except Exception:
+        rec = {}
+    country = rec.get('country') or {}
+    cc = str(country.get('iso_code') or '').upper()
+    name = ((country.get('names') or {}).get('en')) or cc
+    result = {'country_code': cc, 'country_name': name} if cc else None
+    if len(_geoip_cache) > 50000:
+        _geoip_cache.clear()
+    _geoip_cache[ip] = result or {}
+    return result
+
+def _geoip_download():
+    import gzip
+    now = time.gmtime()
+    y, m = now.tm_year, now.tm_mon
+    pm = (y, m - 1) if m > 1 else (y - 1, 12)
+    months = [time.strftime('%Y-%m', now), '%04d-%02d' % pm]
+    last_err = 'unknown error'
+    for ym in months:
+        url = _DBIP_URL.format(ym=ym)
+        try:
+            resp = requests.get(url, timeout=90, headers={'User-Agent': f'traefik-manager/{APP_VERSION}'})
+            if resp.status_code == 200 and resp.content:
+                data = gzip.decompress(resp.content)
+                path = _geoip_db_path()
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                tmp = f"{path}.tmp.{os.getpid()}.{threading.get_ident()}"
+                try:
+                    with open(tmp, 'wb') as f:
+                        f.write(data)
+                    os.replace(tmp, path)
+                finally:
+                    if os.path.exists(tmp):
+                        try:
+                            os.unlink(tmp)
+                        except OSError:
+                            pass
+                with _geoip_lock:
+                    _geoip_state['reader'] = None
+                    _geoip_state['mtime'] = None
+                    _geoip_cache.clear()
+                logger.info(f"GeoIP database updated (DB-IP {ym})")
+                return True, ym
+            last_err = f'HTTP {resp.status_code}'
+        except Exception as e:
+            last_err = str(e)
+    return False, last_err
+
+def _geoip_status() -> dict:
+    path = _geoip_db_path()
+    available = bool(path and os.path.exists(path))
+    db_date = None
+    if available:
+        try:
+            db_date = time.strftime('%Y-%m-%d', time.gmtime(os.path.getmtime(path)))
+        except OSError:
+            db_date = None
+    return {'enabled': _geoip_enabled(), 'available': available, 'db_path': path, 'db_date': db_date}
+
+def _geoip_maybe_autoupdate():
+    try:
+        if not _geoip_enabled():
+            return
+        path = _geoip_db_path()
+        stale = True
+        if os.path.exists(path):
+            try:
+                stale = (time.time() - os.path.getmtime(path)) > 35 * 86400
+            except OSError:
+                stale = True
+        if stale:
+            _geoip_download()
+    except Exception:
+        logger.exception("GeoIP auto-update failed")
+
 def _get_traefik_container() -> str:
     return os.environ.get('TRAEFIK_CONTAINER', 'traefik')
 
@@ -522,6 +652,8 @@ def load_settings() -> dict:
         'oidc_groups_claim':    'groups',
         'oidc_allow_any_authenticated': False,
         'default_theme':        'dark',
+        'geoip_enabled':        False,
+        'geoip_db_path':        '',
         'webhook_url':          '',
         'webhook_type':         'discord',
         'webhook_username':     '',
@@ -648,6 +780,10 @@ def load_settings() -> dict:
         if 'default_theme' in data:
             _dt = str(data['default_theme']).strip().lower()
             merged['default_theme'] = _dt if _dt in ('dark', 'light', 'system') else 'dark'
+        if 'geoip_enabled' in data:
+            merged['geoip_enabled'] = bool(data['geoip_enabled'])
+        if 'geoip_db_path' in data:
+            merged['geoip_db_path'] = str(data['geoip_db_path']).strip()
         if 'webhook_url' in data:
             merged['webhook_url'] = str(data['webhook_url']).strip()
         if 'webhook_type' in data:
@@ -723,7 +859,8 @@ def save_settings(domains, cert_resolver, traefik_api_url,
                   git_backup_token=None, git_backup_commit_message=None,
                   git_backup_auto_push=None,
                   agent_api_rate_limit=None, backup_keep_count=None,
-                  default_theme=None):
+                  default_theme=None,
+                  geoip_enabled=None, geoip_db_path=None):
     if visible_tabs is None:
         visible_tabs = {t: False for t in OPTIONAL_TABS}
     _cur = load_settings()
@@ -748,6 +885,10 @@ def save_settings(domains, cert_resolver, traefik_api_url,
     default_theme = str(default_theme).strip().lower()
     if default_theme not in ('dark', 'light', 'system'):
         default_theme = 'dark'
+    if geoip_enabled is None:
+        geoip_enabled = _cur.get('geoip_enabled', False)
+    if geoip_db_path is None:
+        geoip_db_path = _cur.get('geoip_db_path', '')
     if access_log_path is None:
         access_log_path = _cur.get('access_log_path', '')
     if static_config_path is None:
@@ -845,6 +986,8 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         'oidc_allowed_groups':  oidc_allowed_groups,
         'oidc_allow_any_authenticated': bool(oidc_allow_any_authenticated),
         'default_theme':        default_theme,
+        'geoip_enabled':        bool(geoip_enabled),
+        'geoip_db_path':        str(geoip_db_path or '').strip(),
         'oidc_groups_claim':    oidc_groups_claim,
         'webhook_url':          webhook_url,
         'webhook_type':         webhook_type,
@@ -1235,6 +1378,8 @@ def _get_effective_hash() -> str:
 
 
 _load_notifications()
+
+threading.Thread(target=_geoip_maybe_autoupdate, daemon=True).start()
 
 _SILENT_PREFIXES = (
     '/static/',
@@ -3770,6 +3915,70 @@ def api_save_theme():
     except Exception:
         logger.exception("Theme save error")
         return jsonify({'success': False, 'error': 'Save failed'}), 500
+
+
+@app.route('/api/geoip/status')
+@login_required
+def api_geoip_status():
+    return jsonify(_geoip_status())
+
+@app.route('/api/geoip/lookup', methods=['POST'])
+@csrf_protect
+@login_required
+def api_geoip_lookup():
+    if not _geoip_enabled():
+        return jsonify({'enabled': False, 'available': False, 'results': {}})
+    data = request.get_json(silent=True) or {}
+    ips  = data.get('ips') or []
+    if not isinstance(ips, list):
+        ips = []
+    reader = _geoip_reader()
+    available = reader is not None
+    results = {}
+    if available:
+        for ip in ips[:2000]:
+            ip = str(ip).strip()
+            if not ip or ip in results:
+                continue
+            geo = _geoip_lookup(ip, reader)
+            if geo:
+                results[ip] = geo
+    return jsonify({'enabled': True, 'available': available, 'results': results})
+
+@app.route('/api/settings/geoip', methods=['POST'])
+@csrf_protect
+@login_required
+def api_save_geoip():
+    try:
+        data     = request.get_json(silent=True) or {}
+        existing = load_settings()
+        enabled  = bool(data['geoip_enabled']) if 'geoip_enabled' in data else existing.get('geoip_enabled', False)
+        db_path  = str(data.get('geoip_db_path', existing.get('geoip_db_path', ''))).strip()
+        save_settings(
+            domains=existing['domains'],
+            cert_resolver=existing['cert_resolver'],
+            traefik_api_url=existing['traefik_api_url'],
+            auth_enabled=existing['auth_enabled'],
+            password_hash=existing['password_hash'],
+            visible_tabs=existing['visible_tabs'],
+            geoip_enabled=enabled,
+            geoip_db_path=db_path,
+        )
+        return jsonify({'success': True, 'status': _geoip_status()})
+    except Exception:
+        logger.exception("GeoIP settings save error")
+        return jsonify({'success': False, 'error': 'Save failed'}), 500
+
+@app.route('/api/geoip/update', methods=['POST'])
+@csrf_protect
+@login_required
+@limiter.limit("6 per hour")
+def api_geoip_update():
+    ok, info = _geoip_download()
+    if ok:
+        add_notification('success', f'GeoIP database updated (DB-IP {info})')
+        return jsonify({'success': True, 'db_month': info, 'status': _geoip_status()})
+    return jsonify({'success': False, 'error': f'Download failed: {info}'}), 502
 
 
 @app.route('/api/settings/backup-retention', methods=['POST'])

@@ -56,6 +56,10 @@ Switch to **Recent Alerts** using the toggle next to the search box. The alerts 
 | **Scenario** | The scenario that matched |
 | **Decisions** | Number of decisions created from the alert |
 
+## Geolocation
+
+When [IP geolocation](geoip.md) is enabled (**Settings → Interface → Geolocation**), the CrowdSec tab adds a **Country** column with a flag on every decision and alert, and a shaded **world map** of where the banned/flagged IPs are located. Click a country on the map or in the Top Countries list to filter the decisions and alerts to it. Lookups run on the server against a local database, so no IP addresses leave your machine.
+
 ## Not configured state
 
 If CrowdSec is not configured, the tab shows a placeholder message with a link to **Settings → System Monitoring → CrowdSec**.

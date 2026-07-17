@@ -47,6 +47,15 @@
         html[data-tm-pref="system"] .tm-theme-icon[data-pref="system"],
         html:not([data-tm-pref]) .tm-theme-icon[data-pref="dark"] { display: inline; }
         .tab-optional { display: none; }
+        .tm-geo-map { width: 100%; }
+        .tm-geo-grid { display: grid; gap: 16px; grid-template-columns: minmax(0,2fr) minmax(0,1fr); align-items: start; }
+        @media (max-width: 640px) { .tm-geo-grid { grid-template-columns: 1fr; } }
+        .tm-worldmap { width: 100%; height: auto; display: block; }
+        .tm-worldmap path { fill: var(--input-bg); stroke: var(--card); stroke-width: 0.3; }
+        .tm-worldmap path.tm-geo-active { cursor: pointer; }
+        .tm-worldmap path.tm-geo-active:hover { stroke: var(--text); stroke-width: 0.6; }
+        .tm-worldmap path.tm-geo-selected { stroke: var(--text); stroke-width: 0.8; }
+        .tm-geo-tooltip { position: fixed; z-index: 400; pointer-events: none; background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; color: var(--text); box-shadow: 0 2px 10px rgba(0,0,0,0.3); white-space: nowrap; }
     </style>
     <link rel="stylesheet" href="/static/vendor/fonts/inter.css">
     <link rel="stylesheet" href="/static/vendor/fonts/jetbrains-mono.css">
@@ -4565,7 +4574,12 @@ let _csView          = 'decisions';
 let _csLapiOnline    = false;
 let _csDecisionsPage = 1;
 let _csBanType       = 'ban';
+let _csCountryFilter = '';
 const _CS_PAGE_SIZE  = 100;
+
+function _csIp(d) { return (d.value || '').split('/')[0]; }
+function csGeo_click(cc) { _csCountryFilter = (_csCountryFilter === cc) ? '' : cc; _csDecisionsPage = 1; _csApplyFilters(); }
+function clearCsCountryFilter() { _csCountryFilter = ''; _csDecisionsPage = 1; _csApplyFilters(); }
 
 async function refreshCrowdSecTab() {
     const decEl   = document.getElementById('csDecisionsTable');
@@ -4615,6 +4629,14 @@ async function refreshCrowdSecTab() {
         _csDecisions = Array.isArray(rawDec) ? rawDec : [];
         _csAlerts    = Array.isArray(rawAlt) ? rawAlt : [];
         _csDecisionsPage = 1;
+        await loadGeoStatus();
+        if (_geoEnabled && _geoAvailable) {
+            const ips = [
+                ..._csDecisions.map(d => (d.value || '').split('/')[0]),
+                ..._csAlerts.map(a => a.source && a.source.ip),
+            ].filter(Boolean);
+            await geoLookup(ips);
+        }
         _renderCsStats(_csDecisions, _csAlerts, _csLapiOnline, statsEl);
         _csApplyFilters();
         if (altEl && !altRes.ok) {
@@ -4660,24 +4682,41 @@ function _setCsPage(n) {
     _csApplyFilters();
 }
 
+function _csRenderGeoPanel(ips) {
+    const panel = document.getElementById('csGeoPanel');
+    if (!panel) return;
+    const geoOn = _geoEnabled && _geoAvailable;
+    const countryData = geoOn ? _geoCountryCounts((ips || []).filter(Boolean)) : {};
+    if (_csCountryFilter && !countryData[_csCountryFilter]) _csCountryFilter = '';
+    if (!geoOn || !Object.keys(countryData).length) { panel.innerHTML = ''; return; }
+    panel.innerHTML = _geoPanelHtml('csGeo', countryData, _csCountryFilter, 'clearCsCountryFilter()');
+    renderGeoMap(document.getElementById('csGeoMap'), countryData, csGeo_click, _csCountryFilter);
+}
+
 function _csApplyFilters() {
     const q = (document.getElementById('csSearch')?.value || '').toLowerCase().trim();
+    const geoOn = _geoEnabled && _geoAvailable;
+    const ccOf = ip => { const g = _geoCache[ip]; return g && g.country_code; };
     if (_csView === 'decisions') {
-        const decEl  = document.getElementById('csDecisionsTable');
-        const filtered = _csDecisions.filter(d => {
+        const decEl = document.getElementById('csDecisionsTable');
+        const base = _csDecisions.filter(d => {
             if (_csTypeFilter !== 'all' && d.type !== _csTypeFilter) return false;
             if (q && !((d.value||'').toLowerCase().includes(q) || (d.scenario||'').toLowerCase().includes(q) || (d.origin||'').toLowerCase().includes(q))) return false;
             return true;
         });
+        _csRenderGeoPanel(base.map(_csIp));
+        const filtered = (geoOn && _csCountryFilter) ? base.filter(d => ccOf(_csIp(d)) === _csCountryFilter) : base;
         if (decEl) _renderCsDecisions(filtered, decEl);
     } else {
         const altEl = document.getElementById('csAlertsTable');
-        const filteredAlerts = _csAlerts.filter(a => {
+        const base = _csAlerts.filter(a => {
             if (!q) return true;
             const ip = (a.source && a.source.ip) ? a.source.ip : '';
             return ip.toLowerCase().includes(q) || (a.scenario||'').toLowerCase().includes(q);
         });
-        if (altEl) _renderCsAlerts(filteredAlerts, altEl);
+        _csRenderGeoPanel(base.map(a => a.source && a.source.ip));
+        const filtered = (geoOn && _csCountryFilter) ? base.filter(a => ccOf(a.source && a.source.ip) === _csCountryFilter) : base;
+        if (altEl) _renderCsAlerts(filtered, altEl);
     }
 }
 
@@ -4771,12 +4810,16 @@ function _renderCsDecisions(allFiltered, el) {
         el.innerHTML = `<div class="text-center py-10 text-xs" style="color:var(--muted)">No active decisions</div>`;
         return;
     }
+    const geoOn = _geoEnabled && _geoAvailable;
     const rows = decisions.map(d => {
         const until    = d.until ? new Date(d.until).toLocaleString() : (d.duration || '-');
         const scenario = _esc(d.scenario || '-');
         const origin   = _esc(d.origin || '-');
+        const g = _geoCache[_csIp(d)];
+        const geoCell = geoOn ? `<td class="px-3 py-2 text-xs">${g && g.country_code ? _geoChip(g.country_code, g.country_name) : '<span style="color:var(--muted)">-</span>'}</td>` : '';
         return `<tr style="border-top:1px solid var(--border)">
             <td class="px-3 py-2 font-mono text-xs" style="color:var(--text)">${_esc(d.value || '-')}</td>
+            ${geoCell}
             <td class="px-3 py-2 text-xs"><span class="badge ${d.type === 'ban' ? 'badge-red' : d.type === 'captcha' ? 'badge-yellow' : 'badge-green'}">${_esc(d.type || '-')}</span></td>
             <td class="px-3 py-2 text-xs" style="color:var(--muted)">${_esc(origin)}</td>
             <td class="px-3 py-2 text-xs" style="color:var(--muted)">${scenario}</td>
@@ -4800,6 +4843,7 @@ function _renderCsDecisions(allFiltered, el) {
     el.innerHTML = `<table class="w-full text-left" style="border-collapse:collapse">
         <thead><tr style="background:var(--input-bg)">
             <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">IP / Scope</th>
+            ${geoOn ? '<th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Country</th>' : ''}
             <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Type</th>
             <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Origin</th>
             <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Scenario</th>
@@ -4816,14 +4860,19 @@ function _renderCsAlerts(alerts, el) {
         el.innerHTML = `<div class="text-center py-10 text-xs" style="color:var(--muted)">No recent alerts</div>`;
         return;
     }
+    const geoOn = _geoEnabled && _geoAvailable;
     const rows = alerts.map(a => {
         const ts  = a.startAt ? new Date(a.startAt).toLocaleString() : '-';
-        const ip  = (a.source && a.source.ip) ? _esc(a.source.ip) : '-';
+        const rawIp = (a.source && a.source.ip) ? a.source.ip : '';
+        const ip  = rawIp ? _esc(rawIp) : '-';
         const scenario = _esc(a.scenario || '-');
         const decisions = (a.decisions || []).length;
+        const g = _geoCache[rawIp];
+        const geoCell = geoOn ? `<td class="px-3 py-2 text-xs">${g && g.country_code ? _geoChip(g.country_code, g.country_name) : '<span style="color:var(--muted)">-</span>'}</td>` : '';
         return `<tr style="border-top:1px solid var(--border)">
             <td class="px-3 py-2 text-xs" style="color:var(--muted)">${_esc(ts)}</td>
             <td class="px-3 py-2 font-mono text-xs" style="color:var(--text)">${ip}</td>
+            ${geoCell}
             <td class="px-3 py-2 text-xs" style="color:var(--muted)">${scenario}</td>
             <td class="px-3 py-2 text-xs text-center"><span class="badge badge-muted">${decisions}</span></td>
         </tr>`;
@@ -4832,6 +4881,7 @@ function _renderCsAlerts(alerts, el) {
         <thead><tr style="background:var(--input-bg)">
             <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Time</th>
             <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Source IP</th>
+            ${geoOn ? '<th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Country</th>' : ''}
             <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Scenario</th>
             <th class="px-3 py-2 text-xs font-semibold text-center" style="color:var(--muted)">Decisions</th>
         </tr></thead>
@@ -4850,8 +4900,158 @@ async function csUnban(id) {
     } catch(e) { addNotification('error', 'Request failed'); }
 }
 
+let _geoEnabled = false, _geoAvailable = false, _geoStatusLoaded = false;
+let _geoCache = {};
+let _geoMapSvg = null, _geoMapLoading = null;
+let _geoTooltipEl = null;
+
+async function loadGeoStatus(force) {
+    if (_geoStatusLoaded && !force) return _geoEnabled && _geoAvailable;
+    try {
+        const r = await fetch('/api/geoip/status').then(r => r.json());
+        _geoEnabled = !!r.enabled; _geoAvailable = !!r.available;
+    } catch(_) { _geoEnabled = false; _geoAvailable = false; }
+    _geoStatusLoaded = true;
+    return _geoEnabled && _geoAvailable;
+}
+
+async function geoLookup(ips) {
+    if (!_geoEnabled || !_geoAvailable) return {};
+    const uniq = [...new Set(ips.filter(Boolean))];
+    const need = uniq.filter(ip => !(ip in _geoCache));
+    if (need.length) {
+        try {
+            const r = await fetch('/api/geoip/lookup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+                body: JSON.stringify({ ips: need })
+            }).then(r => r.json());
+            const res = r.results || {};
+            need.forEach(ip => { _geoCache[ip] = res[ip] || null; });
+            if (r.available === false) _geoAvailable = false;
+        } catch(_) {}
+    }
+    const out = {};
+    uniq.forEach(ip => { if (_geoCache[ip]) out[ip] = _geoCache[ip]; });
+    return out;
+}
+
+function _flagEmoji(cc) {
+    if (!cc || cc.length !== 2) return '';
+    try { return String.fromCodePoint(...[...cc.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65)); }
+    catch(_) { return ''; }
+}
+
+function _geoChip(cc, name) {
+    if (!cc) return '';
+    const flag = _flagEmoji(cc);
+    const label = name || cc;
+    return `<span class="inline-flex items-center gap-1 text-xs" style="color:var(--muted)" title="${_esc(label)}">${flag ? `<span style="font-size:13px;line-height:1">${flag}</span>` : ''}<span class="font-mono">${_esc(cc)}</span></span>`;
+}
+
+function _geoCountryCounts(ips) {
+    const counts = {};
+    ips.forEach(ip => {
+        const g = _geoCache[ip];
+        if (g && g.country_code) {
+            const cc = g.country_code;
+            if (!counts[cc]) counts[cc] = { count: 0, name: g.country_name || cc };
+            counts[cc].count++;
+        }
+    });
+    return counts;
+}
+
+async function _ensureWorldMap() {
+    if (_geoMapSvg) return _geoMapSvg;
+    if (!_geoMapLoading) {
+        _geoMapLoading = fetch('/static/world-map.svg').then(r => r.text()).then(t => { _geoMapSvg = t; return t; }).catch(() => { _geoMapLoading = null; return null; });
+    }
+    return _geoMapLoading;
+}
+
+function _geoTooltip() {
+    if (!_geoTooltipEl) {
+        _geoTooltipEl = document.createElement('div');
+        _geoTooltipEl.className = 'tm-geo-tooltip';
+        _geoTooltipEl.style.display = 'none';
+        document.body.appendChild(_geoTooltipEl);
+    }
+    return _geoTooltipEl;
+}
+
+async function renderGeoMap(container, countryData, onCountryClick, activeCC) {
+    if (!container) return;
+    if (_geoTooltipEl) _geoTooltipEl.style.display = 'none';
+    const svgText = await _ensureWorldMap();
+    if (!svgText) { container.innerHTML = ''; return; }
+    container.innerHTML = svgText;
+    const svgEl = container.querySelector('svg');
+    if (!svgEl) return;
+    const counts = Object.values(countryData).map(d => d.count);
+    const max = Math.max(1, ...counts);
+    svgEl.querySelectorAll('path[data-cc]').forEach(p => {
+        const cc = p.getAttribute('data-cc');
+        const d  = countryData[cc];
+        if (d && d.count > 0) {
+            const t = Math.log(d.count + 1) / Math.log(max + 1);
+            p.style.fill = 'var(--blue)';
+            p.style.fillOpacity = (0.22 + 0.78 * t).toFixed(3);
+            p.classList.add('tm-geo-active');
+            if (activeCC && cc === activeCC) p.classList.add('tm-geo-selected');
+        }
+    });
+    const tip = _geoTooltip();
+    svgEl.addEventListener('mousemove', e => {
+        const p = e.target.closest('path.tm-geo-active');
+        if (!p) { tip.style.display = 'none'; return; }
+        const cc = p.getAttribute('data-cc');
+        const d  = countryData[cc] || {};
+        tip.innerHTML = `${_flagEmoji(cc)} ${_esc(d.name || p.getAttribute('data-name') || cc)} <span style="color:var(--muted);margin-left:4px">${d.count || 0}</span>`;
+        tip.style.display = 'block';
+        tip.style.left = (e.clientX + 12) + 'px';
+        tip.style.top  = (e.clientY + 12) + 'px';
+    });
+    svgEl.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+    if (onCountryClick) {
+        svgEl.addEventListener('click', e => {
+            const p = e.target.closest('path.tm-geo-active');
+            if (p) onCountryClick(p.getAttribute('data-cc'));
+        });
+    }
+}
+
+function _geoPanelHtml(panelId, countryData, activeCC, onClearAttr) {
+    const entries = Object.entries(countryData).sort((a, b) => b[1].count - a[1].count);
+    if (!entries.length) return '';
+    const max = entries[0][1].count || 1;
+    const top = entries.slice(0, 8).map(([cc, d]) => {
+        const w = Math.max(4, Math.round((d.count / max) * 100));
+        const sel = activeCC === cc;
+        return `<div class="flex items-center gap-2 py-1 cursor-pointer" style="border-bottom:1px solid var(--border);${sel ? 'background:var(--input-bg)' : ''}" onclick="${panelId}_click('${cc}')">
+            <span style="font-size:14px;line-height:1;flex-shrink:0">${_flagEmoji(cc)}</span>
+            <span class="text-xs truncate" style="color:var(--text);flex:1;min-width:0" title="${_esc(d.name)}">${_esc(d.name)}</span>
+            <div style="width:60px;height:6px;border-radius:3px;background:var(--input-bg);overflow:hidden;flex-shrink:0"><div style="height:100%;border-radius:3px;background:var(--blue);width:${w}%"></div></div>
+            <span class="text-xs font-bold tabular-nums flex-shrink-0" style="color:var(--muted);min-width:28px;text-align:right">${d.count}</span>
+        </div>`;
+    }).join('');
+    const activeChip = activeCC ? `<button onclick="${onClearAttr}" class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full" style="background:var(--input-bg);color:var(--blue);border:1px solid var(--border)">${_flagEmoji(activeCC)} ${_esc((countryData[activeCC] || {}).name || activeCC)} <i class="ph-bold ph-x"></i></button>` : '';
+    return `<div class="rounded-xl p-4 mb-3" style="background:var(--card);border:1px solid var(--border)">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-semibold uppercase tracking-wide" style="color:var(--muted)"><i class="ph-bold ph-globe-hemisphere-west mr-1"></i>Geography</span>
+            ${activeChip}
+        </div>
+        <div class="tm-geo-grid">
+            <div id="${panelId}Map" class="tm-geo-map"></div>
+            <div>${top}</div>
+        </div>
+        <div class="text-xs mt-2" style="color:var(--muted)"><a href="https://db-ip.com" target="_blank" rel="noopener" style="color:var(--muted)">IP Geolocation by DB-IP</a></div>
+    </div>`;
+}
+
 let _allLogLines    = [];
 let _currentLogLines = 100;
+let _logCountryFilter = '';
 
 function setLogLines(n) {
     _currentLogLines = n;
@@ -4882,11 +5082,22 @@ async function refreshLogs() {
             return;
         }
         _allLogLines = res.lines || [];
+        await loadGeoStatus();
+        if (_geoEnabled && _geoAvailable) {
+            const ips = _allLogLines.map(l => { const e = parseLogLine(l); return e && e.ip; }).filter(Boolean);
+            await geoLookup(ips);
+        }
         renderLogs();
     } catch(e) {
         container.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><p>Failed to load logs</p></div>`;
     }
 }
+
+function logGeo_click(cc) {
+    _logCountryFilter = (_logCountryFilter === cc) ? '' : cc;
+    renderLogs();
+}
+function clearLogCountryFilter() { _logCountryFilter = ''; renderLogs(); }
 
 const HTTP_STATUS = {
     200:'OK',201:'Created',202:'Accepted',204:'No Content',
@@ -5031,23 +5242,33 @@ function renderLogStats(entries) {
 function renderLogs() {
     const container = document.getElementById('logsContent');
     const q = (document.getElementById('logSearch')?.value || '').toLowerCase();
-    const lines = q ? _allLogLines.filter(l => l.toLowerCase().includes(q)) : _allLogLines;
+    const searchLines = q ? _allLogLines.filter(l => l.toLowerCase().includes(q)) : _allLogLines;
+    const geoOn = _geoEnabled && _geoAvailable;
 
-    if (lines.length === 0) {
+    const searchParsed = searchLines.map(raw => ({ raw, e: parseLogLine(raw) }));
+    const countryData = geoOn ? _geoCountryCounts(searchParsed.map(o => o.e && o.e.ip).filter(Boolean)) : {};
+    if (_logCountryFilter && !countryData[_logCountryFilter]) _logCountryFilter = '';
+
+    const visible = _logCountryFilter
+        ? searchParsed.filter(o => o.e && _geoCache[o.e.ip] && _geoCache[o.e.ip].country_code === _logCountryFilter)
+        : searchParsed;
+
+    if (searchLines.length === 0) {
         document.getElementById('logStats')?.style && (document.getElementById('logStats').style.display = 'none');
         container.innerHTML = `<div class="text-center py-12" style="color:var(--muted)"><p>No log lines match</p></div>`;
         return;
     }
-    renderLogStats(lines);
+    renderLogStats(visible.map(o => o.raw));
 
     const statusColor = s => !s ? 'var(--muted)' : s >= 500 ? 'var(--red)' : s >= 400 ? 'var(--yellow)' : 'var(--green)';
     const methodColor = m => ({ GET:'var(--blue)', POST:'var(--green)', PUT:'var(--yellow)', DELETE:'var(--red)', PATCH:'var(--purple)' }[m] || 'var(--muted)');
 
-    const cards = lines.map(raw => {
-        const e = parseLogLine(raw);
+    const cards = visible.map(({ raw, e }) => {
         if (!e) return `<div class="px-4 py-2 text-xs font-mono border-b" style="color:var(--muted);border-color:var(--border);overflow-x:auto;white-space:nowrap">${_esc(raw)}</div>`;
         const sc = statusColor(e.status);
         const mc = methodColor(e.method);
+        const geo = _geoCache[e.ip];
+        const flag = (geoOn && geo && geo.country_code) ? `<span style="font-size:12px;line-height:1;flex-shrink:0" title="${_esc(geo.country_name || geo.country_code)}">${_flagEmoji(geo.country_code)}</span>` : '';
         const svcLabel = e.service && e.service !== '-' ? `<span class="text-xs font-mono truncate" style="color:var(--blue);max-width:180px">${_esc(e.service.replace(/@docker|@file/,''))}</span>` : '';
         const durLabel = e.duration && e.duration !== '-' ? `<span class="text-xs" style="color:var(--muted)">${_esc(e.duration)}</span>` : '';
         const entryObj = JSON.stringify(e).replace(/'/g,"&#39;");
@@ -5059,17 +5280,21 @@ function renderLogs() {
                 <div class="text-xs font-mono truncate" style="color:var(--text)" title="${_esc(e.path)}">${_esc(e.path)}</div>
                 ${metaLine ? `<div class="flex items-center gap-1 mt-0.5">${metaLine}</div>` : ''}
             </div>
-            <span class="text-xs flex-shrink-0 hidden sm:block mt-px" style="color:var(--muted)">${_esc(e.ip)}</span>
+            <span class="text-xs flex-shrink-0 hidden sm:flex items-center gap-1 mt-px" style="color:var(--muted)">${flag}${_esc(e.ip)}</span>
         </div>`;
     }).join('');
 
-    container.innerHTML = `<div class="rounded-xl overflow-hidden" style="border:1px solid var(--border)">
+    const geoPanel = (geoOn && Object.keys(countryData).length) ? _geoPanelHtml('logGeo', countryData, _logCountryFilter, 'clearLogCountryFilter()') : '';
+
+    container.innerHTML = geoPanel + `<div class="rounded-xl overflow-hidden" style="border:1px solid var(--border)">
         <div class="flex items-center justify-between px-4 py-2 text-xs" style="background:var(--card);border-bottom:1px solid var(--border);color:var(--muted)">
             <span><i class="ph-bold ph-terminal mr-1"></i>Access Log</span>
-            <span>${lines.length} entries</span>
+            <span>${visible.length} entries</span>
         </div>
         <div style="max-height:600px;overflow-y:auto;background:var(--bg)">${cards}</div>
     </div>`;
+
+    if (geoPanel) renderGeoMap(document.getElementById('logGeoMap'), countryData, logGeo_click, _logCountryFilter);
 }
 
 function openLogDetail(e) {
@@ -5078,8 +5303,10 @@ function openLogDetail(e) {
     document.getElementById('ldBadges').innerHTML =
         `<span class="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded" style="background:${sc}18;color:${sc};border:1px solid ${sc}44">${e.status||'—'} ${e.status ? (HTTP_STATUS[e.status]||'') : 'tunnel'}</span>` +
         `<span class="text-xs font-mono font-bold px-2 py-1 rounded" style="background:${mc}18;color:${mc};border:1px solid ${mc}44">${_esc(e.method)}</span>`;
+    const _g = _geoCache[e.ip];
     const rows = [
         ['Path', e.path], ['IP', e.ip], ['Date', e.date],
+        ...(_g && _g.country_code ? [['Country', `${_flagEmoji(_g.country_code)} ${_g.country_name || _g.country_code}`]] : []),
         ...(e.size && e.size !== '-' ? [['Size', e.size]] : []),
         ...(e.duration && e.duration !== '-' ? [['Duration', e.duration]] : []),
         ...(e.service && e.service !== '-' ? [['Service', e.service]] : []),
