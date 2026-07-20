@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const Version = "1.7.2"
+const Version = "1.7.3"
 
 type Config struct {
 	APIKey                 string
