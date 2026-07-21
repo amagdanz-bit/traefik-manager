@@ -1,0 +1,43 @@
+name: Release Agent Binaries
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to attach the agent binaries to
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-binaries:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+
+      - name: Build TMA binaries
+        working-directory: agent
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64       go build -trimpath -ldflags "-s -w" -o dist/tma-linux-amd64 .
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64       go build -trimpath -ldflags "-s -w" -o dist/tma-linux-arm64 .
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags "-s -w" -o dist/tma-linux-armv7 .
+
+      - name: Attach binaries to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || inputs.tag }}
+          files: agent/dist/tma-linux-*
+          fail_on_unmatched_files: true
