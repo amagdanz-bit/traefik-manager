@@ -924,7 +924,7 @@ function _applyServiceTypeNotice(svcType) {
     if (notice) notice.style.display = editable ? 'none' : 'flex';
     if (!editable) {
         const text = document.getElementById('svcTypeNoticeText');
-        if (text) text.textContent = `This route points at a ${svcType} service, which can't be edited here. The target field is ignored on save — use the Raw YAML editor to change it.`;
+        if (text) text.textContent = `This route points at a ${svcType} service, which can't be edited here. The target field is ignored on save - use the Raw YAML editor to change it.`;
     }
     ['targetIp', 'targetPort', 'targetIpTcp', 'targetPortTcp', 'targetIpUdp', 'targetPortUdp'].forEach(id => {
         const el = document.getElementById(id);
@@ -5366,11 +5366,14 @@ async function loadIpDiagnostic() {
         return;
     }
     const row = (label, ip, cls, hint) => `
-        <div class="flex items-center gap-2 py-2" style="border-bottom:1px solid var(--border)">
-            <span class="text-xs" style="color:var(--muted);min-width:120px">${label}</span>
-            <span class="text-xs font-mono truncate" style="color:var(--text);flex:1;min-width:0" title="${_esc(ip || '')}">${ip ? _esc(ip) : '<span style="color:var(--muted)">—</span>'}</span>
-            ${ip ? ipClassBadge(cls || classifyIp(ip)) : ''}
-        </div>` + (hint ? `<div class="text-xs" style="color:var(--muted);margin:-4px 0 4px 122px">${hint}</div>` : '');
+        <div style="border-bottom:1px solid var(--border);padding:8px 0">
+            <div class="flex items-center gap-2">
+                <span class="text-xs" style="color:var(--muted);min-width:120px">${label}</span>
+                <span class="text-xs font-mono truncate" style="color:var(--text);flex:1;min-width:0" title="${_esc(ip || '')}">${ip ? _esc(ip) : '<span style="color:var(--muted)">-</span>'}</span>
+                ${ip ? ipClassBadge(cls || classifyIp(ip)) : ''}
+            </div>
+            ${hint ? `<div class="text-xs" style="color:var(--muted);margin-top:5px;padding-left:128px">${hint}</div>` : ''}
+        </div>`;
 
     const hdrRows = Object.entries(d.headers || {}).map(([k, v]) => `
         <div class="flex items-center gap-2 py-1.5" style="border-bottom:1px solid var(--border)">
@@ -5383,7 +5386,7 @@ async function loadIpDiagnostic() {
     body.innerHTML = `
         <div class="rounded-xl p-3 mb-3" style="background:var(--card);border:1px solid var(--border)">
             ${row('App sees (client)', d.effective_ip, d.effective_class)}
-            ${row('Socket peer', d.socket_peer, d.socket_peer_class, 'The direct TCP connection — your reverse proxy, or the real client if none.')}
+            ${row('Socket peer', d.socket_peer, d.socket_peer_class, 'The direct TCP connection - your reverse proxy, or the real client if none.')}
             <div class="flex items-center gap-2 py-2">
                 <span class="text-xs" style="color:var(--muted);min-width:120px">Trusted hops</span>
                 <span class="text-xs font-mono" style="color:var(--text)">${d.proxy_hops}</span>
@@ -5393,7 +5396,7 @@ async function loadIpDiagnostic() {
         <div class="rounded-xl p-3 mb-3" style="background:var(--card);border:1px solid var(--border)">
             ${hdrRows}
         </div>
-        ${spoofable ? `<div class="rounded-xl p-3 text-xs" style="background:rgba(210,153,34,0.1);border:1px solid rgba(210,153,34,0.3);color:var(--text)"><i class="ph-bold ph-warning" style="color:var(--yellow);margin-right:6px"></i>The client IP the app trusts is <strong>${_esc(d.effective_class)}</strong>. If clients should reach you from the public internet, a proxy in front is rewriting it — check that your trusted hops and the upstream <code class="font-mono">trustedIPs</code> are set correctly, or real client IPs will be lost to logs, CrowdSec and ipAllowList.</div>` : ''}`;
+        ${spoofable ? `<div class="rounded-xl p-3 text-xs" style="background:rgba(210,153,34,0.1);border:1px solid rgba(210,153,34,0.3);color:var(--text)"><i class="ph-bold ph-warning" style="color:var(--yellow);margin-right:6px"></i>The client IP the app trusts is <strong>${_esc(d.effective_class)}</strong>. If clients should reach you from the public internet, a proxy in front is rewriting it - check that your trusted hops and the upstream <code class="font-mono">trustedIPs</code> are set correctly, or real client IPs will be lost to logs, CrowdSec and ipAllowList.</div>` : ''}`;
 }
 
 function parseLogLine(raw) {
@@ -5587,7 +5590,7 @@ function renderLogs() {
         const metaLine = [svcLabel, durLabel].filter(Boolean).join('<span style="color:var(--border);margin:0 4px">·</span>');
         return `<div class="flex items-start gap-3 px-4 py-2.5 border-b cursor-pointer hover:opacity-80 transition-opacity" style="border-color:var(--border)" onclick='openLogDetail(${entryObj})'>
             <span class="text-xs font-mono font-bold flex-shrink-0 mt-px" style="color:${mc};min-width:40px">${_esc(e.method)}</span>
-            <span class="inline-flex items-center gap-1 flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded" style="background:${sc}18;color:${sc};border:1px solid ${sc}44;min-width:52px">${e.status||'—'} <span style="font-weight:400;opacity:.8">${e.status ? (HTTP_STATUS[e.status]||'') : 'tunnel'}</span></span>
+            <span class="inline-flex items-center gap-1 flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded" style="background:${sc}18;color:${sc};border:1px solid ${sc}44;min-width:52px">${e.status||'-'} <span style="font-weight:400;opacity:.8">${e.status ? (HTTP_STATUS[e.status]||'') : 'tunnel'}</span></span>
             <div class="flex-1 min-w-0">
                 <div class="text-xs font-mono truncate" style="color:var(--text)" title="${_esc(e.path)}">${_esc(e.path)}</div>
                 ${metaLine ? `<div class="flex items-center gap-1 mt-0.5">${metaLine}</div>` : ''}
@@ -5613,7 +5616,7 @@ function openLogDetail(e) {
     const sc = !e.status ? 'var(--muted)' : e.status >= 500 ? 'var(--red)' : e.status >= 400 ? 'var(--yellow)' : 'var(--green)';
     const mc = { GET:'var(--blue)', POST:'var(--green)', PUT:'var(--yellow)', DELETE:'var(--red)', PATCH:'var(--purple)' }[e.method] || 'var(--muted)';
     document.getElementById('ldBadges').innerHTML =
-        `<span class="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded" style="background:${sc}18;color:${sc};border:1px solid ${sc}44">${e.status||'—'} ${e.status ? (HTTP_STATUS[e.status]||'') : 'tunnel'}</span>` +
+        `<span class="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded" style="background:${sc}18;color:${sc};border:1px solid ${sc}44">${e.status||'-'} ${e.status ? (HTTP_STATUS[e.status]||'') : 'tunnel'}</span>` +
         `<span class="text-xs font-mono font-bold px-2 py-1 rounded" style="background:${mc}18;color:${mc};border:1px solid ${mc}44">${_esc(e.method)}</span>`;
     const _g = _geoCache[e.ip];
     const rows = [
