@@ -126,6 +126,7 @@ def _parse_agent_dict(a: dict) -> dict:
         'created_at': str(a.get('created_at', '')),
         'traefik_api_url':              str(a.get('traefik_api_url', 'http://traefik:8080')).strip(),
         'traefik_insecure_skip_verify': bool(a.get('traefik_insecure_skip_verify', False)),
+        'cert_resolver':                str(a.get('cert_resolver', '')).strip(),
         'config_path':                  str(a.get('config_path', '/app/config')).strip(),
         'backup_dir':                   str(a.get('backup_dir', '')).strip(),
         'backup_keep_count':            str(a.get('backup_keep_count', '')).strip(),
@@ -6114,6 +6115,28 @@ def api_agent_routes(agent_id):
                              'serviceType': _service_type(svc),
                              'enabled': False, 'configFile': cf, 'provider': 'file'})
 
+        _mm_ledger       = load_settings().get('managed_middlewares', {})
+        _http_mw_by_file = {fn: ((cfg.get('http') or {}).get('middlewares') or {}) for fn, cfg in all_configs.items()}
+        for _app in apps:
+            if _app.get('protocol') != 'http' or _app.get('provider') != 'file':
+                continue
+            hdr_mw_name = f"{_app.get('name')}-headers"
+            hdr_body    = _http_mw_by_file.get(_app.get('configFile', ''), {}).get(hdr_mw_name)
+            owned       = f"agent_{agent_id}::{hdr_mw_name}" in _mm_ledger
+            decoded     = _decode_headers_middleware(hdr_body) if (owned and hdr_body is not None) else None
+            if not owned or hdr_body is None:
+                hdr_state = 'off'
+            elif decoded is not None:
+                hdr_state = 'toggles'
+            else:
+                hdr_state = 'custom'
+            _app['headersPreset'] = {
+                'owned':   owned,
+                'exists':  hdr_body is not None,
+                'state':   hdr_state,
+                'toggles': decoded if decoded is not None else _headers_preset_defaults(),
+            }
+
         return jsonify({'apps': apps, 'middlewares': middlewares, 'configErrors': config_errors})
     except requests.exceptions.ConnectionError:
         return jsonify({'error': 'Cannot reach agent'}), 502
@@ -6122,24 +6145,53 @@ def api_agent_routes(agent_id):
         return jsonify({'error': str(e)}), 500
 
 
+def _agent_api_cert_resolvers(agent) -> list:
+    found = []
+    try:
+        resp = _agent_request(agent, 'GET', '/api/traefik/routers')
+        if resp.status_code != 200:
+            return found
+        data = resp.json() or {}
+        for proto in ('http', 'tcp'):
+            for r in (data.get(proto) or []):
+                if not isinstance(r, dict):
+                    continue
+                tls = r.get('tls')
+                if not isinstance(tls, dict):
+                    continue
+                name = str(tls.get('certResolver') or '').strip()
+                if name and name not in found:
+                    found.append(name)
+    except Exception:
+        logger.debug("Failed to read cert resolvers from agent Traefik API", exc_info=True)
+    return found
+
+
 @app.route('/api/agents/<agent_id>/cert-resolvers')
 @login_required
 def api_agent_cert_resolvers(agent_id):
     agent = _agent_by_id(agent_id)
     if not agent:
         return jsonify({'resolvers': []})
+    configured = [r.strip() for r in (agent.get('cert_resolver') or '').split(',') if r.strip()]
+    for name in _agent_api_cert_resolvers(agent):
+        if name not in configured:
+            configured.append(name)
     try:
         resp = _agent_request(agent, 'GET', '/api/static')
         if resp.status_code != 200:
-            return jsonify({'resolvers': []})
+            return jsonify({'resolvers': configured})
         content   = (resp.json() or {}).get('content', '')
         data      = _yaml_safe.load(content) or {}
         resolvers = data.get('certificatesResolvers') or {}
         if isinstance(resolvers, dict):
-            return jsonify({'resolvers': [str(k).strip() for k in resolvers if str(k).strip()]})
+            for k in resolvers:
+                k = str(k).strip()
+                if k and k not in configured:
+                    configured.append(k)
     except Exception:
         logger.debug("Failed to read agent cert resolvers", exc_info=True)
-    return jsonify({'resolvers': []})
+    return jsonify({'resolvers': configured})
 
 
 @app.route('/api/agents', methods=['GET'])
@@ -6167,6 +6219,7 @@ def api_agents_create():
         'api_key':    raw_key,
         'created_at': datetime.now(timezone.utc).isoformat(),
         'traefik_api_url':       str(data.get('traefik_api_url', 'http://traefik:8080')).strip(),
+        'cert_resolver':         str(data.get('cert_resolver', '')).strip(),
         'config_path':           str(data.get('config_path', '/app/config')).strip(),
         'backup_keep_count':     str(data.get('backup_keep_count', '')).strip(),
         'static_config_path':    str(data.get('static_config_path', '')).strip(),
@@ -6221,6 +6274,7 @@ def api_agents_update(agent_id):
         if a.get('id') == agent_id:
             updatable = [
                 'name', 'url', 'traefik_api_url', 'traefik_insecure_skip_verify',
+                'cert_resolver',
                 'config_path', 'static_config_path',
                 'acme_json_path', 'access_log_path', 'plugins_dir', 'backup_dir', 'backup_keep_count',
                 'restart_method', 'traefik_container', 'docker_host', 'signal_file_path',

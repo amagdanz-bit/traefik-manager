@@ -1011,6 +1011,11 @@
                                         <input id="agCfgTraefikUrl" type="text" class="input-field text-xs" value="http://traefik:8080" oninput="agentCfgChanged()">
                                         <p class="text-xs mt-1" style="color:var(--muted)">Internal Traefik API - typically <code>http://traefik:8080</code> (not the public dashboard URL)</p>
                                     </div>
+                                    <div>
+                                        <label class="settings-section-label">Certificate Resolver <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgCertResolver" type="text" class="input-field text-xs" placeholder="cloudflare, letsencrypt" oninput="agentCfgChanged()">
+                                        <p class="text-xs mt-1" style="color:var(--muted)">Cert resolver names for this server's Traefik, comma-separated. Resolvers already used by this server's routes are detected automatically from its Traefik API, so this is only needed for a resolver no route uses yet.</p>
+                                    </div>
                                     <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;background:var(--input-bg);border:1px solid var(--border)">
                                         <div>
                                             <div class="text-sm font-medium">Skip TLS Verification</div>
@@ -2997,6 +3002,7 @@ async function openAgentSetup(id, titleOverride) {
         const a    = (data.agents || []).find(x => x.id === id);
         if (a) {
             if (a.traefik_api_url)    document.getElementById('agCfgTraefikUrl').value  = a.traefik_api_url;
+            document.getElementById('agCfgCertResolver').value = a.cert_resolver || '';
             const tlsEl = document.getElementById('agCfgInsecureTLS');
             if (tlsEl) { tlsEl.classList.toggle('on', !!a.traefik_insecure_skip_verify); }
             if (a.config_path)        document.getElementById('agCfgConfigPath').value  = a.config_path;
@@ -3046,6 +3052,7 @@ function resetAgentWizard() {
 
 function resetAgentWizardCfgFields() {
     document.getElementById('agCfgTraefikUrl').value  = 'http://traefik:8080';
+    document.getElementById('agCfgCertResolver').value = '';
     document.getElementById('agCfgConfigPath').value  = '/app/config';
     document.getElementById('agCfgStaticPath').value  = '';
     document.getElementById('agCfgBackupDir').value   = '';
@@ -3199,6 +3206,7 @@ document.getElementById('agCfgGitEnabled').addEventListener('change', function()
 function buildAgentCfgPayload() {
     return {
         traefik_api_url:          document.getElementById('agCfgTraefikUrl').value.trim(),
+        cert_resolver:            document.getElementById('agCfgCertResolver').value.trim(),
         traefik_insecure_skip_verify: document.getElementById('agCfgInsecureTLS')?.classList.contains('on') || false,
         config_path:        document.getElementById('agCfgConfigPath').value.trim(),
         static_config_path: document.getElementById('agCfgStaticPath').value.trim(),

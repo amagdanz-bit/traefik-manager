@@ -991,11 +991,10 @@ function _resetHeadersPreset() {
     const section = document.getElementById('headersPresetSection');
     if (!section) return;
     _buildHeadersPresetPerms();
-    const host = !_activeAgent;
-    section.style.display = host ? '' : 'none';
+    section.style.display = '';
     document.getElementById('hpEnabled').checked = false;
     _applyHeadersPresetToggles(_hpDefaults());
-    document.getElementById('headersPresetPresent').value = host ? 'true' : '';
+    document.getElementById('headersPresetPresent').value = 'true';
     document.getElementById('headersPresetEnabled').value = 'false';
     document.getElementById('headersPresetCustom').value = 'false';
     _renderHeadersPresetState(false, false);
@@ -1005,7 +1004,7 @@ function _applyHeadersPreset(hp) {
     const section = document.getElementById('headersPresetSection');
     if (!section) return;
     _buildHeadersPresetPerms();
-    if (!hp || _activeAgent) {
+    if (!hp) {
         section.style.display = 'none';
         document.getElementById('hpEnabled').checked = false;
         _applyHeadersPresetToggles(_hpDefaults());
@@ -1072,10 +1071,9 @@ function _resetStreamingPreset() {
     const section = document.getElementById('streamingPresetSection');
     if (!section) return;
     _clearStreamingForce();
-    const host = !_activeAgent;
-    section.style.display = host ? '' : 'none';
+    section.style.display = '';
     document.getElementById('streamingEnabled').checked = false;
-    document.getElementById('streamingPresetPresent').value = host ? 'true' : '';
+    document.getElementById('streamingPresetPresent').value = 'true';
     document.getElementById('streamingPresetEnabled').value = 'false';
     _renderStreamingState(false);
 }
@@ -1084,7 +1082,7 @@ function _applyStreamingPreset(on) {
     const section = document.getElementById('streamingPresetSection');
     if (!section) return;
     _clearStreamingForce();
-    if (on == null || _activeAgent) {
+    if (on == null) {
         section.style.display = 'none';
         document.getElementById('streamingEnabled').checked = false;
         document.getElementById('streamingPresetPresent').value = '';
@@ -2134,8 +2132,24 @@ async function _fetchMiddlewaresCached() {
     return _inflightMiddlewares;
 }
 
+function _fillResolverSelects(list) {
+    ['certResolver', 'certResolverTcp'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const cur = sel.value;
+        sel.innerHTML = '';
+        sel.add(new Option('No TLS', '__disabled__'));
+        (list || []).forEach(r => sel.add(new Option(r, r)));
+        sel.add(new Option('None (external / custom cert)', '__none__'));
+        if (cur) _ensureResolverOption(sel, cur);
+        else sel.value = '__disabled__';
+    });
+    const crHttp = document.getElementById('certResolver');
+    if (crHttp) toggleWildcardSection(crHttp.value);
+}
+
 async function _loadAgentResolversIntoSelects() {
-    if (!_activeAgent) return;
+    if (!_activeAgent) { _fillResolverSelects(availableCertResolvers); return; }
     if (_cachedCertResolvers === null && !_inflightCertResolvers) {
         _inflightCertResolvers = (async () => {
             const res = await fetch('/api/agents/' + _activeAgent.id + '/cert-resolvers');
@@ -2149,19 +2163,7 @@ async function _loadAgentResolversIntoSelects() {
     if (list === null) {
         try { list = await _inflightCertResolvers; } catch (e) { list = []; }
     }
-    ['certResolver', 'certResolverTcp'].forEach(id => {
-        const sel = document.getElementById(id);
-        if (!sel) return;
-        const cur = sel.value;
-        sel.innerHTML = '';
-        sel.add(new Option('No TLS', '__disabled__'));
-        list.forEach(r => sel.add(new Option(r, r)));
-        sel.add(new Option('None (external / custom cert)', '__none__'));
-        if (cur) _ensureResolverOption(sel, cur);
-        else sel.value = '__disabled__';
-    });
-    const crHttp = document.getElementById('certResolver');
-    if (crHttp) toggleWildcardSection(crHttp.value);
+    _fillResolverSelects(list);
 }
 
 function _copyToClipboard(text) {

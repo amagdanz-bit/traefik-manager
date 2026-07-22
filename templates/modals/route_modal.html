@@ -141,7 +141,7 @@
                             The <code id="hpCustomName"></code> middleware has been hand-edited beyond what these toggles cover, so it's shown as custom and kept as-is. Edit it in the Middlewares tab, or turn the preset off and on again to replace it with the toggle defaults. Turn it off to remove it.
                         </div>
                         <div id="hpBody" class="mt-2 p-3 rounded-lg" style="display:none;background:var(--input-bg);border:1px solid var(--border)">
-                            <p class="text-xs mb-2" style="color:var(--muted)">Permissions-Policy — who may use each browser feature. <code>self</code> = only your own site · <code>all</code> = any site, including embedded iframes · <code>block</code> = no one.</p>
+                            <p class="text-xs mb-2" style="color:var(--muted)">Permissions-Policy - who may use each browser feature. <code>self</code> = only your own site · <code>all</code> = any site, including embedded iframes · <code>block</code> = no one.</p>
                             <div id="hpPerms" class="grid grid-cols-2 gap-2"></div>
                             <div class="grid grid-cols-2 gap-2 mt-3">
                                 <label class="flex items-center gap-2 text-sm" style="color:var(--text)"><input type="checkbox" name="hp_hsts" id="hp_hsts" value="true" onchange="_hpUserEdited()" class="rounded" style="accent-color:var(--blue)"> HSTS (force HTTPS)</label>
@@ -172,8 +172,8 @@
                         <input type="hidden" name="streamingPresetPresent" id="streamingPresetPresent" value="">
                         <input type="hidden" name="streamingPresetEnabled" id="streamingPresetEnabled" value="false">
                         <div id="streamingNote" class="text-xs mt-2 p-2 rounded-lg" style="display:none;background:var(--input-bg);border:1px solid var(--border);color:var(--muted)">
-                            Forces <code>passHostHeader</code> and sets long <code>forwardingTimeouts</code> on <code><span id="streamingTpName"></span></code>. Entry-point <code>respondingTimeouts</code> are global and static — adjust them in the Static Config editor if long transcodes still cut off.
-                            <span id="streamingBufWarn" style="display:none;color:var(--yellow, #d4a017)"><br>⚠ A <code>buffering</code>/<code>compress</code> middleware is attached — remove it for smooth streaming and seeking.</span>
+                            Forces <code>passHostHeader</code> and sets long <code>forwardingTimeouts</code> on <code><span id="streamingTpName"></span></code>. Entry-point <code>respondingTimeouts</code> are global and static - adjust them in the Static Config editor if long transcodes still cut off.
+                            <span id="streamingBufWarn" style="display:none;color:var(--yellow, #d4a017)"><br>⚠ A <code>buffering</code>/<code>compress</code> middleware is attached - remove it for smooth streaming and seeking.</span>
                         </div>
                     </div>
                     <div id="wildcardCheckboxRow" style="display:none" class="flex items-center justify-between">
