@@ -71,7 +71,7 @@ If a router points at a `weighted`, `mirroring` or `failover` service instead of
 
 ## Security headers preset
 
-The **Security headers preset** toggle in the HTTP route form generates a middleware that sets a `Permissions-Policy` and the common security headers, so you don't have to hand-write one. When enabled on save it:
+The **Security headers preset** toggle in the HTTP route form generates a middleware that sets a `Permissions-Policy` and the common security headers, so you don't have to hand-write one. It works on the Host and on remote agents alike - on an agent the middleware is written to that agent's config. When enabled on save it:
 
 - creates a middleware named `<route>-headers` under `http.middlewares` and attaches it to the router, and
 - records ownership in `manager.yml` under [`managed_middlewares`](./manager-yml#managed-middlewares) so the tool knows it created it.
@@ -95,7 +95,7 @@ The preset is available for local (file-provider) HTTP routes; routes on a remot
 
 ## Streaming preset
 
-The **Optimize for streaming** toggle tunes an HTTP route for media servers (Jellyfin, Emby, Plex), where long transcodes otherwise time out and seeking breaks. On save it:
+The **Optimize for streaming** toggle tunes an HTTP route for media servers (Jellyfin, Emby, Plex), where long transcodes otherwise time out and seeking breaks. Available on the Host and on remote agents. On save it:
 
 - sets `forwardingTimeouts` on the service's `<service>-transport` serversTransport (`responseHeaderTimeout: 0s` - unlimited, so long transcodes aren't cut off - plus a `dialTimeout` and `idleConnTimeout`), and
 - forces `passHostHeader` on.

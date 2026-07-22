@@ -434,7 +434,7 @@ Stores the full config of disabled routes so they can be re-enabled without data
 
 **Type:** map - **Default:** `{}`
 
-Ownership ledger for middlewares that traefik-manager generated on your behalf - currently the `<route>-headers` middleware created by the [Security headers preset](./tab-routes#security-headers-preset). Each entry records that the tool created that middleware, so it will only ever update or remove middlewares it owns, and refuses to overwrite a same-named middleware you wrote by hand. Managed automatically; do not edit by hand.
+Ownership ledger for middlewares that traefik-manager generated on your behalf - currently the `<route>-headers` middleware created by the [Security headers preset](./tab-routes#security-headers-preset). Each entry records that the tool created that middleware, so it will only ever update or remove middlewares it owns, and refuses to overwrite a same-named middleware you wrote by hand. Middlewares created on a remote agent are recorded with an `agent_<id>::` key prefix, so each server's generated middlewares are tracked separately. Managed automatically; do not edit by hand.
 
 ```yaml
 managed_middlewares:
