@@ -1,5 +1,6 @@
 
 :root {
+    color-scheme: dark;
     --bg: #0d1117;
     --card: #161b22;
     --border: #30363d;
@@ -20,6 +21,7 @@
     --code-bg: #161b22;
 }
 [data-theme="light"] {
+    color-scheme: light;
     --bg: #f6f8fa;
     --card: #ffffff;
     --border: #d0d7de;
@@ -147,8 +149,18 @@ select.input-field {
     background-size: 12px;
     padding-right: 32px;
     cursor: pointer;
+    accent-color: var(--blue);
 }
-select.input-field option { background: var(--card); color: var(--text); }
+select.input-field option,
+select.input-field optgroup {
+    background: var(--card);
+    color: var(--text);
+    padding: 6px 10px;
+}
+select.input-field option:checked { background: color-mix(in srgb, var(--blue) 14%, var(--card)); color: var(--text); }
+select.input-field option:disabled { color: var(--muted); }
+select.input-field optgroup { font-weight: 700; color: var(--muted); }
+select.input-field:disabled { opacity: 0.6; cursor: not-allowed; }
 [data-theme="light"] select.input-field {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z' fill='%23656d76'/%3E%3C/svg%3E");
 }

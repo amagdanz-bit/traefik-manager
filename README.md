@@ -33,6 +33,7 @@ Add routes, manage middlewares, monitor services, and view TLS certificates - al
 ## Highlights
 
 - **Routes** - add, edit, clone, and enable/disable HTTP, TCP, and UDP routes from the browser
+- **Load balancing** - multiple backends per route, sticky sessions, health checks, and router priority
 - **Middlewares** - 24 guided wizards plus a raw YAML editor, for HTTP and TCP
 - **Multi-server** - manage unlimited remote Traefik instances through a lightweight Go agent
 - **Static config editor** - edit the full `traefik.yml` from the UI and apply it with a one-click Traefik restart
@@ -91,6 +92,9 @@ Open **http://your-server:5000** - the setup wizard will guide you through the r
 
 - Add, edit, clone, delete, and enable/disable **HTTP, TCP, and UDP** routes
 - **Multiple domains per route** with a chip builder, or switch to the **advanced rule editor** for complex expressions (`PathPrefix`, `HostRegexp`, `&&` / `||`)
+- **Multiple backends per route** - point HTTP, TCP, or UDP at several servers and let Traefik load-balance across them; route cards show a `+N` badge
+- **Sticky sessions, health checks, and router priority** - `loadBalancer.sticky.cookie`, `loadBalancer.healthCheck` (path, interval, timeout), and `router.priority` as form fields instead of raw YAML. Everything round-trips on edit, and a save from the mobile app or an older cached page updates the first backend without wiping the rest
+- **Guided route presets** - **Security headers** (per-feature Permissions-Policy, HSTS, nosniff, frame-deny, referrer-policy) generates a normal, visible, editable `<route>-headers` middleware; **Optimize for streaming** sets `forwardingTimeouts` and `passHostHeader` for Jellyfin/Emby/Plex. Both work on the Host and on remote agents, and TM only ever updates or removes middlewares it created - a hand-written one of the same name is never overwritten
 - **Per-route certificate resolver** - pick any configured resolver, request **wildcard certificates**, or disable TLS
 - **TLS options profiles** - create named `tls.options` (min/max version, ciphers, mTLS, SNI strict) and assign them per route
 - **insecureSkipVerify per service** for backends with self-signed certs (Proxmox, Kasm, etc.)
@@ -101,6 +105,7 @@ Open **http://your-server:5000** - the setup wizard will guide you through the r
 
 - **24 guided wizards**: Basic/Digest Auth, Forward Auth (with Authentik, Authelia, and Gatekeeper presets), OIDC Auth, Rate Limit, In-Flight Requests, IP Allowlist, Secure Headers, CORS, Redirects, Strip/Add/Replace Prefix, Retry, Circuit Breaker, Buffering, Compress, Chain, Encoded Characters, and more
 - **Raw YAML editor** for anything the wizards don't cover
+- **Client IP source selector** in the IP Allowlist wizard - match the real client instead of your proxy, via trusted hop depth (`ipStrategy.depth`) or excluded proxy IPs (`ipStrategy.excludedIPs`)
 - **TCP middlewares** alongside HTTP
 - **Provider middlewares** (Docker, Kubernetes, etc.) shown read-only in the provider tabs
 
@@ -119,7 +124,10 @@ Open **http://your-server:5000** - the setup wizard will guide you through the r
   - **Certs** *(mount `acme.json`)* - TLS certificates with expiry tracking
   - **Plugins** *(mount `traefik.yml`)* - view plugins declared in your static config, and **install new ones** by pasting the snippet from the plugin catalog - TM writes the static config, optionally creates the matching middleware, and prompts a restart
   - **Logs** *(mount the Traefik access log)* - parsed access log cards with full-detail panel
+- **Client IP Diagnostic** - a read-only tool in the top nav showing what this instance actually sees for your own request: the trusted client IP (the one that feeds the login and audit log, `ipAllowList`, and CrowdSec), the raw socket peer, the trusted proxy hop count, and the forwarding headers as received. Warns when the trusted IP is private, loopback, or CGNAT while you expect public clients
+- **Source-IP classification** in the Logs tab - every IP in **Top IPs** is tagged **Public**, **Private**, **CGNAT**, **Loopback**, or **Link-local**, so local noise like a gateway's hairpin-NAT address is easy to tell apart from real traffic
 - **Configurable file paths** - set the `acme.json`, access log, and static config paths from **Settings → File Paths** without a container restart; UI settings override env vars
+- **Light, dark, or system theme** - the nav-bar toggle sets the default for the whole instance, including the login page
 - Card/list view toggle on Routes, Middlewares, and Services
 
 ### Static Config Editor *(optional - mount `traefik.yml` read-write)*
@@ -139,6 +147,7 @@ Open **http://your-server:5000** - the setup wizard will guide you through the r
 - **Traefik Manager Agent (TMA)** - a lightweight Go daemon that runs next to Traefik on any remote server
 - **Server switcher** in the nav bar - every tab (routes, services, middlewares, backups, logs) works against the active server
 - Setup wizard generates a ready-to-paste Docker Compose or Docker Run command; API key shown once and stored encrypted
+- **Cert resolvers without mounting the static config** - resolvers already in use by that server's routes are detected from its Traefik API, merged with its static config when mounted, plus an optional per-agent override field
 - **Git backup without agent-side setup** - enable *Use Host Repository* and the Host pushes that agent's config to its git repo on a dedicated branch; or run agents autonomously via `GIT_BACKUP_*` env vars
 - Manage unlimited servers from one TM - no VPN or SSH required
 
@@ -153,6 +162,7 @@ Open **http://your-server:5000** - the setup wizard will guide you through the r
 - **OIDC / SSO** - Keycloak, Google, Authentik, or any OIDC provider; restrict by email or group; can run as the **sole login method** with built-in auth disabled
 - **Per-device API keys** (up to 10, individually revocable) - the mobile app keeps working in every auth mode
 - CSRF protection, rate limiting, SSRF and git-transport hardening, secrets encrypted at rest (Fernet), atomic config writes
+- **Configurable trusted proxy hops** - `PROXY_FIX_HOPS` (default `1`) sets how many reverse-proxy hops to trust when reading `X-Forwarded-For`, so the login and audit log record the real client behind a chain like Cloudflare → Traefik → TM. Only count hops you actually control - each trusted hop is one more entry a client could forge
 - See the [security](https://traefik-manager.xyzlab.dev/security.html) and [Traefik hardening](https://traefik-manager.xyzlab.dev/hardening.html) docs
 
 ---
@@ -183,6 +193,10 @@ Full documentation at **[traefik-manager.xyzlab.dev](https://traefik-manager.xyz
 | [Security](https://traefik-manager.xyzlab.dev/security.html)              | API keys, sessions, CSRF, rate limits, and hardening  |
 | [Traefik Hardening](https://traefik-manager.xyzlab.dev/hardening.html)    | CVE advisories, header aliases, forwardAuth limits    |
 | [API Reference](https://traefik-manager.xyzlab.dev/api.html)              | REST API for integrations and the mobile app          |
+| [Agent API](https://traefik-manager.xyzlab.dev/api-agent.html)            | TMA endpoints, auth, and health checks                |
+| [Static Config Editor](https://traefik-manager.xyzlab.dev/static.html)    | Entrypoints, cert resolvers, and the restart flow     |
+| [IP Geolocation](https://traefik-manager.xyzlab.dev/geoip.html)           | Country flags, world map, and bring-your-own database |
+| [Notification Webhooks](https://traefik-manager.xyzlab.dev/webhooks.html) | Discord, Slack, ntfy, and generic JSON payloads       |
 | [OIDC / SSO](https://traefik-manager.xyzlab.dev/oidc.html)                | OIDC setup, provider examples, and access control     |
 | [Git Repository Backup](https://traefik-manager.xyzlab.dev/git-backup.html) | Auto-push, commit history, diff viewer, and one-click restore |
 | [Mobile App](https://traefik-manager.xyzlab.dev/mobile.html)              | Android companion app setup and features              |

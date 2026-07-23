@@ -65,11 +65,31 @@ When multiple config files are loaded, route `id` is prefixed as `configFile::na
 | `enabled` | boolean | |
 | `protocol` | string | `http`, `tcp`, or `udp` |
 | `rule` | string | Traefik rule expression |
-| `target` | string | Backend URL |
+| `target` | string | First backend. Kept for backwards compatibility; same as `servers[0]` |
+| `servers` | string[] | All backends. URLs for HTTP, `host:port` for TCP and UDP |
+| `sticky` | object | `loadBalancer.sticky.cookie`, or `{}` when off. HTTP only |
+| `stickyEnabled` | boolean | Whether a sticky block is present. HTTP only |
+| `healthCheck` | object | `loadBalancer.healthCheck`, or `{}` when unset. HTTP only |
+| `priority` | integer \| null | Router priority, `null` when unset. HTTP and TCP only |
 | `middlewares` | string[] | Applied middleware names |
 | `tls` | boolean | |
 | `certResolver` | string | ACME resolver name, or empty for external certs |
 | `configFile` | string | Source config file |
+
+---
+
+### `GET /api/routes/all`
+
+Same shape as `GET /api/routes`, but nothing is filtered out: routes discovered from other Traefik providers (Docker, Kubernetes, and the rest) are enriched from the live Traefik API, and Traefik's own `@internal` routers are included.
+
+```json
+{
+  "apps": [ /* Route[] */ ],
+  "middlewares": [ /* Middleware[] */ ]
+}
+```
+
+Use this when you want a complete picture of everything Traefik is serving. Use `/api/routes` when you only want the routes this instance manages in its own dynamic config files. Unlike `/api/routes`, this endpoint does not return `configErrors`.
 
 ---
 
@@ -81,8 +101,11 @@ Create or update a route. Accepts `application/x-www-form-urlencoded`.
 |---|---|---|
 | `serviceName` | string | Route name |
 | `subdomain` | string | Hostname (e.g. `app.example.com`) |
-| `targetIp` | string | Backend host |
+| `targetIp` | string | Backend host. Ignored when the matching `backendsJson*` field is sent |
 | `targetPort` | string | Backend port |
+| `backendsJsonHttp` | string (JSON) | HTTP service definition - see [Multiple backends](#multiple-backends) below |
+| `backendsJsonTcp` | string (JSON) | TCP service definition |
+| `backendsJsonUdp` | string (JSON) | UDP service definition |
 | `protocol` | string | `http`, `tcp`, or `udp` |
 | `middlewares` | string | Comma-separated middleware names |
 | `scheme` | string | `http` or `https` (default: `http`) |
@@ -93,6 +116,31 @@ Create or update a route. Accepts `application/x-www-form-urlencoded`.
 | `configFile` | string | Target config file (multi-config only) |
 | `isEdit` | boolean | `true` when updating an existing route |
 | `originalId` | string | Original route ID when renaming |
+
+#### Multiple backends
+
+A service can point at several servers. Send the `backendsJson*` field matching the protocol; it takes precedence over `targetIp`/`targetPort`, which stay supported for single-backend clients.
+
+```json
+{
+  "servers": [
+    { "scheme": "http", "host": "192.168.1.10", "port": "8080" },
+    { "scheme": "http", "host": "192.168.1.11", "port": "8080" }
+  ],
+  "sticky":      { "enabled": true, "cookieName": "tm_sticky", "secure": true, "httpOnly": true },
+  "healthCheck": { "enabled": true, "path": "/health", "interval": "10s", "timeout": "3s" },
+  "priority": 10
+}
+```
+
+- A `host` already starting with `http://` or `https://` is used verbatim; otherwise `scheme://host:port` is built.
+- Rows with an empty `host` are skipped. Invalid JSON falls back to `targetIp`/`targetPort` rather than failing the save.
+- `interval` and `timeout` take Go durations (`10s`, `1m`); a bare number is read as seconds.
+- `sticky`, `healthCheck`, and `priority` apply to HTTP. TCP accepts `servers` and `priority`; UDP accepts `servers` only.
+
+::: tip Editing from a single-backend client
+A save that omits `backendsJson*` on an edit replaces only the **first** backend. Any additional backends, plus `sticky`, `healthCheck`, and `priority`, are preserved. This is what keeps the mobile app and older cached pages from wiping a multi-backend route.
+:::
 
 ---
 

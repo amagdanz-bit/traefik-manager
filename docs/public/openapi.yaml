@@ -77,7 +77,22 @@ components:
         enabled: { type: boolean }
         protocol: { type: string, enum: [http, tcp, udp] }
         rule: { type: string, example: "Host(`app.example.com`)" }
-        target: { type: string, example: "http://192.168.1.10:8080" }
+        target: { type: string, example: "http://192.168.1.10:8080", description: "First backend. Kept for backwards compatibility; equivalent to servers[0]." }
+        servers:
+          type: array
+          items: { type: string }
+          description: "All backends for the service. URLs for HTTP, host:port addresses for TCP and UDP."
+          example: ["http://192.168.1.10:8080", "http://192.168.1.11:8080"]
+        sticky:
+          type: object
+          description: "loadBalancer.sticky.cookie, or an empty object when sticky sessions are off. HTTP only."
+          example: { name: "tm_sticky", secure: true, httpOnly: true }
+        stickyEnabled: { type: boolean, description: "Whether a sticky block is present. HTTP only." }
+        healthCheck:
+          type: object
+          description: "loadBalancer.healthCheck, or an empty object when no health check is configured. HTTP only."
+          example: { path: "/health", interval: "10s", timeout: "3s" }
+        priority: { type: integer, nullable: true, description: "Router priority, or null when unset. HTTP and TCP only." }
         middlewares: { type: array, items: { type: string } }
         tls: { type: boolean }
         certResolver: { type: string, description: "ACME resolver name, or empty if using external certs." }
@@ -660,7 +675,16 @@ paths:
     post:
       tags: [Routes & Middlewares]
       summary: Create or update route
-      description: Create a new route or update an existing one.
+      description: |
+        Create a new route or update an existing one.
+
+        A service can have several backends. Send them in the `backendsJson*`
+        field matching the protocol; it takes precedence over
+        `targetIp`/`targetPort`, which stay supported for single-backend clients.
+
+        Clients that omit `backendsJson*` on an edit only replace the **first**
+        backend - any additional backends, plus `sticky`, `healthCheck`, and
+        `priority`, are preserved rather than dropped.
       requestBody:
         required: true
         content:
@@ -670,8 +694,27 @@ paths:
               properties:
                 serviceName: { type: string, description: "Route/service name" }
                 subdomain: { type: string, description: "Hostname (e.g. app.example.com)" }
-                targetIp: { type: string }
+                targetIp: { type: string, description: "Single backend host. Ignored when the matching backendsJson* field is sent." }
                 targetPort: { type: string }
+                backendsJsonHttp:
+                  type: string
+                  description: |
+                    JSON object describing the HTTP service. Keys:
+                    `servers` (array of `{scheme, host, port}` - a `host` already starting with
+                    `http://`/`https://` is used verbatim), `sticky`
+                    (`{enabled, cookieName, secure, httpOnly}`), `healthCheck`
+                    (`{enabled, path, interval, timeout}` - Go durations, a bare number is read as
+                    seconds), and `priority` (integer). Omitted or invalid JSON falls back to
+                    `targetIp`/`targetPort`. Rows with an empty `host` are skipped.
+                  example: '{"servers":[{"scheme":"http","host":"192.168.1.10","port":"8080"},{"scheme":"http","host":"192.168.1.11","port":"8080"}],"sticky":{"enabled":true,"cookieName":"tm_sticky","secure":true,"httpOnly":true},"healthCheck":{"enabled":true,"path":"/health","interval":"10s","timeout":"3s"},"priority":10}'
+                backendsJsonTcp:
+                  type: string
+                  description: "JSON object for a TCP service: `servers` (array of `{host, port}`) and `priority` (integer)."
+                  example: '{"servers":[{"host":"192.168.1.10","port":"5432"}],"priority":5}'
+                backendsJsonUdp:
+                  type: string
+                  description: "JSON object for a UDP service: `servers` (array of `{host, port}`)."
+                  example: '{"servers":[{"host":"192.168.1.10","port":"53"}]}'
                 protocol: { type: string, enum: [http, tcp, udp] }
                 middlewares: { type: string, description: "Comma-separated middleware names" }
                 scheme: { type: string, enum: [http, https], default: "http" }
@@ -1753,6 +1796,79 @@ paths:
                 properties:
                   version: { type: string, example: "1.0.0-beta3" }
                   repo: { type: string, example: "https://github.com/chr0nzz/traefik-manager" }
+
+  /api/routes/all:
+    get:
+      tags: [Routes & Middlewares]
+      summary: List routes including external and internal
+      description: |
+        Same shape as `GET /api/routes`, but nothing is filtered out: routes discovered from
+        other Traefik providers (Docker, Kubernetes, and the rest) are enriched from the live
+        Traefik API, and Traefik's own `@internal` routers are included.
+
+        Use this when you want a complete picture of everything Traefik is serving. Use
+        `/api/routes` when you only want the routes this instance manages in its dynamic
+        config files. Unlike `/api/routes`, this endpoint does not return `configErrors`.
+      responses:
+        "200":
+          description: All routes and middlewares
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  apps:
+                    type: array
+                    items: { $ref: "#/components/schemas/Route" }
+                  middlewares:
+                    type: array
+                    items: { $ref: "#/components/schemas/Middleware" }
+
+  /api/diagnostics/client-ip:
+    get:
+      tags: [Utility]
+      summary: Client IP diagnostic
+      description: |
+        Read-only view of what this instance sees for the calling request: the client IP
+        trusted after `ProxyFix` (the one used for the login rate-limiter, the audit log,
+        `ipAllowList`, and CrowdSec), the raw socket peer, the configured trusted proxy hop
+        count (`PROXY_FIX_HOPS`), and the forwarding headers exactly as received.
+
+        Each IP is classified so a private, loopback, or CGNAT address showing up where you
+        expect public clients is easy to spot - that usually means the upstream `trustedIPs`
+        or hop count is wrong and real client IPs are being lost.
+      responses:
+        "200":
+          description: Diagnostic result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  effective_ip: { type: string, description: "The trusted client IP after ProxyFix.", example: "203.0.113.7" }
+                  effective_class: { type: string, enum: [public, private, cgnat, loopback, link-local, unknown] }
+                  socket_peer: { type: string, description: "Raw TCP peer before ProxyFix.", example: "172.18.0.4" }
+                  socket_peer_class: { type: string }
+                  proxy_hops: { type: integer, description: "Value of PROXY_FIX_HOPS.", example: 1 }
+                  forwarded_for_chain:
+                    type: array
+                    items: { type: string }
+                    description: "X-Forwarded-For split left to right, as received."
+                    example: ["203.0.113.7", "172.18.0.3"]
+                  headers:
+                    type: object
+                    description: "Forwarding headers as received. Missing headers are empty strings."
+                    properties:
+                      X-Forwarded-For: { type: string }
+                      X-Real-IP: { type: string }
+                      CF-Connecting-IP: { type: string }
+                      X-Forwarded-Proto: { type: string }
+                      X-Forwarded-Host: { type: string }
+                  classes:
+                    type: object
+                    additionalProperties: { type: string }
+                    description: "Classification for every IP seen, keyed by address."
+                    example: { "203.0.113.7": "public", "172.18.0.4": "private" }
 
   /api/manager/router-names:
     get:
