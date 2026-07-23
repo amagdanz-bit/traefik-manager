@@ -1101,6 +1101,7 @@ async function openModal() {
     document.getElementById('isEdit').value = 'false';
     document.getElementById('modalTitle').innerText = 'Add Route';
     _applyServiceTypeNotice('loadBalancer');
+    _resetLbAdvanced();
     document.getElementById('originalId').value = '';
     ['serviceName','subdomain','targetIp','targetPort','middlewares','tcpRule','httpRule'].forEach(id => {
         const el = document.getElementById(id);
@@ -1593,6 +1594,7 @@ async function saveRouteAjax(event) {
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
+        _writeBackendsJson();
         const fd = new FormData(form);
         if (_activeAgent) fd.append('agent_id', _activeAgent.id);
         const res = await fetch(form.action, { method:'POST', headers:{'X-Requested-With':'fetch'}, body: fd });
@@ -2005,7 +2007,7 @@ function renderRouteGrid(apps) {
             : isComplexRule
                 ? `<div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono" style="color:var(--blue);word-break:break-all" title="${_esc(app.rule)}">${_esc(app.rule)}</div>${_copyBtn(app.rule,'blue')}</div>`
                 : `<div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--blue)">${_esc(domain || app.rule)}</div>${_copyBtn(domain || app.rule,'blue')}</div>`;
-        const httpBody = `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">${ruleLabel}</div>${domainDisplay}</div><div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Target</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div><button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div></div>`; const tcpBody = `${app.rule ? `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Rule</div><div class="text-xs font-mono truncate" style="color:var(--blue)">${_esc(app.rule)}</div></div>` : ''}<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Target</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div><button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div></div>`;
+        const httpBody = `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">${ruleLabel}</div>${domainDisplay}</div><div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Target</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div>${(app.servers||[]).length>1?`<span class="badge badge-muted" style="font-size:9px" title="${(app.servers||[]).length} backends">+${(app.servers||[]).length-1}</span>`:''}<button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div></div>`; const tcpBody = `${app.rule ? `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Rule</div><div class="text-xs font-mono truncate" style="color:var(--blue)">${_esc(app.rule)}</div></div>` : ''}<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Target</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div>${(app.servers||[]).length>1?`<span class="badge badge-muted" style="font-size:9px" title="${(app.servers||[]).length} backends">+${(app.servers||[]).length-1}</span>`:''}<button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div></div>`;
         const cfArg = app.configFile ? `,'${_esc(app.configFile)}'` : ',\'\'';
         const cfBadge = (epBadges || mwBadges || epMwBadges || app.configFile) ? `<div class="flex flex-wrap items-center gap-1 mt-2">${epBadges}${mwBadges}${epMwBadges}${app.configFile ? `<span class="badge badge-muted" style="font-size:9px;margin-left:auto">${_esc(app.configFile)}</span>` : ''}</div>` : '';
         const dataAttrs = `data-protocol="${proto}" data-name="${_esc(app.name.toLowerCase())}" data-routekey="${_esc(app.name)}" data-idx="${i}" data-enabled="${enabled}" data-domains="${allDomains.map(d => _esc(d)).join('|')}" data-target="${_esc(app.target)}" data-configfile="${_esc(app.configFile||'')}"`;
@@ -2020,7 +2022,7 @@ function renderRouteGrid(apps) {
         if (_routeViewMode === 'list') {
             const epCompact = (app.entryPoints || []).slice(0, 2).map(ep => `<span class="badge badge-muted" style="font-size:9px">${_esc(ep)}</span>`).join('');
             const mwCompact = (app.middlewares || []).map(mw => `<span class="badge" style="font-size:9px;background:rgba(163,113,247,0.1);color:var(--purple);border:1px solid rgba(163,113,247,0.25)">${_esc(mw)}</span>`).join('');
-            return `<div class="svc-list-row route-list-grid route-card${enabled ? '' : ' opacity-50'}" style="${bulkOutline}" ${dataAttrs}><div class="svc-list-col-status" style="display:flex;align-items:center;gap:6px">${bulkCheckbox}<span class="svc-status-dot" style="background:${enabled ? 'var(--green)' : 'var(--muted)'}"></span></div><div style="display:flex;align-items:center;gap:4px"><span class="badge ${badgeClass}" style="font-size:9px">${proto.toUpperCase()}</span>${tlsBadge}${insecureBadge}${tlsProfileBadge}</div><div class="svc-list-col-name"><div style="display:flex;align-items:center;gap:5px">${iconHtml}<span class="truncate">${_esc(app.name)}</span></div><div class="text-xs font-mono truncate" style="color:var(--muted);margin-top:1px">${_esc(app.service_name)}</div></div><div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center">${listDomainDisplay}</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div><button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:3px">${epCompact}</div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:3px">${mwCompact}</div><div class="flex items-center gap-1 flex-shrink-0" onclick="event.stopPropagation()"><button type="button" data-app='${appJson}' data-openurl="${openUrl}" onclick="event.stopPropagation();_openRouteMenu(event,this)" class="pill-btn pill-btn-blue" title="More"><i class="ph-bold ph-dots-three text-sm"></i></button><button type="button" data-app='${appJson}' onclick="handleEdit(this)" class="pill-btn pill-btn-blue" title="Edit"><i class="ph-bold ph-pencil-simple text-sm"></i></button>${toggleBtn}</div></div>`;
+            return `<div class="svc-list-row route-list-grid route-card${enabled ? '' : ' opacity-50'}" style="${bulkOutline}" ${dataAttrs}><div class="svc-list-col-status" style="display:flex;align-items:center;gap:6px">${bulkCheckbox}<span class="svc-status-dot" style="background:${enabled ? 'var(--green)' : 'var(--muted)'}"></span></div><div style="display:flex;align-items:center;gap:4px"><span class="badge ${badgeClass}" style="font-size:9px">${proto.toUpperCase()}</span>${tlsBadge}${insecureBadge}${tlsProfileBadge}</div><div class="svc-list-col-name"><div style="display:flex;align-items:center;gap:5px">${iconHtml}<span class="truncate">${_esc(app.name)}</span></div><div class="text-xs font-mono truncate" style="color:var(--muted);margin-top:1px">${_esc(app.service_name)}</div></div><div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center">${listDomainDisplay}</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div>${(app.servers||[]).length>1?`<span class="badge badge-muted" style="font-size:9px" title="${(app.servers||[]).length} backends">+${(app.servers||[]).length-1}</span>`:''}<button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:3px">${epCompact}</div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:3px">${mwCompact}</div><div class="flex items-center gap-1 flex-shrink-0" onclick="event.stopPropagation()"><button type="button" data-app='${appJson}' data-openurl="${openUrl}" onclick="event.stopPropagation();_openRouteMenu(event,this)" class="pill-btn pill-btn-blue" title="More"><i class="ph-bold ph-dots-three text-sm"></i></button><button type="button" data-app='${appJson}' onclick="handleEdit(this)" class="pill-btn pill-btn-blue" title="Edit"><i class="ph-bold ph-pencil-simple text-sm"></i></button>${toggleBtn}</div></div>`;
         }
         return `<div class="card route-card${enabled ? '' : ' opacity-50'}" style="${bulkOutline}" ${dataAttrs}><div class="route-card-inner p-4 pb-2"><div class="flex justify-between items-start mb-3"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 mb-0.5">${bulkCheckbox}<span class="badge ${badgeClass}">${proto.toUpperCase()}</span>${tlsBadge}${insecureBadge}${tlsProfileBadge}<span class="status-dot status-checking" title="Checking..."></span></div><div class="flex items-center gap-1.5 mt-1.5">${iconHtml}<h3 class="font-bold text-sm truncate transition-colors" style="color:var(--text)">${_esc(app.name)}</h3></div><div class="text-xs font-mono truncate" style="color:var(--muted)">${_esc(app.service_name)}</div></div><div class="flex items-center gap-1.5 ml-2 flex-shrink-0" onclick="event.stopPropagation()"><button type="button" data-app='${appJson}' data-openurl="${openUrl}" onclick="event.stopPropagation();_openRouteMenu(event,this)" class="pill-btn pill-btn-blue" title="More"><i class="ph-bold ph-dots-three text-sm"></i></button><button type="button" data-app='${appJson}' onclick="handleEdit(this)" class="pill-btn pill-btn-blue" title="Edit"><i class="ph-bold ph-pencil-simple text-sm"></i></button>${toggleBtn}</div></div><div class="space-y-2">${proto === 'http' ? httpBody : tcpBody}</div>${cfBadge}</div></div>`;
     }).join('');
@@ -2388,6 +2390,174 @@ function toggleTcpCertResolver(checked) {
     setTcpTlsMode(checked ? 'tls' : 'none', document.getElementById(checked ? 'tcpTlsTls' : 'tcpTlsNone'));
 }
 
+function toggleLbAdvanced(proto) {
+    const body = document.getElementById(proto + 'LbAdvBody');
+    const chev = document.getElementById(proto + 'LbAdvChevron');
+    if (!body) return;
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : '';
+    if (chev) chev.className = 'ph-bold ph-caret-' + (open ? 'right' : 'down') + ' text-xs';
+}
+
+function _lbSyncToggles() {
+    const st = document.getElementById('lbStickyEnabled');
+    const sb = document.getElementById('lbStickyBody');
+    if (st && sb) sb.style.display = st.checked ? '' : 'none';
+    const hc = document.getElementById('lbHealthEnabled');
+    const hb = document.getElementById('lbHealthBody');
+    if (hc && hb) hb.style.display = hc.checked ? '' : 'none';
+}
+
+function removeBackendRow(btn) {
+    const row = btn.closest('.tm-backend-row');
+    if (row) row.remove();
+}
+
+function addBackendRow(proto, data) {
+    const wrap = document.getElementById(proto + 'BackendRows');
+    if (!wrap) return;
+    const d = data || {};
+    const row = document.createElement('div');
+    row.className = 'tm-backend-row grid gap-3 mt-2';
+    row.style.gridTemplateColumns = proto === 'http' ? '110px 1fr 1fr 32px' : '1fr 1fr 32px';
+    const schemeCell = proto === 'http'
+        ? `<select class="input-field bk-scheme"><option value="http">HTTP</option><option value="https">HTTPS</option></select>`
+        : '';
+    row.innerHTML = schemeCell +
+        `<input type="text" class="input-field bk-host" placeholder="10.0.0.11">` +
+        `<input type="text" class="input-field bk-port" placeholder="8080">` +
+        `<button type="button" onclick="removeBackendRow(this)" class="btn-secondary" title="Remove backend" style="padding:0;width:32px;display:flex;align-items:center;justify-content:center"><i class="ph-bold ph-trash text-xs" style="color:var(--red)"></i></button>`;
+    wrap.appendChild(row);
+    if (proto === 'http' && d.scheme) row.querySelector('.bk-scheme').value = d.scheme;
+    if (d.host) row.querySelector('.bk-host').value = d.host;
+    if (d.port) row.querySelector('.bk-port').value = d.port;
+}
+
+function _clearBackendRows(proto) {
+    const wrap = document.getElementById(proto + 'BackendRows');
+    if (wrap) wrap.innerHTML = '';
+}
+
+function _splitServer(value, proto) {
+    let v = String(value || '').trim();
+    if (!v) return null;
+    if (proto === 'http') {
+        const scheme = v.startsWith('https://') ? 'https' : 'http';
+        v = v.replace(/^https?:\/\//, '');
+        const i = v.lastIndexOf(':');
+        return (i > -1 && !v.slice(i + 1).includes('/'))
+            ? { scheme, host: v.slice(0, i), port: v.slice(i + 1) }
+            : { scheme, host: v, port: '' };
+    }
+    const i = v.lastIndexOf(':');
+    return i > -1 ? { host: v.slice(0, i), port: v.slice(i + 1) } : { host: v, port: '' };
+}
+
+function _populateBackends(proto, servers) {
+    _clearBackendRows(proto);
+    const list = (servers || []).map(s => _splitServer(s, proto)).filter(Boolean);
+    const ids = proto === 'http' ? ['targetIp', 'targetPort'] :
+                proto === 'tcp'  ? ['targetIpTcp', 'targetPortTcp'] : ['targetIpUdp', 'targetPortUdp'];
+    if (list.length) {
+        const first = list[0];
+        const hostEl = document.getElementById(ids[0]);
+        const portEl = document.getElementById(ids[1]);
+        if (hostEl) hostEl.value = first.host || '';
+        if (portEl) portEl.value = first.port || '';
+        if (proto === 'http') {
+            const sc = document.getElementById('scheme');
+            if (sc && first.scheme) sc.value = first.scheme;
+        }
+        list.slice(1).forEach(s => addBackendRow(proto, s));
+    }
+}
+
+function _serializeBackends(proto) {
+    const ids = proto === 'http' ? ['targetIp', 'targetPort'] :
+                proto === 'tcp'  ? ['targetIpTcp', 'targetPortTcp'] : ['targetIpUdp', 'targetPortUdp'];
+    const servers = [];
+    const host0 = (document.getElementById(ids[0])?.value || '').trim();
+    if (host0) {
+        const row = { host: host0, port: (document.getElementById(ids[1])?.value || '').trim() };
+        if (proto === 'http') row.scheme = document.getElementById('scheme')?.value || 'http';
+        servers.push(row);
+    }
+    document.querySelectorAll('#' + proto + 'BackendRows .tm-backend-row').forEach(r => {
+        const host = (r.querySelector('.bk-host')?.value || '').trim();
+        if (!host) return;
+        const row = { host, port: (r.querySelector('.bk-port')?.value || '').trim() };
+        if (proto === 'http') row.scheme = r.querySelector('.bk-scheme')?.value || 'http';
+        servers.push(row);
+    });
+    if (!servers.length) return null;
+    const payload = { servers };
+    if (proto === 'http') {
+        payload.sticky = {
+            enabled: !!document.getElementById('lbStickyEnabled')?.checked,
+            cookieName: (document.getElementById('lbStickyCookie')?.value || '').trim(),
+            secure: !!document.getElementById('lbStickySecure')?.checked,
+            httpOnly: !!document.getElementById('lbStickyHttpOnly')?.checked,
+        };
+        payload.healthCheck = {
+            enabled: !!document.getElementById('lbHealthEnabled')?.checked,
+            path: (document.getElementById('lbHealthPath')?.value || '').trim(),
+            interval: (document.getElementById('lbHealthInterval')?.value || '').trim(),
+            timeout: (document.getElementById('lbHealthTimeout')?.value || '').trim(),
+        };
+        payload.priority = (document.getElementById('lbPriority')?.value || '').trim();
+    } else if (proto === 'tcp') {
+        payload.priority = (document.getElementById('lbPriorityTcp')?.value || '').trim();
+    }
+    return JSON.stringify(payload);
+}
+
+function _writeBackendsJson() {
+    ['http', 'tcp', 'udp'].forEach(proto => {
+        const el = document.getElementById('backendsJson' + proto.charAt(0).toUpperCase() + proto.slice(1));
+        if (el) el.value = _serializeBackends(proto) || '';
+    });
+}
+
+function _resetLbAdvanced() {
+    ['http', 'tcp', 'udp'].forEach(_clearBackendRows);
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    const chk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = v; };
+    chk('lbStickyEnabled', false); chk('lbStickySecure', false); chk('lbStickyHttpOnly', false);
+    chk('lbHealthEnabled', false);
+    set('lbStickyCookie', ''); set('lbHealthPath', ''); set('lbHealthInterval', ''); set('lbHealthTimeout', '');
+    set('lbPriority', ''); set('lbPriorityTcp', '');
+    set('backendsJsonHttp', ''); set('backendsJsonTcp', ''); set('backendsJsonUdp', '');
+    _lbSyncToggles();
+    const body = document.getElementById('httpLbAdvBody');
+    if (body) body.style.display = 'none';
+    const chev = document.getElementById('httpLbAdvChevron');
+    if (chev) chev.className = 'ph-bold ph-caret-right text-xs';
+}
+
+function _applyLbAdvanced(app) {
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    const chk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = v; };
+    const sticky = app.sticky || {};
+    const hc     = app.healthCheck || {};
+    chk('lbStickyEnabled', !!app.stickyEnabled);
+    set('lbStickyCookie', sticky.name || '');
+    chk('lbStickySecure', !!sticky.secure);
+    chk('lbStickyHttpOnly', !!sticky.httpOnly);
+    chk('lbHealthEnabled', !!(hc && hc.path));
+    set('lbHealthPath', hc.path || '');
+    set('lbHealthInterval', hc.interval || '');
+    set('lbHealthTimeout', hc.timeout || '');
+    set('lbPriority', app.priority || '');
+    set('lbPriorityTcp', app.priority || '');
+    _lbSyncToggles();
+    if (app.stickyEnabled || (hc && hc.path) || app.priority) {
+        const body = document.getElementById('httpLbAdvBody');
+        const chev = document.getElementById('httpLbAdvChevron');
+        if (body) body.style.display = '';
+        if (chev) chev.className = 'ph-bold ph-caret-down text-xs';
+    }
+}
+
 function toggleWildcardSection(resolverVal) {
     const show = resolverVal && resolverVal !== '__disabled__';
     ['wildcardCheckboxRow', 'wildcardSection'].forEach(id => {
@@ -2452,6 +2622,8 @@ async function cloneRoute(btn) {
     await openModal();
     document.getElementById('modalTitle').innerText = 'Clone Route';
     document.getElementById('serviceName').value = (app.name || '') + '-copy';
+    _populateBackends(app.protocol || 'http', app.servers);
+    _applyLbAdvanced(app);
     const cfSel = document.getElementById('configFileSelect');
     if (app.configFile) {
         document.getElementById('configFile').value = app.configFile;
@@ -2570,6 +2742,9 @@ async function handleEdit(btn) {
     const proto = app.protocol || 'http';
     setProtocol(proto);
     _applyServiceTypeNotice(app.serviceType);
+    _resetLbAdvanced();
+    _populateBackends(proto, app.servers);
+    _applyLbAdvanced(app);
 
     if (proto === 'http') {
         _applyHttpRuleToForm(app.rule || '');

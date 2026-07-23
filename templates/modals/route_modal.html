@@ -81,16 +81,75 @@
                         <input type="text" name="httpRule" id="httpRule" class="input-field font-mono text-sm" placeholder="Host(`app.example.com`) || PathPrefix(`/api`)">
                         <p class="text-xs mt-1" style="color:var(--muted)">Any valid <a href="https://doc.traefik.io/traefik/routing/routers/#rule" target="_blank" style="color:var(--blue)">Traefik router rule</a> expression.</p>
                     </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label>Target IP / Host</label>
-                            <input type="text" name="targetIp" id="targetIp" class="input-field" placeholder="10.0.0.10">
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label style="margin:0">Backends</label>
+                            <button type="button" onclick="addBackendRow('http')" class="btn-secondary text-xs" style="height:24px;padding:0 8px">
+                                <i class="ph-bold ph-plus text-xs"></i> Add backend
+                            </button>
                         </div>
-                        <div>
-                            <label>Port</label>
-                            <input type="text" name="targetPort" id="targetPort" class="input-field" placeholder="8080">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <input type="text" name="targetIp" id="targetIp" class="input-field" placeholder="10.0.0.10">
+                            </div>
+                            <div>
+                                <input type="text" name="targetPort" id="targetPort" class="input-field" placeholder="8080">
+                            </div>
+                        </div>
+                        <div id="httpBackendRows"></div>
+                        <p class="text-xs mt-1" style="color:var(--muted)">Add more backends to load-balance across several servers.</p>
+                    </div>
+                    <div id="httpLbAdvanced">
+                        <button type="button" onclick="toggleLbAdvanced('http')" class="text-xs flex items-center gap-1" style="background:none;border:none;cursor:pointer;padding:0;color:var(--muted)">
+                            <i id="httpLbAdvChevron" class="ph-bold ph-caret-right text-xs"></i>
+                            <span class="font-semibold uppercase tracking-wider">Load balancing</span>
+                        </button>
+                        <div id="httpLbAdvBody" class="mt-2 p-3 rounded-lg space-y-3" style="display:none;background:var(--input-bg);border:1px solid var(--border)">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="lbStickyEnabled" class="rounded" style="accent-color:var(--blue)">
+                                    <label for="lbStickyEnabled" class="text-sm" style="margin:0;color:var(--text)">Sticky sessions</label>
+                                </div>
+                                <span class="tm-info-btn" data-tip="Pins a client to the same backend using a cookie (loadBalancer.sticky.cookie).">i</span>
+                            </div>
+                            <div id="lbStickyBody" style="display:none" class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label>Cookie name</label>
+                                    <input type="text" id="lbStickyCookie" class="input-field" placeholder="tm_sticky">
+                                </div>
+                                <div class="flex items-end gap-3 pb-1">
+                                    <label class="flex items-center gap-2 text-sm" style="color:var(--text)"><input type="checkbox" id="lbStickySecure" class="rounded" style="accent-color:var(--blue)"> Secure</label>
+                                    <label class="flex items-center gap-2 text-sm" style="color:var(--text)"><input type="checkbox" id="lbStickyHttpOnly" class="rounded" style="accent-color:var(--blue)"> HttpOnly</label>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="lbHealthEnabled" class="rounded" style="accent-color:var(--blue)">
+                                    <label for="lbHealthEnabled" class="text-sm" style="margin:0;color:var(--text)">Health check</label>
+                                </div>
+                                <span class="tm-info-btn" data-tip="Traefik polls this path and stops sending traffic to backends that fail (loadBalancer.healthCheck).">i</span>
+                            </div>
+                            <div id="lbHealthBody" style="display:none" class="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label>Path</label>
+                                    <input type="text" id="lbHealthPath" class="input-field" placeholder="/health">
+                                </div>
+                                <div>
+                                    <label>Interval</label>
+                                    <input type="text" id="lbHealthInterval" class="input-field" placeholder="10s">
+                                </div>
+                                <div>
+                                    <label>Timeout</label>
+                                    <input type="text" id="lbHealthTimeout" class="input-field" placeholder="3s">
+                                </div>
+                            </div>
+                            <div>
+                                <label>Router priority <span class="text-xs font-normal" style="color:var(--muted)">(optional)</span></label>
+                                <input type="number" id="lbPriority" class="input-field" min="1" placeholder="leave empty for Traefik's default" style="width:260px">
+                            </div>
                         </div>
                     </div>
+                    <input type="hidden" name="backendsJsonHttp" id="backendsJsonHttp">
                     <div>
                         <label>Entry Points</label>
                         <div id="httpEntrypointChips" class="flex flex-wrap gap-1.5 p-2 rounded-lg" style="background:var(--input-bg);border:1px solid var(--border);min-height:38px">
@@ -222,6 +281,16 @@
                             <input type="text" name="targetPort" id="targetPortTcp" class="input-field" placeholder="5432">
                         </div>
                     </div>
+                    <div id="tcpBackendRows"></div>
+                    <div class="flex items-center justify-between mt-1">
+                        <p class="text-xs" style="color:var(--muted)">Add more backends to load-balance across several servers.</p>
+                        <button type="button" onclick="addBackendRow('tcp')" class="btn-secondary text-xs" style="height:24px;padding:0 8px"><i class="ph-bold ph-plus text-xs"></i> Add backend</button>
+                    </div>
+                    <div class="mt-2">
+                        <label>Router priority <span class="text-xs font-normal" style="color:var(--muted)">(optional)</span></label>
+                        <input type="number" id="lbPriorityTcp" class="input-field" min="1" placeholder="leave empty for Traefik's default" style="width:260px">
+                    </div>
+                    <input type="hidden" name="backendsJsonTcp" id="backendsJsonTcp">
                     <div>
                         <label>Entry Points</label>
                         <div id="tcpEntrypointChips" class="flex flex-wrap gap-1.5 p-2 rounded-lg" style="background:var(--input-bg);border:1px solid var(--border);min-height:38px">
@@ -268,6 +337,12 @@
                             <input type="text" name="targetPort" id="targetPortUdp" class="input-field" placeholder="53">
                         </div>
                     </div>
+                    <div id="udpBackendRows"></div>
+                    <div class="flex items-center justify-between mt-1">
+                        <p class="text-xs" style="color:var(--muted)">Add more backends to load-balance across several servers.</p>
+                        <button type="button" onclick="addBackendRow('udp')" class="btn-secondary text-xs" style="height:24px;padding:0 8px"><i class="ph-bold ph-plus text-xs"></i> Add backend</button>
+                    </div>
+                    <input type="hidden" name="backendsJsonUdp" id="backendsJsonUdp">
                     <div>
                         <label>Entry Point</label>
                         <input type="hidden" name="udpEntryPoint" id="entryPointsUdp">

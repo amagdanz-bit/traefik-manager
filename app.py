@@ -4256,7 +4256,8 @@ def _merge_router(section: dict, name: str, new: dict, managed: tuple) -> None:
     _apply_managed_keys(existing, new, managed)
 
 
-def _merge_service(section: dict, name: str, new_lb: dict, server_key: str, transport_name: str) -> None:
+def _merge_service(section: dict, name: str, new_lb: dict, server_key: str, transport_name: str,
+                   managed_backends: bool = False) -> None:
     existing = section.get(name)
     existing_lb = existing.get('loadBalancer') if isinstance(existing, dict) else None
     if not isinstance(existing_lb, dict):
@@ -4266,10 +4267,18 @@ def _merge_service(section: dict, name: str, new_lb: dict, server_key: str, tran
         return
     servers = existing_lb.get('servers')
     new_servers = new_lb.get('servers') or []
-    if isinstance(servers, list) and servers and isinstance(servers[0], dict) and new_servers:
+    if managed_backends:
+        existing_lb['servers'] = new_servers
+    elif isinstance(servers, list) and servers and isinstance(servers[0], dict) and new_servers:
         servers[0][server_key] = new_servers[0][server_key]
     else:
         existing_lb['servers'] = new_servers
+    if managed_backends:
+        for key in ('sticky', 'healthCheck'):
+            if key in new_lb:
+                existing_lb[key] = new_lb[key]
+            elif key in existing_lb:
+                del existing_lb[key]
     if 'passHostHeader' in new_lb:
         existing_lb['passHostHeader'] = new_lb['passHostHeader']
     elif 'passHostHeader' in existing_lb:
@@ -4278,6 +4287,82 @@ def _merge_service(section: dict, name: str, new_lb: dict, server_key: str, tran
         existing_lb['serversTransport'] = new_lb['serversTransport']
     elif existing_lb.get('serversTransport') == transport_name:
         del existing_lb['serversTransport']
+
+
+def _parse_backends_json(raw):
+    import json as _json
+    if not raw:
+        return None
+    try:
+        data = _json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _clean_priority(value):
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
+def _clean_duration(value):
+    v = str(value or '').strip()
+    if not v:
+        return ''
+    if v.isdigit():
+        return v + 's'
+    return v if re.match(r'^\d+(ms|s|m|h)$', v) else ''
+
+
+def _backend_servers(rows, key, scheme_default='http'):
+    servers = []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        host = str(row.get('host') or '').strip()
+        if not host:
+            continue
+        port = str(row.get('port') or '').strip()
+        if key == 'url':
+            if host.startswith('http://') or host.startswith('https://'):
+                servers.append({'url': host})
+            else:
+                scheme = str(row.get('scheme') or scheme_default).strip() or scheme_default
+                servers.append({'url': f"{scheme}://{host}:{port}" if port else f"{scheme}://{host}"})
+        else:
+            servers.append({key: f"{host}:{port}" if port else host})
+    return servers
+
+
+def _sticky_block(sticky):
+    if not isinstance(sticky, dict) or not sticky.get('enabled'):
+        return None
+    cookie = {}
+    name = str(sticky.get('cookieName') or '').strip()
+    if name:
+        cookie['name'] = name
+    if sticky.get('secure'):
+        cookie['secure'] = True
+    if sticky.get('httpOnly'):
+        cookie['httpOnly'] = True
+    return {'cookie': cookie}
+
+
+def _healthcheck_block(hc):
+    if not isinstance(hc, dict) or not hc.get('enabled'):
+        return None
+    path = str(hc.get('path') or '').strip()
+    if not path:
+        return None
+    block = {'path': path}
+    for field in ('interval', 'timeout'):
+        val = _clean_duration(hc.get(field))
+        if val:
+            block[field] = val
+    return block
 
 
 def _streaming_forwarding_timeouts() -> dict:
@@ -4502,6 +4587,11 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
                      'tlsOptionsProfile': tls_http.get('options', '') if isinstance(tls_http, dict) else '',
                      'insecureSkipVerify': insecure,
                      'streaming': streaming,
+                     'servers': [str(s.get('url', '')) for s in (lb.get('servers') or []) if isinstance(s, dict) and s.get('url')],
+                     'sticky': (lb.get('sticky') or {}).get('cookie', {}) if isinstance(lb.get('sticky'), dict) else {},
+                     'stickyEnabled': isinstance(lb.get('sticky'), dict),
+                     'healthCheck': lb.get('healthCheck') if isinstance(lb.get('healthCheck'), dict) else {},
+                     'priority': rdata.get('priority'),
                      'serviceType': _service_type(http_svcs.get(svc_key)),
                      'configFile': config_file, 'provider': 'file'})
     tcp_config = config.get('tcp') or {}
@@ -4530,6 +4620,8 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
                      'protocol': 'tcp', 'tls': tls_tcp if isinstance(tls_tcp, dict) else ({} if tls_tcp else None), 'enabled': True,
                      'certResolver': tls_tcp.get('certResolver', '') if isinstance(tls_tcp, dict) else '',
                      'serviceType': _service_type(tcp_svcs.get(svc_key)),
+                     'servers': [str(s.get('address', '')) for s in (_as_dict(_as_dict(tcp_svcs.get(svc_key)).get('loadBalancer')).get('servers') or []) if isinstance(s, dict) and s.get('address')],
+                     'priority': rdata.get('priority'),
                      'configFile': config_file, 'provider': 'file'})
     udp_config = config.get('udp') or {}
     udp_svcs = dict(udp_config.get('services') or {})
@@ -4555,6 +4647,7 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
                      'middlewares': [], 'entryPoints': _to_list(rdata.get('entryPoints')),
                      'protocol': 'udp', 'tls': False, 'enabled': True,
                      'serviceType': _service_type(udp_svcs.get(svc_key)),
+                     'servers': [str(s.get('address', '')) for s in (_as_dict(_as_dict(udp_svcs.get(svc_key)).get('loadBalancer')).get('servers') or []) if isinstance(s, dict) and s.get('address')],
                      'configFile': config_file, 'provider': 'file'})
     return apps
 
@@ -5406,9 +5499,29 @@ def save_entry():
                 if tls_opts_profile:
                     tls_entry['options'] = tls_opts_profile
                 r['tls'] = tls_entry
-            lb = {'servers': [{'url': target_url}]}
+            _be = _parse_backends_json(request.form.get('backendsJsonHttp'))
+            _managed_backends = False
+            if _be is not None:
+                _servers = _backend_servers(_be.get('servers'), 'url', scheme)
+                if _servers:
+                    _managed_backends = True
+                    lb = {'servers': _servers}
+                else:
+                    lb = {'servers': [{'url': target_url}]}
+            else:
+                lb = {'servers': [{'url': target_url}]}
             if not pass_host and not stream_preset_on:
                 lb['passHostHeader'] = False
+            if _managed_backends:
+                _sticky = _sticky_block(_be.get('sticky'))
+                if _sticky:
+                    lb['sticky'] = _sticky
+                _hc = _healthcheck_block(_be.get('healthCheck'))
+                if _hc:
+                    lb['healthCheck'] = _hc
+                _prio = _clean_priority(_be.get('priority'))
+                if _prio:
+                    r['priority'] = _prio
             transport_name = f"{svc_name}-transport"
             existing_transports = config.get('http', {}).get('serversTransports', {})
             tp = existing_transports.get(transport_name)
@@ -5429,9 +5542,11 @@ def save_entry():
                 del existing_transports[transport_name]
                 if not existing_transports and 'serversTransports' in config['http']:
                     del config['http']['serversTransports']
-            _merge_router(config['http']['routers'], router_name, r,
-                          ('rule', 'entryPoints', 'service', 'middlewares', 'tls'))
-            _merge_service(config['http']['services'], service_name, lb, 'url', transport_name)
+            _http_managed = ('rule', 'entryPoints', 'service', 'middlewares', 'tls', 'priority') \
+                if _managed_backends else ('rule', 'entryPoints', 'service', 'middlewares', 'tls')
+            _merge_router(config['http']['routers'], router_name, r, _http_managed)
+            _merge_service(config['http']['services'], service_name, lb, 'url', transport_name,
+                           managed_backends=_managed_backends)
 
         elif protocol == 'tcp':
             rule = tcp_rule or (f"HostSNI(`{subdomain}.{domain}`)" if subdomain else "HostSNI(`*`)")
@@ -5450,10 +5565,22 @@ def save_entry():
                 router_entry['tls'] = {'passthrough': True}
             elif use_tls_tcp:
                 router_entry['tls'] = {'certResolver': tcp_cert_resolver} if tcp_cert_resolver else {}
-            _merge_router(config['tcp']['routers'], router_name, router_entry,
-                          ('rule', 'entryPoints', 'service', 'middlewares', 'tls'))
-            _merge_service(config['tcp']['services'], service_name,
-                           {'servers': [{'address': f"{target_ip}:{target_port}"}]}, 'address', '')
+            _be_tcp = _parse_backends_json(request.form.get('backendsJsonTcp'))
+            _tcp_managed = False
+            _tcp_lb = {'servers': [{'address': f"{target_ip}:{target_port}"}]}
+            if _be_tcp is not None:
+                _tcp_servers = _backend_servers(_be_tcp.get('servers'), 'address')
+                if _tcp_servers:
+                    _tcp_managed = True
+                    _tcp_lb = {'servers': _tcp_servers}
+                    _tcp_prio = _clean_priority(_be_tcp.get('priority'))
+                    if _tcp_prio:
+                        router_entry['priority'] = _tcp_prio
+            _tcp_keys = ('rule', 'entryPoints', 'service', 'middlewares', 'tls', 'priority') \
+                if _tcp_managed else ('rule', 'entryPoints', 'service', 'middlewares', 'tls')
+            _merge_router(config['tcp']['routers'], router_name, router_entry, _tcp_keys)
+            _merge_service(config['tcp']['services'], service_name, _tcp_lb, 'address', '',
+                           managed_backends=_tcp_managed)
 
         elif protocol == 'udp':
             udp_ep = request.form.get('udpEntryPoint', '').strip()
@@ -5462,8 +5589,16 @@ def save_entry():
             _merge_router(config['udp']['routers'], router_name,
                           {'entryPoints': [udp_ep] if udp_ep else [], 'service': service_name},
                           ('entryPoints', 'service'))
-            _merge_service(config['udp']['services'], service_name,
-                           {'servers': [{'address': f"{target_ip}:{target_port}"}]}, 'address', '')
+            _be_udp = _parse_backends_json(request.form.get('backendsJsonUdp'))
+            _udp_managed = False
+            _udp_lb = {'servers': [{'address': f"{target_ip}:{target_port}"}]}
+            if _be_udp is not None:
+                _udp_servers = _backend_servers(_be_udp.get('servers'), 'address')
+                if _udp_servers:
+                    _udp_managed = True
+                    _udp_lb = {'servers': _udp_servers}
+            _merge_service(config['udp']['services'], service_name, _udp_lb, 'address', '',
+                           managed_backends=_udp_managed)
 
         if _ledger_changed:
             save_settings(

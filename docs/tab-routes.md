@@ -115,6 +115,24 @@ Streaming works best **without response buffering** - if a `buffering` or `compr
 
 Like the headers preset, streaming is managed only through the route modal for local HTTP routes; API, agent and other saves leave the transport untouched.
 
+## Multiple backends and load balancing
+
+An HTTP, TCP, or UDP route can point at more than one backend. Click **Add backend** under the target fields to add another server; Traefik load-balances across them (`loadBalancer.servers`). Route cards show a **+N** badge when a route has more than one backend.
+
+For HTTP routes, the **Load balancing** section adds:
+
+| Option | Writes | Notes |
+|---|---|---|
+| Sticky sessions | `loadBalancer.sticky.cookie` | Pins a client to one backend via a cookie. Cookie name, `secure` and `httpOnly` are optional. |
+| Health check | `loadBalancer.healthCheck` | Path is required; interval and timeout accept Go durations (`10s`, `500ms`). A bare number is read as seconds. |
+| Router priority | `router.priority` | Higher wins when several routers match the same request. Also available for TCP routes. |
+
+These round-trip on edit, so reopening a route shows the backends and settings it already has.
+
+::: tip Older clients are safe
+The mobile app and older cached pages post only a single target. Saving from one of those updates the first backend only - additional backends, sticky sessions, health checks, and priority are preserved rather than wiped.
+:::
+
 ## Deleting a route
 
 Click the trash icon on the route card. The corresponding service entry in `dynamic.yml` is removed automatically.
