@@ -1664,6 +1664,114 @@ paths:
                   raw: { type: string }
                   parsed: { type: object }
 
+  /api/static/trusted-ips/preview:
+    post:
+      tags: [Static Config]
+      summary: Preview trusted IPs merge
+      description: |
+        Compute the result of adding `forwardedHeaders.trustedIPs` to an entrypoint, without
+        writing anything to disk. Backs the **Trusted IPs** helper in the Static Config editor.
+
+        Trusting a proxy's IP makes Traefik believe its `X-Forwarded-For`, which then feeds the
+        access logs, CrowdSec, `ipAllowList`, and the login rate-limiter. Only trust proxies you
+        control.
+
+        The merge is **additive with dedup**: existing entries are kept, and ranges already
+        covered are skipped by normalized network (so `10.5.5.5/8` will not re-add `10.0.0.0/8`).
+        Sibling keys under `forwardedHeaders`, other entrypoints, and YAML comments are all
+        preserved. The endpoint is stateless and never saves; the returned `raw` is persisted by
+        the client through `POST /api/static` (the normal backup + restart path), which is why it
+        works identically on the Host and on a remote agent.
+
+        Called in two modes:
+
+        - **Inspect** (no `entrypoint`): returns the entrypoint list with their current
+          `trustedIPs`, plus the built-in Cloudflare and private-range presets.
+        - **Preview** (with `entrypoint`): additionally returns the merged `raw`, and the
+          `existing` / `added` / `invalid` / `final` breakdown for the target entrypoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                current_raw: { type: string, description: "Static config YAML to operate on. Falls back to the file on disk when empty." }
+                entrypoint: { type: string, description: "Target entrypoint. Omit for inspect mode." }
+                cloudflare: { type: boolean, description: "Include the built-in Cloudflare edge ranges." }
+                private: { type: boolean, description: "Include the private-range preset (10/8, 172.16/12, 192.168/16, fc00::/7)." }
+                custom_cidrs:
+                  description: "Extra CIDRs or IPs, as an array or a comma/whitespace-separated string. Invalid entries are returned in `invalid` and skipped."
+                  oneOf:
+                    - type: string
+                    - type: array
+                      items: { type: string }
+            examples:
+              inspect:
+                summary: Inspect mode
+                value:
+                  current_raw: "entryPoints:\n  websecure:\n    address: ':443'\n"
+              preview:
+                summary: Preview a Cloudflare + custom merge
+                value:
+                  current_raw: "entryPoints:\n  websecure:\n    address: ':443'\n"
+                  entrypoint: websecure
+                  cloudflare: true
+                  custom_cidrs: "203.0.113.10, 198.51.100.0/24"
+      responses:
+        "200":
+          description: Inspect summary, or full preview when an entrypoint was given
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  entrypoints:
+                    type: array
+                    description: "Every entrypoint in the static config."
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string, example: "websecure" }
+                        address: { type: string, example: ":443" }
+                        trusted_ips:
+                          type: array
+                          items: { type: string }
+                          description: "The entrypoint's current forwardedHeaders.trustedIPs."
+                  cloudflare_captured: { type: string, description: "Capture date of the bundled Cloudflare ranges.", example: "2026-07-23" }
+                  cloudflare_ranges: { type: array, items: { type: string } }
+                  private_ranges: { type: array, items: { type: string } }
+                  entrypoint: { type: string, description: "Preview mode only: the target entrypoint." }
+                  existing:
+                    type: array
+                    items: { type: string }
+                    description: "Preview mode only: trustedIPs before the merge."
+                  added:
+                    type: array
+                    items: { type: string }
+                    description: "Preview mode only: ranges the merge would add (excludes duplicates)."
+                  invalid:
+                    type: array
+                    items: { type: string }
+                    description: "Preview mode only: custom entries that failed CIDR/IP validation and were skipped."
+                  final:
+                    type: array
+                    items: { type: string }
+                    description: "Preview mode only: the resulting trustedIPs (existing + added)."
+                  raw: { type: string, description: "Preview mode only: the full merged static config YAML, to save via POST /api/static." }
+                  parsed: { type: object, description: "Preview mode only: the merged config parsed back to JSON." }
+        "400":
+          description: Named entrypoint not found, or the static config is not a mapping
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: No static config on disk and no current_raw supplied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
   # ─── CrowdSec ─────────────────────────────────────────────────────────────
 
   /api/crowdsec/decisions:

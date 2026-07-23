@@ -746,6 +746,48 @@ Response includes the updated `raw` YAML and `parsed` object.
 
 ---
 
+### `POST /api/static/trusted-ips/preview`
+
+Compute the result of adding `forwardedHeaders.trustedIPs` to an entrypoint, without writing anything to disk. Backs the **Trusted IPs** helper in the Static Config editor.
+
+Trusting a proxy's IP makes Traefik believe its `X-Forwarded-For`, which then feeds the access logs, CrowdSec, `ipAllowList`, and the login rate-limiter. Only trust proxies you control.
+
+The merge is **additive with dedup**: existing entries are kept, and ranges already covered are skipped by normalized network (so `10.5.5.5/8` will not re-add `10.0.0.0/8`). Sibling keys under `forwardedHeaders`, other entrypoints, and YAML comments are all preserved. The endpoint never saves - the returned `raw` is persisted by the client through [`POST /api/static/config`](#post-api-static-config), which is why it works identically on the Host and on a remote agent.
+
+Called in two modes.
+
+**Inspect** (no `entrypoint`) - lists entrypoints and the presets:
+
+```json
+{ "current_raw": "entryPoints:\n  websecure:\n    address: ':443'\n" }
+```
+
+**Preview** (with `entrypoint`) - also returns the merge:
+
+```json
+{
+  "current_raw": "entryPoints:\n  websecure:\n    address: ':443'\n",
+  "entrypoint": "websecure",
+  "cloudflare": true,
+  "private": false,
+  "custom_cidrs": "203.0.113.10, 198.51.100.0/24"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `current_raw` | string | Static config YAML to operate on. Falls back to the file on disk when empty. |
+| `entrypoint` | string | Target entrypoint. Omit for inspect mode. |
+| `cloudflare` | boolean | Include the built-in Cloudflare edge ranges. |
+| `private` | boolean | Include the private-range preset (`10/8`, `172.16/12`, `192.168/16`, `fc00::/7`). |
+| `custom_cidrs` | string \| string[] | Extra CIDRs or IPs, comma/whitespace-separated or an array. Invalid entries are returned in `invalid` and skipped. |
+
+Inspect mode returns `ok`, `entrypoints` (each with `name`, `address`, `trusted_ips`), `cloudflare_captured`, `cloudflare_ranges`, and `private_ranges`. Preview mode adds `entrypoint`, `existing`, `added`, `invalid`, `final`, the merged `raw` YAML, and the `parsed` object.
+
+Returns `400` if the named entrypoint is absent or the config is not a mapping, and `404` if there is no static config on disk and no `current_raw` was supplied.
+
+---
+
 ## Utility
 
 ### `GET /api/manager/version`
