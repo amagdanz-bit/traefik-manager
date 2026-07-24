@@ -16,6 +16,8 @@ type Config struct {
 	Port                   string
 	RateLimit              int
 	TraefikAPIURL          string
+	TraefikAPIUser         string
+	TraefikAPIPassword     string
 	TraefikInsecureSkipVerify bool
 	ConfigPath         string
 	StaticConfigPath   string
@@ -39,6 +41,7 @@ type Config struct {
 	GitBackupCommitMsg string
 	BackupDir          string
 	BackupKeepCount    int
+	Debug              bool
 }
 
 type App struct {
@@ -81,6 +84,8 @@ func loadConfig() *Config {
 		Port:                      envOr("TMA_PORT", "8090"),
 		RateLimit:                 envInt("TMA_RATE_LIMIT", 300),
 		TraefikAPIURL:             envOr("TRAEFIK_API_URL", "http://traefik:8080"),
+		TraefikAPIUser:            os.Getenv("TRAEFIK_API_USER"),
+		TraefikAPIPassword:        os.Getenv("TRAEFIK_API_PASSWORD"),
 		TraefikInsecureSkipVerify: envBool("TRAEFIK_INSECURE_SKIP_VERIFY", false),
 		ConfigPath:         envOr("CONFIG_PATH", "/app/config"),
 		StaticConfigPath:   os.Getenv("STATIC_CONFIG_PATH"),
@@ -104,6 +109,7 @@ func loadConfig() *Config {
 		GitBackupCommitMsg: envOr("GIT_BACKUP_COMMIT_MESSAGE", "traefik-manager: {action} at {timestamp}"),
 		BackupDir:          envOr("BACKUP_DIR", "/app/backups"),
 		BackupKeepCount:    envInt("BACKUP_KEEP_COUNT", 0),
+		Debug:              envBool("TMA_DEBUG", false),
 	}
 }
 
@@ -127,7 +133,7 @@ func main() {
 	mux.HandleFunc("/health", app.healthHandler)
 	mux.Handle("/api/", app.rateLimitMiddleware(app.authMiddleware(http.HandlerFunc(app.router))))
 
-	log.Printf("TMA v%s listening on :%s (traefik=%s, insecure-tls=%v)", Version, cfg.Port, cfg.TraefikAPIURL, cfg.TraefikInsecureSkipVerify)
+	log.Printf("TMA v%s listening on :%s (traefik=%s, insecure-tls=%v, traefik-auth=%v, debug=%v)", Version, cfg.Port, cfg.TraefikAPIURL, cfg.TraefikInsecureSkipVerify, cfg.TraefikAPIUser != "", cfg.Debug)
 	if err := http.ListenAndServe(":"+cfg.Port, mux); err != nil {
 		log.Fatal(err)
 	}
