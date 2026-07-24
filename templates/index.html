@@ -27,6 +27,7 @@
             if (localStorage.getItem('showDocsLink') === 'false') document.documentElement.classList.add('tm-hide-docs');
             if (localStorage.getItem('showApiLink') !== 'true') document.documentElement.classList.add('tm-hide-api');
             if (localStorage.getItem('showShortcutsBtn') === 'false') document.documentElement.classList.add('tm-hide-shortcuts');
+            if (localStorage.getItem('showIpDiagBtn') === 'false') document.documentElement.classList.add('tm-hide-ipdiag');
         })();
     </script>
     <style>
@@ -35,6 +36,7 @@
         html.tm-hide-docs .nav-docs-link { display: none !important; }
         html.tm-hide-api .nav-api-link { display: none !important; }
         html.tm-hide-shortcuts .shortcuts-btn-wrap { display: none !important; }
+        html.tm-hide-ipdiag .nav-ipdiag-btn { display: none !important; }
         html.tm-compact-stats #statsGrid .stat-exp-header,
         html.tm-compact-stats #statsGrid .stat-exp-body,
         html.tm-compact-stats #statsGrid .stat-count { display: none; }

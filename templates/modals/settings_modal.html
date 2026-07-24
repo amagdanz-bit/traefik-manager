@@ -865,12 +865,19 @@
                                 </div>
                                 <div class="toggle-switch" id="toggle-api-link" onclick="toggleApiLink()"><div class="toggle-knob"></div></div>
                             </div>
-                            <div class="flex items-center justify-between" style="padding:10px 12px;">
+                            <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
                                 <div>
                                     <div class="text-xs font-medium" style="color:var(--text)">Show keyboard shortcuts button</div>
                                     <div class="text-xs" style="color:var(--muted)">Quick reference panel for keyboard shortcuts.</div>
                                 </div>
                                 <div class="toggle-switch" id="toggle-shortcuts-btn" onclick="toggleShortcutsBtn()"><div class="toggle-knob"></div></div>
+                            </div>
+                            <div class="flex items-center justify-between" style="padding:10px 12px;">
+                                <div>
+                                    <div class="text-xs font-medium" style="color:var(--text)">Show Client IP Diagnostic button</div>
+                                    <div class="text-xs" style="color:var(--muted)">Read-only tool showing the client IP this instance sees for your request.</div>
+                                </div>
+                                <div class="toggle-switch" id="toggle-ipdiag-btn" onclick="toggleIpDiagBtn()"><div class="toggle-knob"></div></div>
                             </div>
                         </div>
                     </div>
@@ -2321,6 +2328,14 @@ function toggleShortcutsBtn() {
     if (t) t.classList.toggle('on', !show);
 }
 
+function toggleIpDiagBtn() {
+    const show = localStorage.getItem('showIpDiagBtn') !== 'false';
+    localStorage.setItem('showIpDiagBtn', show ? 'false' : 'true');
+    document.documentElement.classList.toggle('tm-hide-ipdiag', show);
+    const t = document.getElementById('toggle-ipdiag-btn');
+    if (t) t.classList.toggle('on', !show);
+}
+
 function toggleDocsLink() {
     const show = localStorage.getItem('showDocsLink') !== 'false';
     localStorage.setItem('showDocsLink', show ? 'false' : 'true');
@@ -2471,6 +2486,8 @@ function loadUiTogglesIntoModal() {
     if (ep) ep.classList.toggle('on', _uiPref('showEntrypoints'));
     if (cs) cs.classList.toggle('on', localStorage.getItem('compactStatCards') === 'true');
     if (sh) sh.classList.toggle('on', localStorage.getItem('showShortcutsBtn') !== 'false');
+    const ipd = document.getElementById('toggle-ipdiag-btn');
+    if (ipd) ipd.classList.toggle('on', localStorage.getItem('showIpDiagBtn') !== 'false');
     const ri = document.getElementById('toggle-route-icons');
     if (ri) ri.classList.toggle('on', localStorage.getItem('showRouteIcons') === 'true');
     loadGeoipSettings();
