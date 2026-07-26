@@ -1314,6 +1314,11 @@ def inject_csrf():
     return {'csrf_token': _get_csrf_token()}
 
 
+@app.context_processor
+def inject_asset_version():
+    return {'asset_version': APP_VERSION}
+
+
 def _check_password(plaintext: str, hashed: str) -> bool:
     import bcrypt
     try:

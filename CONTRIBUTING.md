@@ -139,7 +139,8 @@ templates/
     modals/                   # Route, middleware, settings and other modals
 static/
     css/app.css               # All custom styles
-    js/                       # Application JS, one file per area + vendor/
+    js/                       # Application JS, one file per area
+    vendor/                   # Third-party JS/CSS (Monaco, dagre, fonts)
 docs/                         # VitePress documentation site
     .vitepress/
         config.ts             # Nav, sidebar, theme config
