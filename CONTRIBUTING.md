@@ -10,6 +10,7 @@ Thanks for your interest in contributing. This guide covers everything you need 
 - [Suggesting features](#suggesting-features)
 - [Submitting a pull request](#submitting-a-pull-request)
 - [Running locally](#running-locally)
+- [Tests](#tests)
 - [Project structure](#project-structure)
 - [Code style](#code-style)
 - [Branch guide](#branch-guide)
@@ -109,23 +110,36 @@ docker run -p 5000:5000 \
   traefik-manager:local
 ```
 
+### Tests
+
+```bash
+pip install pytest
+pytest
+```
+
+The suite runs against a temporary config directory - it never touches a real Traefik or your own config. Please run it before opening a pull request, and add a test when you change the config write path (`/save`, middleware saves, backups). Tests assert the YAML that actually lands on disk, not just the HTTP status, because that is where config-corrupting bugs show up.
+
 ---
 
 ## Project structure
 
 ```
-app.py                        # Main Flask application - all routes and business logic
+app.py                        # Flask app creation, blueprint registration, CLI
+core/                         # Shared helpers - settings, config I/O, auth, Traefik, agents
+blueprints/                   # One module per area (routes, middlewares, backups, ...)
+tests/                        # pytest suite - run before opening a PR
 requirements.txt              # Python dependencies
 Dockerfile
 docker-compose.yml
+agent/                        # TMA - the Go agent for remote servers
 templates/
     index.html                # Main SPA shell
-    sections/                 # Navbar, stats bar, modals
+    sections/                 # Navbar, stats bar, mobile menu
     tabs/                     # One file per tab (routes, middlewares, dashboard, etc.)
-    modals/                   # Route and middleware editor modals
+    modals/                   # Route, middleware, settings and other modals
 static/
     css/app.css               # All custom styles
-    js/                       # Third-party JS (Monaco, dagre, etc.)
+    js/                       # Application JS, one file per area + vendor/
 docs/                         # VitePress documentation site
     .vitepress/
         config.ts             # Nav, sidebar, theme config
@@ -135,7 +149,11 @@ docs/                         # VitePress documentation site
     workflows/
         docker.yml            # Builds and pushes Docker image on tag/branch push
         docs.yml              # Deploys VitePress docs
+        release-binaries.yml  # Builds agent binaries on a published release
 ```
+
+> [!NOTE]
+> **Refactor in progress (v1.9.0).** `app.py` and the JavaScript in `templates/index.html` are being split into the `core/`, `blueprints/` and `static/js/` layout above. Until that lands, some code still lives in the two original files. If you are planning a large change, open an issue first so we can sequence it and avoid conflicts.
 
 ---
 

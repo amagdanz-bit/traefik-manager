@@ -16,6 +16,12 @@ images/
 docs/
 build.sh
 
+# Tests
+tests/
+pytest.ini
+requirements-dev.txt
+.pytest_cache/
+
 # Docker
 docker-compose.yml
 Dockerfile
