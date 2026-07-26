@@ -247,14 +247,9 @@ Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to rep
 
 Traefik Manager is better because of the people who took the time to dig into it, file precise bug reports, and send patches. Thank you.
 
-| | Contribution |
-|---|---|
-| [**@fbnlrz**](https://github.com/fbnlrz) | 15 merged PRs and counting. Built the entire client-IP feature set in v1.8.0 - the Client IP Diagnostic, source-IP classification, the `ipStrategy` builder, configurable proxy hops, and the Trusted IPs helper - plus the guided route presets with their ownership ledger. Also found and fixed a class of config-safety bugs in route saves and bulk delete that had real data-loss potential. |
-| [**@adrianrp1988**](https://github.com/adrianrp1988) | Fixed TCP middlewares not showing on TCP routes or in the Middlewares tab. |
-| [**@akanealw**](https://github.com/akanealw) | Corrected the Authelia forward-auth template to match Authelia's own documentation. |
-| [**@yhay81**](https://github.com/yhay81) | Community support - stepped in to help another user debug a systemd agent install. |
+[@fbnlrz](https://github.com/fbnlrz) · [@adrianrp1988](https://github.com/adrianrp1988) · [@akanealw](https://github.com/akanealw) · [@yhay81](https://github.com/yhay81)
 
-Thanks as well to everyone who has opened an issue or a discussion. Several of the features above started as a question from someone running into something unexpected, and the detail in those reports is what made them fixable.
+Thanks as well to everyone who has opened an issue or a discussion. Several features started as a question from someone running into something unexpected, and the detail in those reports is what made them fixable.
 
 ## License
 
