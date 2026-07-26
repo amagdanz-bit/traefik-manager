@@ -37,6 +37,18 @@ func jsonError(w http.ResponseWriter, msg string, code int) {
 	json.NewEncoder(w).Encode(map[string]any{"error": msg, "ok": false})
 }
 
+func (a *App) debugf(format string, args ...any) {
+	if a.cfg.Debug {
+		log.Printf("[debug] "+format, args...)
+	}
+}
+
+func (a *App) applyTraefikAuth(req *http.Request) {
+	if a.cfg.TraefikAPIUser != "" && a.cfg.TraefikAPIPassword != "" {
+		req.SetBasicAuth(a.cfg.TraefikAPIUser, a.cfg.TraefikAPIPassword)
+	}
+}
+
 // ---- health -----------------------------------------------------------------
 
 func (a *App) healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -54,12 +66,17 @@ func (a *App) traefikProxy(w http.ResponseWriter, r *http.Request, traefikPath s
 		jsonError(w, "proxy error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.applyTraefikAuth(req)
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
+		a.debugf("traefik proxy %s failed: %v", target, err)
 		jsonError(w, "traefik unavailable: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		a.debugf("traefik proxy %s returned status %d", target, resp.StatusCode)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
@@ -73,12 +90,15 @@ func (a *App) traefikFetchProto(ctx context.Context, traefikPath string) (json.R
 	if err != nil {
 		return json.RawMessage("[]"), err
 	}
+	a.applyTraefikAuth(req)
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
+		a.debugf("traefik fetch %s failed: %v", target, err)
 		return json.RawMessage("[]"), err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		a.debugf("traefik fetch %s returned status %d", target, resp.StatusCode)
 		return json.RawMessage("[]"), fmt.Errorf("traefik returned status %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(resp.Body)

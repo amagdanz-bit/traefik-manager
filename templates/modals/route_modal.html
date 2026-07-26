@@ -81,16 +81,75 @@
                         <input type="text" name="httpRule" id="httpRule" class="input-field font-mono text-sm" placeholder="Host(`app.example.com`) || PathPrefix(`/api`)">
                         <p class="text-xs mt-1" style="color:var(--muted)">Any valid <a href="https://doc.traefik.io/traefik/routing/routers/#rule" target="_blank" style="color:var(--blue)">Traefik router rule</a> expression.</p>
                     </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label>Target IP / Host</label>
-                            <input type="text" name="targetIp" id="targetIp" class="input-field" placeholder="10.0.0.10">
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label style="margin:0">Backends</label>
+                            <button type="button" onclick="addBackendRow('http')" class="btn-secondary text-xs" style="height:24px;padding:0 8px">
+                                <i class="ph-bold ph-plus text-xs"></i> Add backend
+                            </button>
                         </div>
-                        <div>
-                            <label>Port</label>
-                            <input type="text" name="targetPort" id="targetPort" class="input-field" placeholder="8080">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <input type="text" name="targetIp" id="targetIp" class="input-field" placeholder="10.0.0.10">
+                            </div>
+                            <div>
+                                <input type="text" name="targetPort" id="targetPort" class="input-field" placeholder="8080">
+                            </div>
+                        </div>
+                        <div id="httpBackendRows"></div>
+                        <p class="text-xs mt-1" style="color:var(--muted)">Add more backends to load-balance across several servers.</p>
+                    </div>
+                    <div id="httpLbAdvanced">
+                        <button type="button" onclick="toggleLbAdvanced('http')" class="text-xs flex items-center gap-1" style="background:none;border:none;cursor:pointer;padding:0;color:var(--muted)">
+                            <i id="httpLbAdvChevron" class="ph-bold ph-caret-right text-xs"></i>
+                            <span class="font-semibold uppercase tracking-wider">Load balancing</span>
+                        </button>
+                        <div id="httpLbAdvBody" class="mt-2 p-3 rounded-lg space-y-3" style="display:none;background:var(--input-bg);border:1px solid var(--border)">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="lbStickyEnabled" class="rounded" style="accent-color:var(--blue)">
+                                    <label for="lbStickyEnabled" class="text-sm" style="margin:0;color:var(--text)">Sticky sessions</label>
+                                </div>
+                                <span class="tm-info-btn" data-tip="Pins a client to the same backend using a cookie (loadBalancer.sticky.cookie).">i</span>
+                            </div>
+                            <div id="lbStickyBody" style="display:none" class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label>Cookie name</label>
+                                    <input type="text" id="lbStickyCookie" class="input-field" placeholder="tm_sticky">
+                                </div>
+                                <div class="flex items-end gap-3 pb-1">
+                                    <label class="flex items-center gap-2 text-sm" style="color:var(--text)"><input type="checkbox" id="lbStickySecure" class="rounded" style="accent-color:var(--blue)"> Secure</label>
+                                    <label class="flex items-center gap-2 text-sm" style="color:var(--text)"><input type="checkbox" id="lbStickyHttpOnly" class="rounded" style="accent-color:var(--blue)"> HttpOnly</label>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="lbHealthEnabled" class="rounded" style="accent-color:var(--blue)">
+                                    <label for="lbHealthEnabled" class="text-sm" style="margin:0;color:var(--text)">Health check</label>
+                                </div>
+                                <span class="tm-info-btn" data-tip="Traefik polls this path and stops sending traffic to backends that fail (loadBalancer.healthCheck).">i</span>
+                            </div>
+                            <div id="lbHealthBody" style="display:none" class="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label>Path</label>
+                                    <input type="text" id="lbHealthPath" class="input-field" placeholder="/health">
+                                </div>
+                                <div>
+                                    <label>Interval</label>
+                                    <input type="text" id="lbHealthInterval" class="input-field" placeholder="10s">
+                                </div>
+                                <div>
+                                    <label>Timeout</label>
+                                    <input type="text" id="lbHealthTimeout" class="input-field" placeholder="3s">
+                                </div>
+                            </div>
+                            <div>
+                                <label>Router priority <span class="text-xs font-normal" style="color:var(--muted)">(optional)</span></label>
+                                <input type="number" id="lbPriority" class="input-field" min="1" placeholder="leave empty for Traefik's default" style="width:260px">
+                            </div>
                         </div>
                     </div>
+                    <input type="hidden" name="backendsJsonHttp" id="backendsJsonHttp">
                     <div>
                         <label>Entry Points</label>
                         <div id="httpEntrypointChips" class="flex flex-wrap gap-1.5 p-2 rounded-lg" style="background:var(--input-bg);border:1px solid var(--border);min-height:38px">
@@ -125,6 +184,56 @@
                             <span class="text-sm" style="color:var(--text)">Skip TLS Verification</span>
                         </div>
                         <span class="tm-info-btn" data-tip="Disables certificate validation for the backend. Use for self-signed certs (e.g. Proxmox, Kasm). Adds insecureSkipVerify via a named serversTransport."><i class="ph-bold ph-info"></i></span>
+                    </div>
+                    <div id="headersPresetSection">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="hpEnabled" onchange="_onHeadersPresetToggle(this.checked)" class="rounded" style="accent-color:var(--blue)">
+                                <span class="text-sm" style="color:var(--text)">Security headers preset</span>
+                            </div>
+                            <span class="tm-info-btn" data-tip="Creates a tool-managed <route>-headers middleware: a Permissions-Policy plus common security headers (HSTS, nosniff, frame-deny, referrer). It stays a normal, editable file middleware in the Middlewares tab."><i class="ph-bold ph-info"></i></span>
+                        </div>
+                        <input type="hidden" name="headersPresetPresent" id="headersPresetPresent" value="">
+                        <input type="hidden" name="headersPresetEnabled" id="headersPresetEnabled" value="false">
+                        <input type="hidden" name="headersPresetCustom" id="headersPresetCustom" value="false">
+                        <div id="hpCustomNotice" class="text-xs mt-2 p-2 rounded-lg" style="display:none;background:rgba(240,180,0,0.1);border:1px solid rgba(240,180,0,0.3);color:var(--text)">
+                            The <code id="hpCustomName"></code> middleware has been hand-edited beyond what these toggles cover, so it's shown as custom and kept as-is. Edit it in the Middlewares tab, or turn the preset off and on again to replace it with the toggle defaults. Turn it off to remove it.
+                        </div>
+                        <div id="hpBody" class="mt-2 p-3 rounded-lg" style="display:none;background:var(--input-bg);border:1px solid var(--border)">
+                            <p class="text-xs mb-2" style="color:var(--muted)">Permissions-Policy - who may use each browser feature. <code>self</code> = only your own site · <code>all</code> = any site, including embedded iframes · <code>block</code> = no one.</p>
+                            <div id="hpPerms" class="grid grid-cols-2 gap-2"></div>
+                            <div class="grid grid-cols-2 gap-2 mt-3">
+                                <label class="flex items-center gap-2 text-sm" style="color:var(--text)"><input type="checkbox" name="hp_hsts" id="hp_hsts" value="true" onchange="_hpUserEdited()" class="rounded" style="accent-color:var(--blue)"> HSTS (force HTTPS)</label>
+                                <label class="flex items-center gap-2 text-sm" style="color:var(--text)"><input type="checkbox" name="hp_nosniff" id="hp_nosniff" value="true" onchange="_hpUserEdited()" class="rounded" style="accent-color:var(--blue)"> Content-Type nosniff</label>
+                                <label class="flex items-center gap-2 text-sm" style="color:var(--text)"><input type="checkbox" name="hp_frameDeny" id="hp_frameDeny" value="true" onchange="_hpUserEdited()" class="rounded" style="accent-color:var(--blue)"> Frame deny (anti-clickjacking)</label>
+                                <div>
+                                    <label class="text-sm" style="color:var(--text)">Referrer-Policy</label>
+                                    <select name="hp_referrer" id="hp_referrer" onchange="_hpUserEdited()" class="input-field">
+                                        <option value="">(none)</option>
+                                        <option value="no-referrer">no-referrer</option>
+                                        <option value="strict-origin-when-cross-origin">strict-origin-when-cross-origin</option>
+                                        <option value="same-origin">same-origin</option>
+                                        <option value="strict-origin">strict-origin</option>
+                                        <option value="origin-when-cross-origin">origin-when-cross-origin</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="streamingPresetSection">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="streamingEnabled" onchange="_onStreamingToggle(this.checked)" class="rounded" style="accent-color:var(--blue)">
+                                <span class="text-sm" style="color:var(--text)">Optimize for streaming (Jellyfin / Emby / Plex)</span>
+                            </div>
+                            <span class="tm-info-btn" data-tip="Sets forwardingTimeouts on the service's serversTransport (unlimited response-header timeout for long transcodes) and forces passHostHeader. Composes with Skip TLS Verification on the same transport."><i class="ph-bold ph-info"></i></span>
+                        </div>
+                        <input type="hidden" name="streamingPresetPresent" id="streamingPresetPresent" value="">
+                        <input type="hidden" name="streamingPresetEnabled" id="streamingPresetEnabled" value="false">
+                        <div id="streamingNote" class="text-xs mt-2 p-2 rounded-lg" style="display:none;background:var(--input-bg);border:1px solid var(--border);color:var(--muted)">
+                            Forces <code>passHostHeader</code> and sets long <code>forwardingTimeouts</code> on <code><span id="streamingTpName"></span></code>. Entry-point <code>respondingTimeouts</code> are global and static - adjust them in the Static Config editor if long transcodes still cut off.
+                            <span id="streamingBufWarn" style="display:none;color:var(--yellow, #d4a017)"><br>⚠ A <code>buffering</code>/<code>compress</code> middleware is attached - remove it for smooth streaming and seeking.</span>
+                        </div>
                     </div>
                     <div id="wildcardCheckboxRow" style="display:none" class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
@@ -172,6 +281,16 @@
                             <input type="text" name="targetPort" id="targetPortTcp" class="input-field" placeholder="5432">
                         </div>
                     </div>
+                    <div id="tcpBackendRows"></div>
+                    <div class="flex items-center justify-between mt-1">
+                        <p class="text-xs" style="color:var(--muted)">Add more backends to load-balance across several servers.</p>
+                        <button type="button" onclick="addBackendRow('tcp')" class="btn-secondary text-xs" style="height:24px;padding:0 8px"><i class="ph-bold ph-plus text-xs"></i> Add backend</button>
+                    </div>
+                    <div class="mt-2">
+                        <label>Router priority <span class="text-xs font-normal" style="color:var(--muted)">(optional)</span></label>
+                        <input type="number" id="lbPriorityTcp" class="input-field" min="1" placeholder="leave empty for Traefik's default" style="width:260px">
+                    </div>
+                    <input type="hidden" name="backendsJsonTcp" id="backendsJsonTcp">
                     <div>
                         <label>Entry Points</label>
                         <div id="tcpEntrypointChips" class="flex flex-wrap gap-1.5 p-2 rounded-lg" style="background:var(--input-bg);border:1px solid var(--border);min-height:38px">
@@ -218,6 +337,12 @@
                             <input type="text" name="targetPort" id="targetPortUdp" class="input-field" placeholder="53">
                         </div>
                     </div>
+                    <div id="udpBackendRows"></div>
+                    <div class="flex items-center justify-between mt-1">
+                        <p class="text-xs" style="color:var(--muted)">Add more backends to load-balance across several servers.</p>
+                        <button type="button" onclick="addBackendRow('udp')" class="btn-secondary text-xs" style="height:24px;padding:0 8px"><i class="ph-bold ph-plus text-xs"></i> Add backend</button>
+                    </div>
+                    <input type="hidden" name="backendsJsonUdp" id="backendsJsonUdp">
                     <div>
                         <label>Entry Point</label>
                         <input type="hidden" name="udpEntryPoint" id="entryPointsUdp">

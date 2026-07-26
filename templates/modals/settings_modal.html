@@ -736,6 +736,10 @@
                                 <i id="staticHdrAddIcon" class="ph-bold ph-plus text-xs" style="color:var(--blue)"></i>
                                 <span id="staticHdrAddLabel">Entrypoint</span>
                             </button>
+                            <button onclick="openTrustedIpsHelper()" class="btn-secondary text-xs flex items-center gap-1.5" title="Add trusted proxy IPs to an entrypoint" style="height:28px;padding:0 10px">
+                                <i class="ph-bold ph-shield-check text-xs" style="color:var(--green)"></i>
+                                Trusted IPs
+                            </button>
                             <button onclick="openStaticYamlPopout()" class="btn-secondary text-xs flex items-center gap-1.5" style="height:28px;padding:0 10px">
                                 <i class="ph-bold ph-code text-xs"></i>
                                 Raw YAML
@@ -861,12 +865,19 @@
                                 </div>
                                 <div class="toggle-switch" id="toggle-api-link" onclick="toggleApiLink()"><div class="toggle-knob"></div></div>
                             </div>
-                            <div class="flex items-center justify-between" style="padding:10px 12px;">
+                            <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
                                 <div>
                                     <div class="text-xs font-medium" style="color:var(--text)">Show keyboard shortcuts button</div>
                                     <div class="text-xs" style="color:var(--muted)">Quick reference panel for keyboard shortcuts.</div>
                                 </div>
                                 <div class="toggle-switch" id="toggle-shortcuts-btn" onclick="toggleShortcutsBtn()"><div class="toggle-knob"></div></div>
+                            </div>
+                            <div class="flex items-center justify-between" style="padding:10px 12px;">
+                                <div>
+                                    <div class="text-xs font-medium" style="color:var(--text)">Show Client IP Diagnostic button</div>
+                                    <div class="text-xs" style="color:var(--muted)">Read-only tool showing the client IP this instance sees for your request.</div>
+                                </div>
+                                <div class="toggle-switch" id="toggle-ipdiag-btn" onclick="toggleIpDiagBtn()"><div class="toggle-knob"></div></div>
                             </div>
                         </div>
                     </div>
@@ -1010,6 +1021,11 @@
                                         <label class="settings-section-label">Traefik API URL</label>
                                         <input id="agCfgTraefikUrl" type="text" class="input-field text-xs" value="http://traefik:8080" oninput="agentCfgChanged()">
                                         <p class="text-xs mt-1" style="color:var(--muted)">Internal Traefik API - typically <code>http://traefik:8080</code> (not the public dashboard URL)</p>
+                                    </div>
+                                    <div>
+                                        <label class="settings-section-label">Certificate Resolver <span style="color:var(--muted)">(optional)</span></label>
+                                        <input id="agCfgCertResolver" type="text" class="input-field text-xs" placeholder="cloudflare, letsencrypt" oninput="agentCfgChanged()">
+                                        <p class="text-xs mt-1" style="color:var(--muted)">Cert resolver names for this server's Traefik, comma-separated. Resolvers already used by this server's routes are detected automatically from its Traefik API, so this is only needed for a resolver no route uses yet.</p>
                                     </div>
                                     <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;background:var(--input-bg);border:1px solid var(--border)">
                                         <div>
@@ -2312,6 +2328,14 @@ function toggleShortcutsBtn() {
     if (t) t.classList.toggle('on', !show);
 }
 
+function toggleIpDiagBtn() {
+    const show = localStorage.getItem('showIpDiagBtn') !== 'false';
+    localStorage.setItem('showIpDiagBtn', show ? 'false' : 'true');
+    document.documentElement.classList.toggle('tm-hide-ipdiag', show);
+    const t = document.getElementById('toggle-ipdiag-btn');
+    if (t) t.classList.toggle('on', !show);
+}
+
 function toggleDocsLink() {
     const show = localStorage.getItem('showDocsLink') !== 'false';
     localStorage.setItem('showDocsLink', show ? 'false' : 'true');
@@ -2462,6 +2486,8 @@ function loadUiTogglesIntoModal() {
     if (ep) ep.classList.toggle('on', _uiPref('showEntrypoints'));
     if (cs) cs.classList.toggle('on', localStorage.getItem('compactStatCards') === 'true');
     if (sh) sh.classList.toggle('on', localStorage.getItem('showShortcutsBtn') !== 'false');
+    const ipd = document.getElementById('toggle-ipdiag-btn');
+    if (ipd) ipd.classList.toggle('on', localStorage.getItem('showIpDiagBtn') !== 'false');
     const ri = document.getElementById('toggle-route-icons');
     if (ri) ri.classList.toggle('on', localStorage.getItem('showRouteIcons') === 'true');
     loadGeoipSettings();
@@ -2997,6 +3023,7 @@ async function openAgentSetup(id, titleOverride) {
         const a    = (data.agents || []).find(x => x.id === id);
         if (a) {
             if (a.traefik_api_url)    document.getElementById('agCfgTraefikUrl').value  = a.traefik_api_url;
+            document.getElementById('agCfgCertResolver').value = a.cert_resolver || '';
             const tlsEl = document.getElementById('agCfgInsecureTLS');
             if (tlsEl) { tlsEl.classList.toggle('on', !!a.traefik_insecure_skip_verify); }
             if (a.config_path)        document.getElementById('agCfgConfigPath').value  = a.config_path;
@@ -3046,6 +3073,7 @@ function resetAgentWizard() {
 
 function resetAgentWizardCfgFields() {
     document.getElementById('agCfgTraefikUrl').value  = 'http://traefik:8080';
+    document.getElementById('agCfgCertResolver').value = '';
     document.getElementById('agCfgConfigPath').value  = '/app/config';
     document.getElementById('agCfgStaticPath').value  = '';
     document.getElementById('agCfgBackupDir').value   = '';
@@ -3199,6 +3227,7 @@ document.getElementById('agCfgGitEnabled').addEventListener('change', function()
 function buildAgentCfgPayload() {
     return {
         traefik_api_url:          document.getElementById('agCfgTraefikUrl').value.trim(),
+        cert_resolver:            document.getElementById('agCfgCertResolver').value.trim(),
         traefik_insecure_skip_verify: document.getElementById('agCfgInsecureTLS')?.classList.contains('on') || false,
         config_path:        document.getElementById('agCfgConfigPath').value.trim(),
         static_config_path: document.getElementById('agCfgStaticPath').value.trim(),

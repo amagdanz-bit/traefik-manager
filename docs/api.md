@@ -65,11 +65,31 @@ When multiple config files are loaded, route `id` is prefixed as `configFile::na
 | `enabled` | boolean | |
 | `protocol` | string | `http`, `tcp`, or `udp` |
 | `rule` | string | Traefik rule expression |
-| `target` | string | Backend URL |
+| `target` | string | First backend. Kept for backwards compatibility; same as `servers[0]` |
+| `servers` | string[] | All backends. URLs for HTTP, `host:port` for TCP and UDP |
+| `sticky` | object | `loadBalancer.sticky.cookie`, or `{}` when off. HTTP only |
+| `stickyEnabled` | boolean | Whether a sticky block is present. HTTP only |
+| `healthCheck` | object | `loadBalancer.healthCheck`, or `{}` when unset. HTTP only |
+| `priority` | integer \| null | Router priority, `null` when unset. HTTP and TCP only |
 | `middlewares` | string[] | Applied middleware names |
 | `tls` | boolean | |
 | `certResolver` | string | ACME resolver name, or empty for external certs |
 | `configFile` | string | Source config file |
+
+---
+
+### `GET /api/routes/all`
+
+Same shape as `GET /api/routes`, but nothing is filtered out: routes discovered from other Traefik providers (Docker, Kubernetes, and the rest) are enriched from the live Traefik API, and Traefik's own `@internal` routers are included.
+
+```json
+{
+  "apps": [ /* Route[] */ ],
+  "middlewares": [ /* Middleware[] */ ]
+}
+```
+
+Use this when you want a complete picture of everything Traefik is serving. Use `/api/routes` when you only want the routes this instance manages in its own dynamic config files. Unlike `/api/routes`, this endpoint does not return `configErrors`.
 
 ---
 
@@ -81,8 +101,11 @@ Create or update a route. Accepts `application/x-www-form-urlencoded`.
 |---|---|---|
 | `serviceName` | string | Route name |
 | `subdomain` | string | Hostname (e.g. `app.example.com`) |
-| `targetIp` | string | Backend host |
+| `targetIp` | string | Backend host. Ignored when the matching `backendsJson*` field is sent |
 | `targetPort` | string | Backend port |
+| `backendsJsonHttp` | string (JSON) | HTTP service definition - see [Multiple backends](#multiple-backends) below |
+| `backendsJsonTcp` | string (JSON) | TCP service definition |
+| `backendsJsonUdp` | string (JSON) | UDP service definition |
 | `protocol` | string | `http`, `tcp`, or `udp` |
 | `middlewares` | string | Comma-separated middleware names |
 | `scheme` | string | `http` or `https` (default: `http`) |
@@ -93,6 +116,31 @@ Create or update a route. Accepts `application/x-www-form-urlencoded`.
 | `configFile` | string | Target config file (multi-config only) |
 | `isEdit` | boolean | `true` when updating an existing route |
 | `originalId` | string | Original route ID when renaming |
+
+#### Multiple backends
+
+A service can point at several servers. Send the `backendsJson*` field matching the protocol; it takes precedence over `targetIp`/`targetPort`, which stay supported for single-backend clients.
+
+```json
+{
+  "servers": [
+    { "scheme": "http", "host": "192.168.1.10", "port": "8080" },
+    { "scheme": "http", "host": "192.168.1.11", "port": "8080" }
+  ],
+  "sticky":      { "enabled": true, "cookieName": "tm_sticky", "secure": true, "httpOnly": true },
+  "healthCheck": { "enabled": true, "path": "/health", "interval": "10s", "timeout": "3s" },
+  "priority": 10
+}
+```
+
+- A `host` already starting with `http://` or `https://` is used verbatim; otherwise `scheme://host:port` is built.
+- Rows with an empty `host` are skipped. Invalid JSON falls back to `targetIp`/`targetPort` rather than failing the save.
+- `interval` and `timeout` take Go durations (`10s`, `1m`); a bare number is read as seconds.
+- `sticky`, `healthCheck`, and `priority` apply to HTTP. TCP accepts `servers` and `priority`; UDP accepts `servers` only.
+
+::: tip Editing from a single-backend client
+A save that omits `backendsJson*` on an edit replaces only the **first** backend. Any additional backends, plus `sticky`, `healthCheck`, and `priority`, are preserved. This is what keeps the mobile app and older cached pages from wiping a multi-backend route.
+:::
 
 ---
 
@@ -250,6 +298,31 @@ Tail Traefik access logs. Requires `ACCESS_LOG_PATH`.
 | Query param | Default | Max |
 |---|---|---|
 | `lines` | `100` | `1000` |
+
+---
+
+### `GET /api/diagnostics/client-ip`
+
+Read-only diagnostic for the current request. Returns what the app sees as the client after `ProxyFix`, the raw socket peer, the forwarding headers as received, the number of trusted proxy hops, and a scope classification (`public`, `private`, `cgnat`, `loopback`, `link-local` or `unknown`) for each observed IP.
+
+```json
+{
+  "effective_ip": "203.0.113.5",
+  "effective_class": "public",
+  "socket_peer": "172.20.0.1",
+  "socket_peer_class": "private",
+  "headers": {
+    "X-Forwarded-For": "203.0.113.5",
+    "X-Real-IP": "",
+    "CF-Connecting-IP": "",
+    "X-Forwarded-Proto": "https",
+    "X-Forwarded-Host": "example.com"
+  },
+  "forwarded_for_chain": ["203.0.113.5"],
+  "proxy_hops": 1,
+  "classes": { "203.0.113.5": "public", "172.20.0.1": "private" }
+}
+```
 
 ---
 
@@ -670,6 +743,48 @@ Update a single named section of the static config without writing raw YAML.
 | `providers` | `add`, `edit`, `remove` | `name` = provider type key, `yaml_config` = YAML body |
 
 Response includes the updated `raw` YAML and `parsed` object.
+
+---
+
+### `POST /api/static/trusted-ips/preview`
+
+Compute the result of adding `forwardedHeaders.trustedIPs` to an entrypoint, without writing anything to disk. Backs the **Trusted IPs** helper in the Static Config editor.
+
+Trusting a proxy's IP makes Traefik believe its `X-Forwarded-For`, which then feeds the access logs, CrowdSec, `ipAllowList`, and the login rate-limiter. Only trust proxies you control.
+
+The merge is **additive with dedup**: existing entries are kept, and ranges already covered are skipped by normalized network (so `10.5.5.5/8` will not re-add `10.0.0.0/8`). Sibling keys under `forwardedHeaders`, other entrypoints, and YAML comments are all preserved. The endpoint never saves - the returned `raw` is persisted by the client through [`POST /api/static/config`](#post-api-static-config), which is why it works identically on the Host and on a remote agent.
+
+Called in two modes.
+
+**Inspect** (no `entrypoint`) - lists entrypoints and the presets:
+
+```json
+{ "current_raw": "entryPoints:\n  websecure:\n    address: ':443'\n" }
+```
+
+**Preview** (with `entrypoint`) - also returns the merge:
+
+```json
+{
+  "current_raw": "entryPoints:\n  websecure:\n    address: ':443'\n",
+  "entrypoint": "websecure",
+  "cloudflare": true,
+  "private": false,
+  "custom_cidrs": "203.0.113.10, 198.51.100.0/24"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `current_raw` | string | Static config YAML to operate on. Falls back to the file on disk when empty. |
+| `entrypoint` | string | Target entrypoint. Omit for inspect mode. |
+| `cloudflare` | boolean | Include the built-in Cloudflare edge ranges. |
+| `private` | boolean | Include the private-range preset (`10/8`, `172.16/12`, `192.168/16`, `fc00::/7`). |
+| `custom_cidrs` | string \| string[] | Extra CIDRs or IPs, comma/whitespace-separated or an array. Invalid entries are returned in `invalid` and skipped. |
+
+Inspect mode returns `ok`, `entrypoints` (each with `name`, `address`, `trusted_ips`), `cloudflare_captured`, `cloudflare_ranges`, and `private_ranges`. Preview mode adds `entrypoint`, `existing`, `added`, `invalid`, `final`, the merged `raw` YAML, and the `parsed` object.
+
+Returns `400` if the named entrypoint is absent or the config is not a mapping, and `404` if there is no static config on disk and no `current_raw` was supplied.
 
 ---
 

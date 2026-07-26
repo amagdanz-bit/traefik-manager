@@ -20,7 +20,7 @@ Each agent card in Settings - Agents has four action buttons:
 
 When a remote agent is active:
 
-- **Routes** - The Routes tab shows the agent's routes fetched live from the remote Traefik instance. You can add, edit, delete, and toggle routes exactly as you would locally - changes are written to the agent's config files and a `.bak` backup is created before every write. The Config File selector in the Add/Edit Route modal lists the agent's actual config files (fetched live), not the Host's config files. If the agent has **Domains** configured (Settings - Agents - Traefik tab) or existing routes to detect domains from, the Add/Edit Route modal shows domain chip selectors - the same experience as the Host, including domains auto-detected from the agent's routes and a **+** chip for ad-hoc entry. Without any domains, the Subdomain field becomes a free-form **Hostname** field (enter the full hostname, e.g. `app.example.com`). Entrypoints in the route form are fetched live from the agent's Traefik instance.
+- **Routes** - The Routes tab shows the agent's routes fetched live from the remote Traefik instance. You can add, edit, delete, and toggle routes exactly as you would locally - changes are written to the agent's config files and a `.bak` backup is created before every write. The Config File selector in the Add/Edit Route modal lists the agent's actual config files (fetched live), not the Host's config files. If the agent has **Domains** configured (Settings - Agents - Traefik tab) or existing routes to detect domains from, the Add/Edit Route modal shows domain chip selectors - the same experience as the Host, including domains auto-detected from the agent's routes and a **+** chip for ad-hoc entry. Without any domains, the Subdomain field becomes a free-form **Hostname** field (enter the full hostname, e.g. `app.example.com`). Entrypoints in the route form are fetched live from the agent's Traefik instance. The **Security headers** and **Optimize for streaming** presets are available on agents too - the generated middleware and `serversTransport` are written to that agent's own config. Cert resolvers offered in the route form are detected automatically from the agent's Traefik API - any resolver already used by one of that server's routers is offered, so no extra configuration is needed. Resolvers found in the agent's static config are merged in when it is mounted, and the optional **Certificate Resolver** field (Settings - Agents - Traefik tab) lets you add resolver names that aren't in use by any route yet.
 - **Middlewares** - The Middlewares tab shows only middlewares managed by TM - those in config files under `CONFIG_PATH` with the `@file` provider suffix. Traefik built-in and other provider middlewares are excluded from the badge count and the chip selector. You can add and edit middlewares on the agent exactly as you would locally.
 - **Services** - Shows the agent's services from the remote Traefik API.
 - **Route Map** - The route map diagram renders the agent's routes and services.
@@ -124,6 +124,8 @@ sudo systemctl enable --now tma
 | Variable | Default | Description |
 |---|---|---|
 | `TRAEFIK_API_URL` | `http://traefik:8080` | Traefik API URL. Use `http://traefik:8080` when TMA runs alongside Traefik on the same Docker network, or a public HTTPS URL for a remote Traefik instance. |
+| `TRAEFIK_API_USER` | - | Username for a Traefik API behind basic auth. Set together with `TRAEFIK_API_PASSWORD`; when both are set the agent sends HTTP Basic Auth on every Traefik API call. Leave empty for an unauthenticated API. |
+| `TRAEFIK_API_PASSWORD` | - | Password paired with `TRAEFIK_API_USER`. |
 | `TRAEFIK_INSECURE_SKIP_VERIFY` | `false` | Skip TLS certificate verification for HTTPS Traefik API URLs. Useful when using a self-signed cert or Cloudflare Origin Certificate. |
 | `CONFIG_PATH` | `/app/config` | Dynamic config directory or file |
 | `STATIC_CONFIG_PATH` | - | Path to `traefik.yml` - enables static config R/W |
@@ -224,6 +226,7 @@ Instead of configuring `GIT_BACKUP_*` on every agent, you can enable **Use Host 
 |---|---|---|
 | `TMA_PORT` | `8090` | Listening port |
 | `TMA_RATE_LIMIT` | `300` | Requests per minute per IP (0 = disabled) |
+| `TMA_DEBUG` | `false` | When `true`, log each failed Traefik API call (the request URL and the returned status) to the journal. Off by default; the agent otherwise only logs startup and fatal errors. Turn it on when a tab shows "could not load" and you need to see why (for example a `401` from an authenticated API). |
 
 `TMA_PORT` and `TMA_RATE_LIMIT` can also be set from the **Settings - Agents** wizard. They appear as optional fields in the configuration step; leave them blank to use the defaults. The generated Docker Compose only includes these env vars when a non-default value is entered.
 
@@ -284,3 +287,25 @@ Check the agent's `TRAEFIK_API_URL`:
 - Test it from the agent host: `docker exec <agent-container> wget -qO- http://traefik:8080/api/http/routers` - it should return JSON.
 
 For HTTPS Traefik API URLs with a self-signed or Cloudflare Origin certificate, set `TRAEFIK_INSECURE_SKIP_VERIFY=true`.
+
+**The Traefik API is behind basic auth (returns `401`)**
+
+If your Traefik API sits behind a `basicAuth` middleware or a protected dashboard route, every agent call comes back `traefik returned status 401` and the tabs show "could not load". Either point `TRAEFIK_API_URL` at the internal, unauthenticated API (usually `http://localhost:8080` with `api.insecure: true` bound to localhost, on the same host as Traefik), or keep the authenticated URL and give the agent credentials:
+
+```
+TRAEFIK_API_USER=youruser
+TRAEFIK_API_PASSWORD=yourpassword
+```
+
+When both are set the agent sends HTTP Basic Auth on every Traefik API call. The setup wizard also asks for these when you tell it the Traefik API is behind basic auth.
+
+**Viewing the agent's logs (binary install)**
+
+The binary install runs the agent as a systemd service, so its output is in the journal, not a file:
+
+```bash
+sudo journalctl -u tma -n 200 --no-pager
+sudo journalctl -u tma -f
+```
+
+By default the agent only logs its startup line and fatal errors - per-request failures are returned to the Manager, not logged. Set `TMA_DEBUG=true` to log each failed Traefik API call (URL and status) to the journal, then reproduce the error. The startup line also shows the active config, e.g. `traefik=http://localhost:8080, insecure-tls=false, traefik-auth=true, debug=true`.

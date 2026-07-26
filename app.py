@@ -7,6 +7,7 @@ import logging
 import threading
 import subprocess
 import fcntl
+import ipaddress
 import contextlib
 import requests
 import urllib3
@@ -25,7 +26,7 @@ from io import StringIO
 from cryptography.fernet import Fernet, InvalidToken
 
 GITHUB_REPO  = "chr0nzz/traefik-manager"
-APP_VERSION  = "1.7.3"
+APP_VERSION  = "1.8.0"
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -36,8 +37,15 @@ logging.basicConfig(
 logger = logging.getLogger("traefik-manager")
 
 
+def _proxy_fix_hops() -> int:
+    try:
+        return max(0, int(os.environ.get('PROXY_FIX_HOPS', '1')))
+    except ValueError:
+        return 1
+
 app = Flask(__name__)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+PROXY_FIX_HOPS = _proxy_fix_hops()
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=PROXY_FIX_HOPS, x_proto=1, x_host=1)
 
 _CONFIG_DIR      = os.path.dirname(os.environ.get('SETTINGS_PATH', '/app/config/manager.yml'))
 _SECRET_KEY_PATH = os.path.join(_CONFIG_DIR, '.secret_key')
@@ -118,6 +126,7 @@ def _parse_agent_dict(a: dict) -> dict:
         'created_at': str(a.get('created_at', '')),
         'traefik_api_url':              str(a.get('traefik_api_url', 'http://traefik:8080')).strip(),
         'traefik_insecure_skip_verify': bool(a.get('traefik_insecure_skip_verify', False)),
+        'cert_resolver':                str(a.get('cert_resolver', '')).strip(),
         'config_path':                  str(a.get('config_path', '/app/config')).strip(),
         'backup_dir':                   str(a.get('backup_dir', '')).strip(),
         'backup_keep_count':            str(a.get('backup_keep_count', '')).strip(),
@@ -636,6 +645,7 @@ def load_settings() -> dict:
         'otp_secret':           '',
         'otp_enabled':          False,
         'disabled_routes':      {},
+        'managed_middlewares':  {},
         'api_keys':             [],
         'api_key_enabled':      False,
         'self_route':           {'domain': '', 'service_url': ''},
@@ -726,6 +736,8 @@ def load_settings() -> dict:
                 merged['setup_complete'] = True
         if 'disabled_routes' in data and isinstance(data['disabled_routes'], dict):
             merged['disabled_routes'] = dict(data['disabled_routes'])
+        if 'managed_middlewares' in data and isinstance(data['managed_middlewares'], dict):
+            merged['managed_middlewares'] = dict(data['managed_middlewares'])
         if 'api_keys' in data and isinstance(data['api_keys'], list):
             keys = []
             for k in data['api_keys']:
@@ -841,6 +853,7 @@ def save_settings(domains, cert_resolver, traefik_api_url,
                   otp_secret=None, otp_enabled=None,
                   api_keys=None,
                   disabled_routes=None,
+                  managed_middlewares=None,
                   self_route=None,
                   acme_json_path=None,
                   access_log_path=None,
@@ -878,6 +891,8 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         self_route = _cur.get('self_route', {'domain': '', 'service_url': ''})
     if disabled_routes is None:
         disabled_routes = _cur.get('disabled_routes', {})
+    if managed_middlewares is None:
+        managed_middlewares = _cur.get('managed_middlewares', {})
     if acme_json_path is None:
         acme_json_path = _cur.get('acme_json_path', '')
     if default_theme is None:
@@ -971,6 +986,7 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         'otp_secret':           otp_secret,
         'otp_enabled':          otp_enabled,
         'disabled_routes':      disabled_routes,
+        'managed_middlewares':  managed_middlewares,
         'api_keys':             api_keys,
         'api_key_enabled':      len(list(api_keys)) > 0,
         'self_route':           self_route,
@@ -1238,6 +1254,7 @@ logger.info(f"Settings Path:  {SETTINGS_PATH}")
 logger.info(f"Backup Dir:     {BACKUP_DIR}")
 logger.info(f"Traefik API:    {_s['traefik_api_url']}")
 logger.info(f"Restart Method: {_restart_meth}")
+logger.info(f"Trusted Hops:   {PROXY_FIX_HOPS}")
 logger.info(f"Static Config:  {_static_path if _static_path else 'not configured'}")
 logger.info(f"Domains:        {_s['domains']}")
 logger.info(f"Cert Resolver:  {_s['cert_resolver'] or 'not set'}")
@@ -2667,6 +2684,143 @@ def api_static_section_update():
         return jsonify({'error': str(e)}), 500
 
 
+# Cloudflare edge ranges for forwardedHeaders.trustedIPs, captured 2026-07-23 from
+# https://www.cloudflare.com/ips/ (https://www.cloudflare.com/ips-v4 + /ips-v6).
+# Refresh on release: replace both lists from that source and bump _CLOUDFLARE_IPS_CAPTURED.
+_CLOUDFLARE_IPS_CAPTURED = '2026-07-23'
+_CLOUDFLARE_IPS_V4 = [
+    '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+    '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+    '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+    '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+]
+_CLOUDFLARE_IPS_V6 = [
+    '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32',
+    '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
+]
+_PRIVATE_IP_RANGES = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', 'fc00::/7']
+
+
+def _trusted_ip_key(cidr: str) -> str:
+    try:
+        return str(ipaddress.ip_network(str(cidr).strip(), strict=False))
+    except ValueError:
+        return str(cidr).strip().lower()
+
+
+def _is_valid_cidr(cidr: str) -> bool:
+    try:
+        ipaddress.ip_network(str(cidr).strip(), strict=False)
+        return True
+    except ValueError:
+        return False
+
+
+def _merge_trusted_ips(existing: list, additions: list) -> tuple:
+    seen = {_trusted_ip_key(x) for x in existing}
+    added = []
+    for cidr in additions:
+        key = _trusted_ip_key(cidr)
+        if key in seen:
+            continue
+        seen.add(key)
+        added.append(cidr)
+    return list(existing) + added, added
+
+
+def _parse_cidr_input(raw) -> list:
+    if isinstance(raw, list):
+        parts = [str(x) for x in raw]
+    else:
+        parts = re.split(r'[\s,]+', str(raw or ''))
+    return [p.strip() for p in parts if p.strip()]
+
+
+@app.route('/api/static/trusted-ips/preview', methods=['POST'])
+@csrf_protect
+@login_required
+def api_static_trusted_ips_preview():
+    req = request.get_json(silent=True) or {}
+    current_raw = req.get('current_raw', '')
+    entrypoint  = str(req.get('entrypoint', '')).strip()
+    try:
+        _y = YAML()
+        _y.preserve_quotes = True
+        if current_raw:
+            config = _y.load(StringIO(current_raw)) or {}
+        else:
+            path = _get_static_config_path()
+            if not path or not os.path.exists(path):
+                return jsonify({'error': 'Static config not found'}), 404
+            with open(path, 'r') as f:
+                config = _y.load(f) or {}
+        if not isinstance(config, dict):
+            return jsonify({'error': 'Static config is not a mapping'}), 400
+        ep_key = 'entryPoints' if 'entryPoints' in config else ('entrypoints' if 'entrypoints' in config else 'entryPoints')
+        eps = config.get(ep_key)
+        summary = []
+        if isinstance(eps, dict):
+            for nm, cfg in eps.items():
+                cur = []
+                addr = ''
+                if isinstance(cfg, dict):
+                    addr = str(cfg.get('address', ''))
+                    fh = cfg.get('forwardedHeaders')
+                    if isinstance(fh, dict) and isinstance(fh.get('trustedIPs'), list):
+                        cur = [str(x) for x in fh['trustedIPs']]
+                summary.append({'name': str(nm), 'address': addr, 'trusted_ips': cur})
+        resp = {
+            'ok': True,
+            'entrypoints': summary,
+            'cloudflare_captured': _CLOUDFLARE_IPS_CAPTURED,
+            'cloudflare_ranges': _CLOUDFLARE_IPS_V4 + _CLOUDFLARE_IPS_V6,
+            'private_ranges': _PRIVATE_IP_RANGES,
+        }
+        if not entrypoint:
+            return jsonify(resp)
+        if not isinstance(eps, dict) or entrypoint not in eps:
+            return jsonify({'error': f'Entrypoint "{entrypoint}" not found in static config'}), 400
+        custom  = _parse_cidr_input(req.get('custom_cidrs', []))
+        invalid = [c for c in custom if not _is_valid_cidr(c)]
+        additions = []
+        if req.get('cloudflare'):
+            additions += _CLOUDFLARE_IPS_V4 + _CLOUDFLARE_IPS_V6
+        if req.get('private'):
+            additions += _PRIVATE_IP_RANGES
+        additions += [c for c in custom if _is_valid_cidr(c)]
+        ep = eps.get(entrypoint)
+        if not isinstance(ep, dict):
+            ep = {}
+        fh = ep.get('forwardedHeaders') if isinstance(ep.get('forwardedHeaders'), dict) else {}
+        cur_seq = fh.get('trustedIPs')
+        existing = [str(x) for x in cur_seq] if isinstance(cur_seq, list) else []
+        final, added = _merge_trusted_ips(existing, additions)
+        if isinstance(cur_seq, list):
+            for c in added:
+                cur_seq.append(DoubleQuotedScalarString(c))
+        else:
+            fh['trustedIPs'] = [DoubleQuotedScalarString(c) for c in final]
+        ep['forwardedHeaders'] = fh
+        eps[entrypoint] = ep
+        stream = StringIO()
+        _y.dump(config, stream)
+        new_raw = stream.getvalue()
+        parsed = SafeYAML(typ='safe').load(new_raw) or {}
+        resp.update({
+            'entrypoint': entrypoint,
+            'existing': existing,
+            'added': added,
+            'final': final,
+            'invalid': invalid,
+            'raw': new_raw,
+            'parsed': parsed,
+        })
+        return jsonify(resp)
+    except Exception as e:
+        logger.exception("Trusted IPs preview failed")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/setup/test-connection', methods=['POST'])
 @login_required
 def api_setup_test_connection():
@@ -3995,6 +4149,52 @@ def api_geoip_update():
     return jsonify({'success': False, 'error': f'Download failed: {info}'}), 502
 
 
+_CGNAT_NETWORK = ipaddress.ip_network('100.64.0.0/10')
+
+def _classify_ip(ip: str) -> str:
+    try:
+        addr = ipaddress.ip_address((ip or '').strip())
+    except ValueError:
+        return 'unknown'
+    if addr.is_loopback:
+        return 'loopback'
+    if addr.is_link_local:
+        return 'link-local'
+    if addr.version == 4 and addr in _CGNAT_NETWORK:
+        return 'cgnat'
+    if addr.is_private:
+        return 'private'
+    return 'public'
+
+
+@app.route('/api/diagnostics/client-ip')
+@login_required
+def api_client_ip_diagnostic():
+    orig        = request.environ.get('werkzeug.proxy_fix.orig') or {}
+    socket_peer = orig.get('REMOTE_ADDR', '') or ''
+    headers     = {
+        'X-Forwarded-For':   request.headers.get('X-Forwarded-For', ''),
+        'X-Real-IP':         request.headers.get('X-Real-IP', ''),
+        'CF-Connecting-IP':  request.headers.get('CF-Connecting-IP', ''),
+        'X-Forwarded-Proto': request.headers.get('X-Forwarded-Proto', ''),
+        'X-Forwarded-Host':  request.headers.get('X-Forwarded-Host', ''),
+    }
+    xff_chain = [p.strip() for p in headers['X-Forwarded-For'].split(',') if p.strip()]
+    effective = request.remote_addr or ''
+    seen      = [ip for ip in [effective, socket_peer, *xff_chain] if ip]
+    classes   = {ip: _classify_ip(ip) for ip in seen}
+    return jsonify({
+        'effective_ip':        effective,
+        'effective_class':     _classify_ip(effective),
+        'socket_peer':         socket_peer,
+        'socket_peer_class':   _classify_ip(socket_peer),
+        'headers':             headers,
+        'forwarded_for_chain': xff_chain,
+        'proxy_hops':          PROXY_FIX_HOPS,
+        'classes':             classes,
+    })
+
+
 @app.route('/api/settings/backup-retention', methods=['POST'])
 @csrf_protect
 @login_required
@@ -4193,7 +4393,8 @@ def _merge_router(section: dict, name: str, new: dict, managed: tuple) -> None:
     _apply_managed_keys(existing, new, managed)
 
 
-def _merge_service(section: dict, name: str, new_lb: dict, server_key: str, transport_name: str) -> None:
+def _merge_service(section: dict, name: str, new_lb: dict, server_key: str, transport_name: str,
+                   managed_backends: bool = False) -> None:
     existing = section.get(name)
     existing_lb = existing.get('loadBalancer') if isinstance(existing, dict) else None
     if not isinstance(existing_lb, dict):
@@ -4203,10 +4404,18 @@ def _merge_service(section: dict, name: str, new_lb: dict, server_key: str, tran
         return
     servers = existing_lb.get('servers')
     new_servers = new_lb.get('servers') or []
-    if isinstance(servers, list) and servers and isinstance(servers[0], dict) and new_servers:
+    if managed_backends:
+        existing_lb['servers'] = new_servers
+    elif isinstance(servers, list) and servers and isinstance(servers[0], dict) and new_servers:
         servers[0][server_key] = new_servers[0][server_key]
     else:
         existing_lb['servers'] = new_servers
+    if managed_backends:
+        for key in ('sticky', 'healthCheck'):
+            if key in new_lb:
+                existing_lb[key] = new_lb[key]
+            elif key in existing_lb:
+                del existing_lb[key]
     if 'passHostHeader' in new_lb:
         existing_lb['passHostHeader'] = new_lb['passHostHeader']
     elif 'passHostHeader' in existing_lb:
@@ -4215,6 +4424,214 @@ def _merge_service(section: dict, name: str, new_lb: dict, server_key: str, tran
         existing_lb['serversTransport'] = new_lb['serversTransport']
     elif existing_lb.get('serversTransport') == transport_name:
         del existing_lb['serversTransport']
+
+
+def _parse_backends_json(raw):
+    import json as _json
+    if not raw:
+        return None
+    try:
+        data = _json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _clean_priority(value):
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
+def _clean_duration(value):
+    v = str(value or '').strip()
+    if not v:
+        return ''
+    if v.isdigit():
+        return v + 's'
+    return v if re.match(r'^\d+(ms|s|m|h)$', v) else ''
+
+
+def _backend_servers(rows, key, scheme_default='http'):
+    servers = []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        host = str(row.get('host') or '').strip()
+        if not host:
+            continue
+        port = str(row.get('port') or '').strip()
+        if key == 'url':
+            if host.startswith('http://') or host.startswith('https://'):
+                servers.append({'url': host})
+            else:
+                scheme = str(row.get('scheme') or scheme_default).strip() or scheme_default
+                servers.append({'url': f"{scheme}://{host}:{port}" if port else f"{scheme}://{host}"})
+        else:
+            servers.append({key: f"{host}:{port}" if port else host})
+    return servers
+
+
+def _sticky_block(sticky):
+    if not isinstance(sticky, dict) or not sticky.get('enabled'):
+        return None
+    cookie = {}
+    name = str(sticky.get('cookieName') or '').strip()
+    if name:
+        cookie['name'] = name
+    if sticky.get('secure'):
+        cookie['secure'] = True
+    if sticky.get('httpOnly'):
+        cookie['httpOnly'] = True
+    return {'cookie': cookie}
+
+
+def _healthcheck_block(hc):
+    if not isinstance(hc, dict) or not hc.get('enabled'):
+        return None
+    path = str(hc.get('path') or '').strip()
+    if not path:
+        return None
+    block = {'path': path}
+    for field in ('interval', 'timeout'):
+        val = _clean_duration(hc.get(field))
+        if val:
+            block[field] = val
+    return block
+
+
+def _streaming_forwarding_timeouts() -> dict:
+    return {'dialTimeout': '30s', 'responseHeaderTimeout': '0s', 'idleConnTimeout': '90s'}
+
+
+def _json_plain(value: object) -> object:
+    import json as _json
+    try:
+        return _json.loads(_json.dumps(value, default=str))
+    except (TypeError, ValueError):
+        return value
+
+
+HEADERS_PRESET_FEATURES = (
+    'geolocation', 'camera', 'microphone', 'fullscreen', 'autoplay',
+    'payment', 'usb', 'display-capture', 'accelerometer', 'gyroscope', 'magnetometer',
+)
+HEADERS_PRESET_SELF_DEFAULT = ('geolocation', 'camera', 'microphone', 'fullscreen', 'autoplay')
+HEADERS_PRESET_HSTS_SECONDS = 31536000
+HEADERS_PRESET_REFERRER_DEFAULT = 'strict-origin-when-cross-origin'
+HEADERS_PRESET_REFERRER_VALUES = {
+    'no-referrer', 'strict-origin-when-cross-origin', 'same-origin',
+    'strict-origin', 'origin-when-cross-origin',
+}
+_PERM_VALUE_TO_TOKEN = {'self': '(self)', 'all': '*', 'block': '()'}
+_PERM_TOKEN_TO_VALUE = {'(self)': 'self', '*': 'all', '()': 'block'}
+_HEADERS_PRESET_KEYS = {
+    'customResponseHeaders', 'stsSeconds', 'stsIncludeSubdomains',
+    'contentTypeNosniff', 'frameDeny', 'referrerPolicy',
+}
+
+
+def _headers_preset_defaults() -> dict:
+    return {
+        'perms': {f: ('self' if f in HEADERS_PRESET_SELF_DEFAULT else 'block') for f in HEADERS_PRESET_FEATURES},
+        'hsts': True,
+        'nosniff': True,
+        'frameDeny': True,
+        'referrer': HEADERS_PRESET_REFERRER_DEFAULT,
+    }
+
+
+def _build_permissions_policy(perms: dict) -> str:
+    parts = []
+    for feat in HEADERS_PRESET_FEATURES:
+        token = _PERM_VALUE_TO_TOKEN.get(perms.get(feat, 'block'), '()')
+        parts.append(f"{feat}={token}")
+    return ', '.join(parts)
+
+
+def _build_headers_middleware(toggles: dict) -> dict:
+    headers = {}
+    pp = _build_permissions_policy(toggles.get('perms') or {})
+    if pp:
+        headers['customResponseHeaders'] = {'Permissions-Policy': pp}
+    if toggles.get('hsts'):
+        headers['stsSeconds'] = HEADERS_PRESET_HSTS_SECONDS
+        headers['stsIncludeSubdomains'] = True
+    if toggles.get('nosniff'):
+        headers['contentTypeNosniff'] = True
+    if toggles.get('frameDeny'):
+        headers['frameDeny'] = True
+    ref = (toggles.get('referrer') or '').strip()
+    if ref:
+        headers['referrerPolicy'] = ref
+    return {'headers': headers}
+
+
+def _parse_permissions_policy(value) -> dict | None:
+    if not isinstance(value, str):
+        return None
+    perms = {f: 'block' for f in HEADERS_PRESET_FEATURES}
+    for token in value.split(','):
+        token = token.strip()
+        if not token or '=' not in token:
+            return None
+        feat, _, raw = token.partition('=')
+        feat = feat.strip()
+        val = _PERM_TOKEN_TO_VALUE.get(raw.strip())
+        if feat not in HEADERS_PRESET_FEATURES or val is None:
+            return None
+        perms[feat] = val
+    return perms
+
+
+def _headers_toggles_from_form(form) -> dict:
+    perms = {}
+    for feat in HEADERS_PRESET_FEATURES:
+        val = form.get(f'hp_perm_{feat}', '')
+        perms[feat] = val if val in ('self', 'all', 'block') else 'block'
+    return {
+        'perms': perms,
+        'hsts': form.get('hp_hsts') == 'true',
+        'nosniff': form.get('hp_nosniff') == 'true',
+        'frameDeny': form.get('hp_frameDeny') == 'true',
+        'referrer': (form.get('hp_referrer') or '').strip(),
+    }
+
+
+def _decode_headers_middleware(body) -> dict | None:
+    plain = _json_plain(body)
+    if not isinstance(plain, dict) or set(plain.keys()) != {'headers'}:
+        return None
+    h = plain.get('headers')
+    if not isinstance(h, dict) or not set(h.keys()).issubset(_HEADERS_PRESET_KEYS):
+        return None
+    toggles = {
+        'perms': {f: 'block' for f in HEADERS_PRESET_FEATURES},
+        'hsts': False, 'nosniff': False, 'frameDeny': False, 'referrer': '',
+    }
+    crh = h.get('customResponseHeaders')
+    if crh is not None:
+        if not isinstance(crh, dict) or set(crh.keys()) - {'Permissions-Policy'}:
+            return None
+        parsed = _parse_permissions_policy(crh.get('Permissions-Policy'))
+        if parsed is None:
+            return None
+        toggles['perms'] = parsed
+    if 'stsSeconds' in h:
+        toggles['hsts'] = True
+    if 'contentTypeNosniff' in h:
+        toggles['nosniff'] = True
+    if 'frameDeny' in h:
+        toggles['frameDeny'] = True
+    if 'referrerPolicy' in h:
+        if h.get('referrerPolicy') not in HEADERS_PRESET_REFERRER_VALUES:
+            return None
+        toggles['referrer'] = h['referrerPolicy']
+    if _build_headers_middleware(toggles) != plain:
+        return None
+    return toggles
 
 
 def save_config(data, path=None):
@@ -4293,7 +4710,9 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
         tls_http = rdata.get('tls', {})
         transport_name = lb.get('serversTransport', '')
         transports_cfg = http_config.get('serversTransports') or {}
-        insecure = bool(_as_dict(transports_cfg.get(transport_name)).get('insecureSkipVerify', False)) if transport_name else False
+        transport_cfg  = _as_dict(transports_cfg.get(transport_name)) if transport_name else {}
+        insecure  = bool(transport_cfg.get('insecureSkipVerify', False))
+        streaming = 'forwardingTimeouts' in transport_cfg
         apps.append({'id': app_id, 'name': rname, 'rule': rdata.get('rule', ''),
                      'service_name': svc_name, 'target': target_url,
                      'middlewares': _to_list(rdata.get('middlewares')),
@@ -4304,6 +4723,12 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
                      'tlsDomains': tls_http.get('domains', []) if isinstance(tls_http, dict) else [],
                      'tlsOptionsProfile': tls_http.get('options', '') if isinstance(tls_http, dict) else '',
                      'insecureSkipVerify': insecure,
+                     'streaming': streaming,
+                     'servers': [str(s.get('url', '')) for s in (lb.get('servers') or []) if isinstance(s, dict) and s.get('url')],
+                     'sticky': (lb.get('sticky') or {}).get('cookie', {}) if isinstance(lb.get('sticky'), dict) else {},
+                     'stickyEnabled': isinstance(lb.get('sticky'), dict),
+                     'healthCheck': lb.get('healthCheck') if isinstance(lb.get('healthCheck'), dict) else {},
+                     'priority': rdata.get('priority'),
                      'serviceType': _service_type(http_svcs.get(svc_key)),
                      'configFile': config_file, 'provider': 'file'})
     tcp_config = config.get('tcp') or {}
@@ -4332,6 +4757,8 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
                      'protocol': 'tcp', 'tls': tls_tcp if isinstance(tls_tcp, dict) else ({} if tls_tcp else None), 'enabled': True,
                      'certResolver': tls_tcp.get('certResolver', '') if isinstance(tls_tcp, dict) else '',
                      'serviceType': _service_type(tcp_svcs.get(svc_key)),
+                     'servers': [str(s.get('address', '')) for s in (_as_dict(_as_dict(tcp_svcs.get(svc_key)).get('loadBalancer')).get('servers') or []) if isinstance(s, dict) and s.get('address')],
+                     'priority': rdata.get('priority'),
                      'configFile': config_file, 'provider': 'file'})
     udp_config = config.get('udp') or {}
     udp_svcs = dict(udp_config.get('services') or {})
@@ -4357,6 +4784,7 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
                      'middlewares': [], 'entryPoints': _to_list(rdata.get('entryPoints')),
                      'protocol': 'udp', 'tls': False, 'enabled': True,
                      'serviceType': _service_type(udp_svcs.get(svc_key)),
+                     'servers': [str(s.get('address', '')) for s in (_as_dict(_as_dict(udp_svcs.get(svc_key)).get('loadBalancer')).get('servers') or []) if isinstance(s, dict) and s.get('address')],
                      'configFile': config_file, 'provider': 'file'})
     return apps
 
@@ -4485,6 +4913,27 @@ def _build_all_apps(include_external=True, include_internal=False):
                     ep_mws.append(mw)
         app['entrypointMiddlewares'] = ep_mws
     settings = load_settings()
+    _mm_ledger = settings.get('managed_middlewares', {})
+    _http_mw_by_file = {cf: ((cfg.get('http') or {}).get('middlewares') or {}) for cf, cfg in loaded}
+    for app in all_apps:
+        if app.get('protocol') != 'http' or app.get('provider') != 'file':
+            continue
+        hdr_mw_name = f"{app.get('name')}-headers"
+        hdr_body    = _http_mw_by_file.get(app.get('configFile', ''), {}).get(hdr_mw_name)
+        owned       = hdr_mw_name in _mm_ledger
+        decoded     = _decode_headers_middleware(hdr_body) if (owned and hdr_body is not None) else None
+        if not owned or hdr_body is None:
+            hdr_state = 'off'
+        elif decoded is not None:
+            hdr_state = 'toggles'
+        else:
+            hdr_state = 'custom'
+        app['headersPreset'] = {
+            'owned':   owned,
+            'exists':  hdr_body is not None,
+            'state':   hdr_state,
+            'toggles': decoded if decoded is not None else _headers_preset_defaults(),
+        }
     for route_id, rdata in settings.get('disabled_routes', {}).items():
         if route_id.startswith('agent_'):
             continue  # agent disabled routes belong to that agent, not the host
@@ -5037,6 +5486,26 @@ def save_entry():
         plain_original_id = orig_parts[1] if len(orig_parts) > 1 else original_id
         orig_cfg_file = orig_parts[0] if len(orig_parts) > 1 else cfg_filename
 
+        _ledger            = settings.get('managed_middlewares', {})
+        _ledger_changed    = False
+        hdr_name           = f"{router_name}-headers"
+        hdr_ledger_key     = f"agent_{agent_id}::{hdr_name}" if agent else hdr_name
+        hdr_preset_present = protocol == 'http' and request.form.get('headersPresetPresent') == 'true'
+        hdr_preset_on      = hdr_preset_present and request.form.get('headersPresetEnabled') == 'true'
+        hdr_preset_custom  = request.form.get('headersPresetCustom') == 'true'
+        stream_preset_present = protocol == 'http' and request.form.get('streamingPresetPresent') == 'true'
+        stream_preset_on      = stream_preset_present and request.form.get('streamingPresetEnabled') == 'true'
+        if hdr_preset_on:
+            _existing_hdr = config.get('http', {}).get('middlewares', {}).get(hdr_name)
+            _hdr_foreign  = _existing_hdr is not None and (
+                hdr_ledger_key not in _ledger or (is_edit and orig_cfg_file != cfg_filename))
+            if _hdr_foreign:
+                _msg = f"A middleware named '{hdr_name}' already exists and wasn't created by the route presets. Rename or remove it first, then re-save."
+                if fetch:
+                    return jsonify({'ok': False, 'message': _msg}), 409
+                flash(_msg, "error")
+                return redirect(url_for('index'))
+
         _prev_tcp_mws = None
         if is_edit and plain_original_id:
             _prev_src = config
@@ -5078,6 +5547,15 @@ def save_entry():
                 del old_transports[old_transport_name]
                 if not old_transports:
                     del http_sec['serversTransports']
+            old_hdr_name = f"{plain_original_id}-headers"
+            old_hdr_key  = f"agent_{agent_id}::{old_hdr_name}" if agent else old_hdr_name
+            if hdr_preset_present and old_hdr_key in _ledger:
+                old_hdr_mws = http_sec.get('middlewares', {})
+                old_hdr_mws.pop(old_hdr_name, None)
+                if not old_hdr_mws and 'middlewares' in http_sec:
+                    del http_sec['middlewares']
+                del _ledger[old_hdr_key]
+                _ledger_changed = True
             if agent:
                 _agent_write_config(agent, orig_cfg_file, old_config)
             elif orig_target_path:
@@ -5092,6 +5570,16 @@ def save_entry():
                     del old_routers[plain_original_id]
                 if old_svc and old_svc != service_name and 'services' in s and old_svc in s['services']:
                     del s['services'][old_svc]
+            if hdr_preset_present and plain_original_id != router_name:
+                rn_hdr_name = f"{plain_original_id}-headers"
+                rn_hdr_key  = f"agent_{agent_id}::{rn_hdr_name}" if agent else rn_hdr_name
+                if rn_hdr_key in _ledger:
+                    rn_hdr_mws = config.get('http', {}).get('middlewares', {})
+                    rn_hdr_mws.pop(rn_hdr_name, None)
+                    if not rn_hdr_mws and 'http' in config and 'middlewares' in config['http']:
+                        del config['http']['middlewares']
+                    del _ledger[rn_hdr_key]
+                    _ledger_changed = True
 
         if protocol == 'http':
             if http_rule:
@@ -5114,6 +5602,24 @@ def save_entry():
             insecure   = request.form.get('insecureSkipVerify') == 'true'
             config.setdefault('http', {}).setdefault('routers', {})
             config['http'].setdefault('services', {})
+            if hdr_preset_present:
+                if hdr_preset_on or hdr_ledger_key in _ledger:
+                    mws = [m for m in mws if m != hdr_name]
+                if hdr_preset_on and not hdr_preset_custom:
+                    config['http'].setdefault('middlewares', {})[hdr_name] = _build_headers_middleware(_headers_toggles_from_form(request.form))
+                _hdr_present_now = config.get('http', {}).get('middlewares', {}).get(hdr_name) is not None
+                if hdr_preset_on and _hdr_present_now:
+                    mws.append(hdr_name)
+                    if hdr_ledger_key not in _ledger:
+                        _ledger[hdr_ledger_key] = {'kind': 'route-headers', 'route': router_name}
+                        _ledger_changed = True
+                elif hdr_ledger_key in _ledger:
+                    _hdr_sec = config.get('http', {}).get('middlewares', {})
+                    _hdr_sec.pop(hdr_name, None)
+                    if not _hdr_sec and 'middlewares' in config['http']:
+                        del config['http']['middlewares']
+                    _ledger.pop(hdr_ledger_key, None)
+                    _ledger_changed = True
             r = {'rule': rule, 'entryPoints': http_eps, 'service': service_name}
             if mws:
                 r['middlewares'] = mws
@@ -5130,22 +5636,54 @@ def save_entry():
                 if tls_opts_profile:
                     tls_entry['options'] = tls_opts_profile
                 r['tls'] = tls_entry
-            lb = {'servers': [{'url': target_url}]}
-            if not pass_host:
+            _be = _parse_backends_json(request.form.get('backendsJsonHttp'))
+            _managed_backends = False
+            if _be is not None:
+                _servers = _backend_servers(_be.get('servers'), 'url', scheme)
+                if _servers:
+                    _managed_backends = True
+                    lb = {'servers': _servers}
+                else:
+                    lb = {'servers': [{'url': target_url}]}
+            else:
+                lb = {'servers': [{'url': target_url}]}
+            if not pass_host and not stream_preset_on:
                 lb['passHostHeader'] = False
+            if _managed_backends:
+                _sticky = _sticky_block(_be.get('sticky'))
+                if _sticky:
+                    lb['sticky'] = _sticky
+                _hc = _healthcheck_block(_be.get('healthCheck'))
+                if _hc:
+                    lb['healthCheck'] = _hc
+                _prio = _clean_priority(_be.get('priority'))
+                if _prio:
+                    r['priority'] = _prio
             transport_name = f"{svc_name}-transport"
+            existing_transports = config.get('http', {}).get('serversTransports', {})
+            tp = existing_transports.get(transport_name)
+            tp = tp if isinstance(tp, dict) else {}
             if insecure:
+                tp['insecureSkipVerify'] = True
+            else:
+                tp.pop('insecureSkipVerify', None)
+            if stream_preset_present:
+                if stream_preset_on:
+                    tp['forwardingTimeouts'] = _streaming_forwarding_timeouts()
+                else:
+                    tp.pop('forwardingTimeouts', None)
+            if tp:
+                config['http'].setdefault('serversTransports', {})[transport_name] = tp
                 lb['serversTransport'] = transport_name
-                config['http'].setdefault('serversTransports', {})[transport_name] = {'insecureSkipVerify': True}
-            elif not insecure:
-                existing_transports = config.get('http', {}).get('serversTransports', {})
-                if transport_name in existing_transports:
-                    del existing_transports[transport_name]
-                    if not existing_transports:
-                        del config['http']['serversTransports']
-            _merge_router(config['http']['routers'], router_name, r,
-                          ('rule', 'entryPoints', 'service', 'middlewares', 'tls'))
-            _merge_service(config['http']['services'], service_name, lb, 'url', transport_name)
+            elif transport_name in existing_transports:
+                del existing_transports[transport_name]
+                if not existing_transports and 'serversTransports' in config['http']:
+                    del config['http']['serversTransports']
+            _http_managed = ('rule', 'entryPoints', 'service', 'middlewares', 'tls', 'priority') \
+                if _managed_backends else ('rule', 'entryPoints', 'service', 'middlewares', 'tls')
+            _merge_router(config['http']['routers'], router_name, r, _http_managed)
+            _merge_service(config['http']['services'], service_name, lb, 'url', transport_name,
+                           managed_backends=_managed_backends)
 
         elif protocol == 'tcp':
             rule = tcp_rule or (f"HostSNI(`{subdomain}.{domain}`)" if subdomain else "HostSNI(`*`)")
@@ -5164,10 +5702,22 @@ def save_entry():
                 router_entry['tls'] = {'passthrough': True}
             elif use_tls_tcp:
                 router_entry['tls'] = {'certResolver': tcp_cert_resolver} if tcp_cert_resolver else {}
-            _merge_router(config['tcp']['routers'], router_name, router_entry,
-                          ('rule', 'entryPoints', 'service', 'middlewares', 'tls'))
-            _merge_service(config['tcp']['services'], service_name,
-                           {'servers': [{'address': f"{target_ip}:{target_port}"}]}, 'address', '')
+            _be_tcp = _parse_backends_json(request.form.get('backendsJsonTcp'))
+            _tcp_managed = False
+            _tcp_lb = {'servers': [{'address': f"{target_ip}:{target_port}"}]}
+            if _be_tcp is not None:
+                _tcp_servers = _backend_servers(_be_tcp.get('servers'), 'address')
+                if _tcp_servers:
+                    _tcp_managed = True
+                    _tcp_lb = {'servers': _tcp_servers}
+                    _tcp_prio = _clean_priority(_be_tcp.get('priority'))
+                    if _tcp_prio:
+                        router_entry['priority'] = _tcp_prio
+            _tcp_keys = ('rule', 'entryPoints', 'service', 'middlewares', 'tls', 'priority') \
+                if _tcp_managed else ('rule', 'entryPoints', 'service', 'middlewares', 'tls')
+            _merge_router(config['tcp']['routers'], router_name, router_entry, _tcp_keys)
+            _merge_service(config['tcp']['services'], service_name, _tcp_lb, 'address', '',
+                           managed_backends=_tcp_managed)
 
         elif protocol == 'udp':
             udp_ep = request.form.get('udpEntryPoint', '').strip()
@@ -5176,9 +5726,27 @@ def save_entry():
             _merge_router(config['udp']['routers'], router_name,
                           {'entryPoints': [udp_ep] if udp_ep else [], 'service': service_name},
                           ('entryPoints', 'service'))
-            _merge_service(config['udp']['services'], service_name,
-                           {'servers': [{'address': f"{target_ip}:{target_port}"}]}, 'address', '')
+            _be_udp = _parse_backends_json(request.form.get('backendsJsonUdp'))
+            _udp_managed = False
+            _udp_lb = {'servers': [{'address': f"{target_ip}:{target_port}"}]}
+            if _be_udp is not None:
+                _udp_servers = _backend_servers(_be_udp.get('servers'), 'address')
+                if _udp_servers:
+                    _udp_managed = True
+                    _udp_lb = {'servers': _udp_servers}
+            _merge_service(config['udp']['services'], service_name, _udp_lb, 'address', '',
+                           managed_backends=_udp_managed)
 
+        if _ledger_changed:
+            save_settings(
+                domains=settings['domains'],
+                cert_resolver=settings['cert_resolver'],
+                traefik_api_url=settings['traefik_api_url'],
+                auth_enabled=settings['auth_enabled'],
+                password_hash=settings['password_hash'],
+                visible_tabs=settings['visible_tabs'],
+                managed_middlewares=_ledger,
+            )
         if agent:
             _agent_write_config(agent, cfg_filename, config)
             threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'route save'), daemon=True).start()
@@ -5819,6 +6387,28 @@ def api_agent_routes(agent_id):
                              'serviceType': _service_type(svc),
                              'enabled': False, 'configFile': cf, 'provider': 'file'})
 
+        _mm_ledger       = load_settings().get('managed_middlewares', {})
+        _http_mw_by_file = {fn: ((cfg.get('http') or {}).get('middlewares') or {}) for fn, cfg in all_configs.items()}
+        for _app in apps:
+            if _app.get('protocol') != 'http' or _app.get('provider') != 'file':
+                continue
+            hdr_mw_name = f"{_app.get('name')}-headers"
+            hdr_body    = _http_mw_by_file.get(_app.get('configFile', ''), {}).get(hdr_mw_name)
+            owned       = f"agent_{agent_id}::{hdr_mw_name}" in _mm_ledger
+            decoded     = _decode_headers_middleware(hdr_body) if (owned and hdr_body is not None) else None
+            if not owned or hdr_body is None:
+                hdr_state = 'off'
+            elif decoded is not None:
+                hdr_state = 'toggles'
+            else:
+                hdr_state = 'custom'
+            _app['headersPreset'] = {
+                'owned':   owned,
+                'exists':  hdr_body is not None,
+                'state':   hdr_state,
+                'toggles': decoded if decoded is not None else _headers_preset_defaults(),
+            }
+
         return jsonify({'apps': apps, 'middlewares': middlewares, 'configErrors': config_errors})
     except requests.exceptions.ConnectionError:
         return jsonify({'error': 'Cannot reach agent'}), 502
@@ -5827,24 +6417,53 @@ def api_agent_routes(agent_id):
         return jsonify({'error': str(e)}), 500
 
 
+def _agent_api_cert_resolvers(agent) -> list:
+    found = []
+    try:
+        resp = _agent_request(agent, 'GET', '/api/traefik/routers')
+        if resp.status_code != 200:
+            return found
+        data = resp.json() or {}
+        for proto in ('http', 'tcp'):
+            for r in (data.get(proto) or []):
+                if not isinstance(r, dict):
+                    continue
+                tls = r.get('tls')
+                if not isinstance(tls, dict):
+                    continue
+                name = str(tls.get('certResolver') or '').strip()
+                if name and name not in found:
+                    found.append(name)
+    except Exception:
+        logger.debug("Failed to read cert resolvers from agent Traefik API", exc_info=True)
+    return found
+
+
 @app.route('/api/agents/<agent_id>/cert-resolvers')
 @login_required
 def api_agent_cert_resolvers(agent_id):
     agent = _agent_by_id(agent_id)
     if not agent:
         return jsonify({'resolvers': []})
+    configured = [r.strip() for r in (agent.get('cert_resolver') or '').split(',') if r.strip()]
+    for name in _agent_api_cert_resolvers(agent):
+        if name not in configured:
+            configured.append(name)
     try:
         resp = _agent_request(agent, 'GET', '/api/static')
         if resp.status_code != 200:
-            return jsonify({'resolvers': []})
+            return jsonify({'resolvers': configured})
         content   = (resp.json() or {}).get('content', '')
         data      = _yaml_safe.load(content) or {}
         resolvers = data.get('certificatesResolvers') or {}
         if isinstance(resolvers, dict):
-            return jsonify({'resolvers': [str(k).strip() for k in resolvers if str(k).strip()]})
+            for k in resolvers:
+                k = str(k).strip()
+                if k and k not in configured:
+                    configured.append(k)
     except Exception:
         logger.debug("Failed to read agent cert resolvers", exc_info=True)
-    return jsonify({'resolvers': []})
+    return jsonify({'resolvers': configured})
 
 
 @app.route('/api/agents', methods=['GET'])
@@ -5872,6 +6491,7 @@ def api_agents_create():
         'api_key':    raw_key,
         'created_at': datetime.now(timezone.utc).isoformat(),
         'traefik_api_url':       str(data.get('traefik_api_url', 'http://traefik:8080')).strip(),
+        'cert_resolver':         str(data.get('cert_resolver', '')).strip(),
         'config_path':           str(data.get('config_path', '/app/config')).strip(),
         'backup_keep_count':     str(data.get('backup_keep_count', '')).strip(),
         'static_config_path':    str(data.get('static_config_path', '')).strip(),
@@ -5926,6 +6546,7 @@ def api_agents_update(agent_id):
         if a.get('id') == agent_id:
             updatable = [
                 'name', 'url', 'traefik_api_url', 'traefik_insecure_skip_verify',
+                'cert_resolver',
                 'config_path', 'static_config_path',
                 'acme_json_path', 'access_log_path', 'plugins_dir', 'backup_dir', 'backup_keep_count',
                 'restart_method', 'traefik_container', 'docker_host', 'signal_file_path',
