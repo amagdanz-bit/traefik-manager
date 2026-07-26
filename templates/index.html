@@ -431,7 +431,13 @@
 {% include 'modals/detail_panels.html' %}
 
 <script>
-const APP_DATA = JSON.parse({{ apps | tojson | tojson }});
+const APP_DATA             = JSON.parse({{ apps | tojson | tojson }});
+const availableDomains     = {{ domains | tojson | safe }};
+const availableCertResolvers = {{ cert_resolvers | tojson | safe }};
+const MULTI_CONFIG         = {{ multi_config | tojson }};
+const CONFIG_DIR_SET       = {{ config_dir_set | tojson }};
+const CONFIG_PATHS_LIST    = {{ config_paths_list | tojson | safe }};
+let _allMiddlewares        = {{ middlewares | tojson | safe }};
 
 function _csrfHeaders() {
     const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -2086,8 +2092,6 @@ function _onBackdropClick(e, fn) {
     el.addEventListener('click', function(e) { _onBackdropClick(e, () => this.style.display = 'none'); });
 });
 
-const availableDomains = {{ domains | tojson | safe }};
-const availableCertResolvers = {{ cert_resolvers | tojson | safe }};
 
 function _ensureResolverOption(sel, value) {
     if (!sel || !value) return;
@@ -2375,9 +2379,6 @@ function _toggleMwChip(mw, proto) {
     state.render();
 }
 
-const MULTI_CONFIG = {{ multi_config | tojson }};
-const CONFIG_DIR_SET = {{ config_dir_set | tojson }};
-const CONFIG_PATHS_LIST = {{ config_paths_list | tojson | safe }};
 
 function setTcpTlsMode(mode, btn) {
     document.querySelectorAll('#tcpTlsNone,#tcpTlsTls,#tcpTlsPassthrough').forEach(b => b.classList.remove('active-http'));
@@ -3477,7 +3478,6 @@ async function bulkDelete() {
     if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData();
 }
 let _mwViewMode = 'grid';
-let _allMiddlewares = {{ middlewares | tojson | safe }};
 
 function toggleSvcView() {
     _svcViewMode = _svcViewMode === 'grid' ? 'list' : 'grid';
