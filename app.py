@@ -3,18 +3,12 @@ import re
 import time
 import shutil
 import secrets
-import logging
 import threading
-import subprocess
-import fcntl
 import ipaddress
-import contextlib
 import requests
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-from collections import deque
 from datetime import datetime, timezone, timedelta
-from functools import wraps
 import click
 from flask import (Flask, render_template, request, redirect,
                    url_for, flash, jsonify, abort, session, send_file)
@@ -23,28 +17,161 @@ from ruamel.yaml import YAML
 from ruamel.yaml import YAML as SafeYAML
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 from io import StringIO
-from cryptography.fernet import Fernet, InvalidToken
 
-GITHUB_REPO  = "chr0nzz/traefik-manager"
-APP_VERSION  = "1.8.0"
+from core import env
+from core.env import GITHUB_REPO, APP_VERSION, logger, PROXY_FIX_HOPS
+from core import crypto
 
-
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(
-    level=LOG_LEVEL,
-    format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
-)
-logger = logging.getLogger("traefik-manager")
-
-
-def _proxy_fix_hops() -> int:
-    try:
-        return max(0, int(os.environ.get('PROXY_FIX_HOPS', '1')))
-    except ValueError:
-        return 1
+from core import config as _cfg
+yaml                   = _cfg.yaml
+_yaml_safe             = _cfg.yaml_safe
+_safe_file_path        = _cfg.safe_file_path
+_readable_config_path  = _cfg.readable_config_path
+_is_safe_path          = _cfg.is_safe_path
+_resolve_config_path   = _cfg.resolve_config_path
+_safe_api_url          = _cfg.safe_api_url
+_sanitize_go_templates = _cfg.sanitize_go_templates
+_restore_go_templates  = _cfg.restore_go_templates
+load_config            = _cfg.load_config
+_strip_empty_sections  = _cfg.strip_empty_sections
+save_config            = _cfg.save_config
+_svc_key               = _cfg.svc_key
+_as_dict               = _cfg.as_dict
+_load_config_display         = _cfg._load_config_display
+_get_config_parse_errors     = _cfg._get_config_parse_errors
+from core import agents_store as _ag
+from core import settings as _settings
+OPTIONAL_TABS     = _settings.OPTIONAL_TABS
+load_settings     = _settings.load_settings
+save_settings     = _settings.save_settings
+_get_acme_json_path      = _settings._get_acme_json_path
+_get_access_log_path     = _settings._get_access_log_path
+_get_static_config_path  = _settings._get_static_config_path
+_get_restart_method      = _settings._get_restart_method
+load_agents       = _ag.load_agents
+save_agents_file  = _ag.save_agents_file
+_save_agents      = _ag.encrypt_agents
+_parse_agent_dict = _ag.parse_agent_dict
+from core import backups as _back
+from core import notifications as _noti
+from core import traefik as _trae
+from core import agents_http as _agen
+from core import git as _git
+from core import auth as _auth
+from core import routes_build as _rb
+from core import crowdsec as _crowd
+from core import certs as _certs
+_parse_cert_expiry           = _certs._parse_cert_expiry
+_certs_from_tls_configs      = _certs._certs_from_tls_configs
+from core import self_route as _self_r
+_self_route_path             = _self_r._self_route_path
+_detect_self_route_domain    = _self_r._detect_self_route_domain
+_detect_self_route_from_own_labels = _self_r._detect_self_route_from_own_labels
+_find_existing_self_route    = _self_r._find_existing_self_route
+_write_self_route            = _self_r._write_self_route
+_delete_self_route           = _self_r._delete_self_route
+SELF_ROUTE_FILENAME          = _self_r.SELF_ROUTE_FILENAME
+_cs_lapi_url               = _crowd._cs_lapi_url
+_cs_api_key                = _crowd._cs_api_key
+_cs_machine_id             = _crowd._cs_machine_id
+_cs_machine_password       = _crowd._cs_machine_password
+_cs_has_machine            = _crowd._cs_has_machine
+_cs_request                = _crowd._cs_request
+_cs_jwt_cache              = _crowd._cs_jwt_cache
+_cs_jwt                    = _crowd._cs_jwt
+_cs_machine_request        = _crowd._cs_machine_request
+from core import geoip as _geoip
+_geoip_enabled             = _geoip._geoip_enabled
+_geoip_db_path             = _geoip._geoip_db_path
+_geoip_reader              = _geoip._geoip_reader
+_geoip_lookup              = _geoip._geoip_lookup
+_geoip_status              = _geoip._geoip_status
+_geoip_download            = _geoip._geoip_download
+_DBIP_URL                  = _geoip._DBIP_URL
+_GEOIP_SENTINEL            = _geoip._GEOIP_SENTINEL
+_geoip_cache               = _geoip._geoip_cache
+_geoip_lock                = _geoip._geoip_lock
+_geoip_state               = _geoip._geoip_state
+_trusted_ip_key                = _rb._trusted_ip_key
+_merge_trusted_ips             = _rb._merge_trusted_ips
+_apply_managed_keys            = _rb._apply_managed_keys
+_merge_router                  = _rb._merge_router
+_merge_service                 = _rb._merge_service
+_json_plain                    = _rb._json_plain
+_headers_preset_defaults       = _rb._headers_preset_defaults
+_build_permissions_policy      = _rb._build_permissions_policy
+_build_headers_middleware      = _rb._build_headers_middleware
+_parse_permissions_policy      = _rb._parse_permissions_policy
+_decode_headers_middleware     = _rb._decode_headers_middleware
+_to_list                       = _rb._to_list
+_service_type                  = _rb._service_type
+_build_apps                    = _rb._build_apps
+_build_middlewares             = _rb._build_middlewares
+_traefik_router_ep_map         = _rb._traefik_router_ep_map
+_traefik_service_url_map       = _rb._traefik_service_url_map
+_build_external_routes         = _rb._build_external_routes
+_entrypoint_mw_map             = _rb._entrypoint_mw_map
+_build_all_apps                = _rb._build_all_apps
+HEADERS_PRESET_FEATURES        = _rb.HEADERS_PRESET_FEATURES
+HEADERS_PRESET_HSTS_SECONDS    = _rb.HEADERS_PRESET_HSTS_SECONDS
+HEADERS_PRESET_REFERRER_DEFAULT = _rb.HEADERS_PRESET_REFERRER_DEFAULT
+HEADERS_PRESET_REFERRER_VALUES = _rb.HEADERS_PRESET_REFERRER_VALUES
+HEADERS_PRESET_SELF_DEFAULT    = _rb.HEADERS_PRESET_SELF_DEFAULT
+_HEADERS_PRESET_KEYS           = _rb._HEADERS_PRESET_KEYS
+_PERM_TOKEN_TO_VALUE           = _rb._PERM_TOKEN_TO_VALUE
+_PERM_VALUE_TO_TOKEN           = _rb._PERM_VALUE_TO_TOKEN
+_auth_enabled          = _auth._auth_enabled
+_oidc_active           = _auth._oidc_active
+_auth_required         = _auth._auth_required
+_get_csrf_token        = _auth._get_csrf_token
+_check_csrf            = _auth._check_csrf
+csrf_protect           = _auth.csrf_protect
+_check_password        = _auth._check_password
+_verify_api_key        = _auth._verify_api_key
+_is_authenticated      = _auth._is_authenticated
+_check_inactivity      = _auth._check_inactivity
+_check_api_key         = _auth._check_api_key
+login_required         = _auth.login_required
+_CsrfError = _auth._CsrfError
+_git_repo_dir              = _git._git_repo_dir
+_valid_git_url             = _git._valid_git_url
+_safe_git_branch           = _git._safe_git_branch
+_git_askpass_path          = _git._git_askpass_path
+_git_run                   = _git._git_run
+_git_ensure_repo_at        = _git._git_ensure_repo_at
+_git_ensure_repo           = _git._git_ensure_repo
+_git_lock                  = _git._git_lock
+_git_push_configs          = _git._git_push_configs
+_git_push_if_enabled       = _git._git_push_if_enabled
+_git_agent_repo_dir        = _git._git_agent_repo_dir
+_agent_git_branch          = _git._agent_git_branch
+_git_push_agent_configs    = _git._git_push_agent_configs
+_git_push_agent_if_enabled = _git._git_push_agent_if_enabled
+_git_show_first            = _git._git_show_first
+_GIT_ALLOWED_SCHEMES = _git._GIT_ALLOWED_SCHEMES
+_GIT_PROTO_HARDENING = _git._GIT_PROTO_HARDENING
+ensure_backup_dir            = _back.ensure_backup_dir
+_backup_keep_count           = _back._backup_keep_count
+_prune_backups               = _back._prune_backups
+create_backup                = _back.create_backup
+_is_ntfy_url                 = _noti._is_ntfy_url
+_send_webhook                = _noti._send_webhook
+_fire_webhook                = _noti._fire_webhook
+_load_notifications          = _noti._load_notifications
+_save_notifications_bg       = _noti._save_notifications_bg
+add_notification             = _noti.add_notification
+_traefik_verify              = _trae._traefik_verify
+traefik_api_get              = _trae.traefik_api_get
+traefik_api_get_all          = _trae.traefik_api_get_all
+_fetch_traefik_routers_and_services = _trae._fetch_traefik_routers_and_services
+_agent_by_id                 = _agen._agent_by_id
+_agent_request               = _agen._agent_request
+_agent_load_configs          = _agen._agent_load_configs
+_agent_write_config          = _agen._agent_write_config
+_notifications = _noti._notifications
+_notif_lock    = _noti._notif_lock
 
 app = Flask(__name__)
-PROXY_FIX_HOPS = _proxy_fix_hops()
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=PROXY_FIX_HOPS, x_proto=1, x_host=1)
 
 _CONFIG_DIR      = os.path.dirname(os.environ.get('SETTINGS_PATH', '/app/config/manager.yml'))
@@ -72,139 +199,17 @@ def _load_or_create_secret_key() -> bytes:
 
 app.secret_key = _load_or_create_secret_key()
 
-_OTP_KEY_PATH = os.path.join(_CONFIG_DIR, '.otp_key')
-
-def _get_otp_fernet() -> Fernet:
-    key = os.environ.get('OTP_ENCRYPTION_KEY', '').strip()
-    if not key:
-        if os.path.exists(_OTP_KEY_PATH):
-            with open(_OTP_KEY_PATH) as f:
-                key = f.read().strip()
-        else:
-            key = Fernet.generate_key().decode()
-            os.makedirs(os.path.dirname(_OTP_KEY_PATH), exist_ok=True)
-            with open(_OTP_KEY_PATH, 'w') as f:
-                f.write(key)
-    return Fernet(key.encode() if isinstance(key, str) else key)
-
-def _encrypt_otp_secret(secret: str) -> str:
-    if not secret:
-        return ''
-    return _get_otp_fernet().encrypt(secret.encode()).decode()
-
-def _decrypt_otp_secret(token: str) -> str:
-    if not token:
-        return ''
-    try:
-        return _get_otp_fernet().decrypt(token.encode()).decode()
-    except (InvalidToken, Exception):
-        logger.warning("Failed to decrypt secret (encryption key mismatch?) - treating as empty")
-        return ''
-
-def _save_agents(agents: list) -> list:
-    out = []
-    for a in agents:
-        enc = dict(a)
-        if enc.get('api_key'):
-            enc['api_key'] = _encrypt_otp_secret(enc['api_key'])
-        if enc.get('crowdsec_api_key'):
-            enc['crowdsec_api_key'] = _encrypt_otp_secret(enc['crowdsec_api_key'])
-        if enc.get('crowdsec_machine_password'):
-            enc['crowdsec_machine_password'] = _encrypt_otp_secret(enc['crowdsec_machine_password'])
-        if enc.get('git_backup_token'):
-            enc['git_backup_token'] = _encrypt_otp_secret(enc['git_backup_token'])
-        out.append(enc)
-    return out
+_OTP_KEY_PATH        = env.OTP_KEY_PATH
+_get_otp_fernet      = crypto.get_otp_fernet
+_encrypt_otp_secret  = crypto.encrypt_secret
+_decrypt_otp_secret  = crypto.decrypt_secret
 
 
-def _parse_agent_dict(a: dict) -> dict:
-    return {
-        'id':         str(a['id']),
-        'name':       str(a['name'])[:100],
-        'url':        str(a['url']).strip().rstrip('/'),
-        'api_key':    _decrypt_otp_secret(str(a.get('api_key', ''))),
-        'created_at': str(a.get('created_at', '')),
-        'traefik_api_url':              str(a.get('traefik_api_url', 'http://traefik:8080')).strip(),
-        'traefik_insecure_skip_verify': bool(a.get('traefik_insecure_skip_verify', False)),
-        'cert_resolver':                str(a.get('cert_resolver', '')).strip(),
-        'config_path':                  str(a.get('config_path', '/app/config')).strip(),
-        'backup_dir':                   str(a.get('backup_dir', '')).strip(),
-        'backup_keep_count':            str(a.get('backup_keep_count', '')).strip(),
-        'static_config_path':           str(a.get('static_config_path', '')).strip(),
-        'acme_json_path':               str(a.get('acme_json_path', '')).strip(),
-        'access_log_path':              str(a.get('access_log_path', '')).strip(),
-        'plugins_dir':                  str(a.get('plugins_dir', '')).strip(),
-        'restart_method':               str(a.get('restart_method', '')).strip(),
-        'traefik_container':            str(a.get('traefik_container', 'traefik')).strip(),
-        'docker_host':                  str(a.get('docker_host', '')).strip(),
-        'signal_file_path':             str(a.get('signal_file_path', '')).strip(),
-        'crowdsec_lapi_url':            str(a.get('crowdsec_lapi_url', '')).strip(),
-        'crowdsec_api_key':             _decrypt_otp_secret(str(a.get('crowdsec_api_key', ''))),
-        'crowdsec_machine_id':          str(a.get('crowdsec_machine_id', '')).strip(),
-        'crowdsec_machine_password':    _decrypt_otp_secret(str(a.get('crowdsec_machine_password', ''))),
-        'git_backup_enabled':           bool(a.get('git_backup_enabled', False)),
-        'git_backup_repo':              str(a.get('git_backup_repo', '')).strip(),
-        'git_backup_branch':            str(a.get('git_backup_branch', 'main')).strip() or 'main',
-        'git_backup_username':          str(a.get('git_backup_username', '')).strip(),
-        'git_backup_token':             _decrypt_otp_secret(str(a.get('git_backup_token', ''))),
-        'git_backup_auto_push':         bool(a.get('git_backup_auto_push', True)),
-        'git_backup_commit_message':    str(a.get('git_backup_commit_message', 'traefik-manager: {action} at {timestamp}')).strip() or 'traefik-manager: {action} at {timestamp}',
-        'git_host_backup':              bool(a.get('git_host_backup', False)),
-        'git_host_branch':              str(a.get('git_host_branch', '')).strip(),
-        'tma_port':                     str(a.get('tma_port', '')).strip(),
-        'tma_rate_limit':               str(a.get('tma_rate_limit', '')).strip(),
-        'domains':                      [str(d).strip() for d in (a.get('domains') or []) if str(d).strip()],
-    }
 
 
-def load_agents() -> list:
-    if os.path.exists(AGENTS_PATH):
-        try:
-            with open(AGENTS_PATH, 'r') as f:
-                raw = _yaml_safe.load(f) or {}
-            return [
-                _parse_agent_dict(a)
-                for a in (raw.get('agents', []) or [])
-                if isinstance(a, dict) and a.get('id') and a.get('name') and a.get('url')
-            ]
-        except Exception as e:
-            logger.warning(f"Could not load agents.yml: {e}")
-            return []
-
-    if os.path.exists(SETTINGS_PATH):
-        try:
-            with open(SETTINGS_PATH, 'r') as f:
-                data = _yaml_safe.load(f) or {}
-            raw_agents = data.get('agents', [])
-            if raw_agents and isinstance(raw_agents, list):
-                agents = [
-                    _parse_agent_dict(a)
-                    for a in raw_agents
-                    if isinstance(a, dict) and a.get('id') and a.get('name') and a.get('url')
-                ]
-                if agents:
-                    save_agents_file(agents)
-                    logger.info(f"Migrated {len(agents)} agent(s) from manager.yml to agents.yml")
-                return agents
-        except Exception as e:
-            logger.warning(f"Agent migration from manager.yml failed: {e}")
-
-    return []
 
 
-def save_agents_file(agents: list):
-    os.makedirs(os.path.dirname(AGENTS_PATH), exist_ok=True)
-    tmp = f"{AGENTS_PATH}.tmp.{os.getpid()}.{threading.get_ident()}"
-    try:
-        with open(tmp, 'w') as f:
-            yaml.dump({'agents': _save_agents(agents)}, f)
-        os.replace(tmp, AGENTS_PATH)
-    finally:
-        if os.path.exists(tmp):
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
+
 
 
 def load_templates() -> list:
@@ -248,174 +253,37 @@ app.config['SESSION_COOKIE_SAMESITE']    = 'Lax'
 app.config['SESSION_COOKIE_SECURE']      = os.environ.get('COOKIE_SECURE', 'false').lower() == 'true'
 
 
-INACTIVITY_TIMEOUT = int(os.environ.get('INACTIVITY_TIMEOUT_MINUTES', '120'))
+INACTIVITY_TIMEOUT = _auth.INACTIVITY_TIMEOUT
 
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 limiter = Limiter(get_remote_address, app=app, default_limits=[], storage_uri="memory://")
 
 
-class _ThreadLocalYAML:
-    def __init__(self, typ=None):
-        self._tl = threading.local()
-        self._typ = typ
-
-    def _y(self):
-        y = getattr(self._tl, 'y', None)
-        if y is None:
-            if self._typ:
-                y = YAML(typ=self._typ)
-            else:
-                y = YAML()
-                y.preserve_quotes = True
-                y.indent(mapping=2, sequence=4, offset=2)
-                y.width = 4096
-            self._tl.y = y
-        return y
-
-    def load(self, stream):
-        return self._y().load(stream)
-
-    def dump(self, data, stream):
-        return self._y().dump(data, stream)
-
-yaml = _ThreadLocalYAML()
-_yaml_safe = _ThreadLocalYAML(typ='safe')
 
 
-BACKUP_DIR    = os.environ.get('BACKUP_DIR',    '/app/backups')
-SETTINGS_PATH      = os.environ.get('SETTINGS_PATH', '/app/config/manager.yml')
-_CONFIG_DIR        = os.path.dirname(os.path.abspath(SETTINGS_PATH))
-GROUPS_CACHE_DIR   = os.path.join(_CONFIG_DIR, 'cache')
-GEOIP_DIR          = os.path.join(_CONFIG_DIR, 'geoip')
-GROUPS_CONFIG_FILE  = os.path.join(_CONFIG_DIR, 'dashboard.yml')
-NOTIFICATIONS_PATH  = os.path.join(_CONFIG_DIR, 'notifications.yml')
-AGENTS_PATH        = os.path.join(_CONFIG_DIR, 'agents.yml')
-TEMPLATES_PATH     = os.path.join(_CONFIG_DIR, 'templates.yml')
-os.makedirs(GROUPS_CACHE_DIR, exist_ok=True)
 
-_notifications     = deque(maxlen=200)
-_notif_lock        = threading.Lock()
+BACKUP_DIR         = env.BACKUP_DIR
+SETTINGS_PATH      = env.SETTINGS_PATH
+_CONFIG_DIR        = env.CONFIG_DIR
+GROUPS_CACHE_DIR   = env.GROUPS_CACHE_DIR
+GEOIP_DIR          = env.GEOIP_DIR
+GROUPS_CONFIG_FILE = env.GROUPS_CONFIG_FILE
+NOTIFICATIONS_PATH = env.NOTIFICATIONS_PATH
+AGENTS_PATH        = env.AGENTS_PATH
+TEMPLATES_PATH     = env.TEMPLATES_PATH
 
-def _load_notifications():
-    if os.path.exists(NOTIFICATIONS_PATH):
-        try:
-            _y = SafeYAML(typ='safe')
-            with open(NOTIFICATIONS_PATH, 'r') as f:
-                data = _y.load(f) or []
-            with _notif_lock:
-                _notifications.clear()
-                for entry in data[-100:]:
-                    _notifications.append(entry)
-        except Exception:
-            pass
 
-def _save_notifications_bg():
-    try:
-        _y = SafeYAML(typ='safe')
-        with _notif_lock:
-            data = list(_notifications)
-        with open(NOTIFICATIONS_PATH, 'w') as f:
-            _y.dump(data, f)
-    except Exception:
-        logger.exception("Failed to save notifications")
 
-def _is_ntfy_url(url: str) -> bool:
-    from urllib.parse import urlparse
-    try:
-        h = urlparse(url).hostname or ''
-        return h == 'ntfy.sh' or h.startswith('ntfy.') or '/api/v1/publish' in url
-    except Exception:
-        return False
 
-def _send_webhook(url: str, wtype: str, type_: str, msg: str, ts: str, username: str = '', password: str = ''):
-    color_map = {'warning': 0xf0a500, 'error': 0xf85149, 'info': 0x58a6ff, 'success': 0x3fb950}
-    color = color_map.get(type_, 0x58a6ff)
-    tag_map = {'warning': 'warning', 'error': 'rotating_light', 'success': 'white_check_mark', 'info': 'information_source'}
-    auth = (username, password) if username else None
-    if wtype == 'discord':
-        payload = {'embeds': [{'title': msg, 'color': color, 'footer': {'text': f'Traefik Manager - {ts}'}}]}
-        requests.post(url, json=payload, timeout=5, auth=auth)
-    elif wtype == 'slack':
-        icon = {'warning': ':warning:', 'error': ':x:', 'success': ':white_check_mark:', 'info': ':information_source:'}.get(type_, ':bell:')
-        requests.post(url, json={'text': f'{icon} *Traefik Manager* - {msg}'}, timeout=5, auth=auth)
-    elif wtype == 'ntfy':
-        headers = {
-            'X-Title': 'Traefik Manager',
-            'X-Priority': '4' if type_ in ('warning', 'error') else '3',
-            'X-Tags': tag_map.get(type_, 'bell'),
-        }
-        requests.post(url, data=msg.encode('utf-8'), headers=headers, timeout=5, auth=auth)
-    else:
-        requests.post(url, json={'event': type_, 'message': msg, 'timestamp': ts}, timeout=5, auth=auth)
 
-def _fire_webhook(type_: str, msg: str, ts: str):
-    s   = load_settings()
-    url = s.get('webhook_url', '').strip()
-    if not url:
-        return
-    wtype    = s.get('webhook_type', 'discord')
-    username = s.get('webhook_username', '')
-    password = s.get('webhook_password', '')
-    try:
-        _send_webhook(url, wtype, type_, msg, ts, username, password)
-    except Exception as e:
-        logger.warning(f"Webhook delivery failed: {e}")
 
-def add_notification(type_, msg):
-    entry = {'ts': time.strftime("%Y-%m-%d %H:%M:%S"), 'type': type_, 'msg': msg}
-    with _notif_lock:
-        _notifications.append(entry)
-    _save_notifications_bg()
-    threading.Thread(target=_fire_webhook, args=(type_, msg, entry['ts']), daemon=True).start()
 
-_config_dir = os.environ.get('CONFIG_DIR', '').strip()
-ACTIVE_CONFIG_DIR = _config_dir
-if _config_dir:
-    import glob as _glob
-    _ymls  = _glob.glob(os.path.join(_config_dir, '**', '*.yml'),  recursive=True)
-    _yamls = _glob.glob(os.path.join(_config_dir, '**', '*.yaml'), recursive=True)
-    CONFIG_PATHS = sorted(_ymls + _yamls) or [os.path.join(_config_dir, 'dynamic.yml')]
-else:
-    _raw_paths = os.environ.get('CONFIG_PATHS', '').strip()
-    if _raw_paths:
-        CONFIG_PATHS = [p.strip() for p in _raw_paths.split(',') if p.strip()]
-    else:
-        CONFIG_PATHS = [os.environ.get('CONFIG_PATH', '/app/config/dynamic.yml')]
 
-CONFIG_PATH  = CONFIG_PATHS[0]
-MULTI_CONFIG = len(CONFIG_PATHS) > 1
+ACTIVE_CONFIG_DIR = env.ACTIVE_CONFIG_DIR
+_ALLOWED_API_SCHEMES = env.ALLOWED_API_SCHEMES
 
-_ALLOWED_FILE_PREFIXES = tuple(sorted(set(
-    ['/app/', os.path.abspath(BACKUP_DIR) + '/', os.path.dirname(os.path.abspath(SETTINGS_PATH)) + '/'] +
-    [os.path.dirname(os.path.abspath(p)) + '/' for p in CONFIG_PATHS]
-)))
-_ALLOWED_API_SCHEMES   = ('http://', 'https://')
 
-def _safe_file_path(path: str) -> str:
-    if not path:
-        return ''
-    resolved = os.path.realpath(path)
-    if any(resolved.startswith(p) for p in _ALLOWED_FILE_PREFIXES):
-        return resolved
-    logger.warning(f"Blocked unsafe file path: {path!r}")
-    return ''
-
-def _readable_config_path(path: str) -> str:
-    """Realpath if within the allowed prefixes or a directory of an env-configured
-    Traefik file. Blocks reading arbitrary files via web-set path settings."""
-    if not path:
-        return ''
-    resolved = os.path.realpath(path)
-    allowed  = list(_ALLOWED_FILE_PREFIXES)
-    for _ev in ('STATIC_CONFIG_PATH', 'ACCESS_LOG_PATH', 'ACME_JSON_PATH', 'PLUGINS_DIR'):
-        _v = os.environ.get(_ev, '').strip()
-        if _v:
-            allowed.append(os.path.dirname(os.path.realpath(_v)) + os.sep)
-    if any(resolved.startswith(p) for p in allowed):
-        return resolved
-    logger.warning(f"Blocked read of unsafe path: {path!r}")
-    return ''
 
 def _ssrf_ok(url: str) -> bool:
     """False if the URL host resolves to a link-local (cloud metadata 169.254.x),
@@ -435,177 +303,25 @@ def _ssrf_ok(url: str) -> bool:
     except Exception:
         return False
 
-def _is_safe_path(path: str) -> bool:
-    """Return True if path is inside ACTIVE_CONFIG_DIR (prevents path traversal)."""
-    if not ACTIVE_CONFIG_DIR:
-        return False
-    try:
-        return os.path.realpath(path).startswith(os.path.realpath(ACTIVE_CONFIG_DIR) + os.sep)
-    except Exception:
-        return False
 
-def _resolve_config_path(s: str) -> str:
-    """Validate a config file given a basename or full path against CONFIG_PATHS.
-    Returns the canonical path if valid, '' otherwise.
-    If ACTIVE_CONFIG_DIR is set and s is a plain filename, allows new files in CONFIG_DIR."""
-    if not s:
-        return CONFIG_PATH
-    s = s.strip()
-    for p in CONFIG_PATHS:
-        if s == p or s == os.path.basename(p):
-            return p
-    if ACTIVE_CONFIG_DIR and '/' not in s and '\\' not in s:
-        if not s.endswith(('.yml', '.yaml')):
-            s = s + '.yml'
-        candidate = os.path.join(ACTIVE_CONFIG_DIR, s)
-        if _is_safe_path(candidate):
-            return candidate
-    logger.warning(f"Config file not in CONFIG_PATHS: {s!r}")
-    return ''
 
 def _register_config_path(path: str):
-    """Add a newly created config file to CONFIG_PATHS if not already present."""
-    global CONFIG_PATHS, CONFIG_PATH, MULTI_CONFIG
-    if path and path not in CONFIG_PATHS:
-        CONFIG_PATHS = sorted(CONFIG_PATHS + [path])
-        CONFIG_PATH  = CONFIG_PATHS[0]
-        MULTI_CONFIG = len(CONFIG_PATHS) > 1
-
-def _safe_api_url(url: str) -> str:
-    url = url.strip()
-    if any(url.startswith(s) for s in _ALLOWED_API_SCHEMES):
-        return url
-    logger.warning(f"Blocked unsafe API URL: {url!r}")
-    return ''
+    """Add a newly created config file to the active set (see core.env)."""
+    env.register_config_path(path)
 
 
-def _get_acme_json_path() -> str:
-    s = load_settings()
-    return s.get('acme_json_path', '').strip() or os.environ.get('ACME_JSON_PATH', '/app/acme.json')
 
-def _get_access_log_path() -> str:
-    s = load_settings()
-    return s.get('access_log_path', '').strip() or os.environ.get('ACCESS_LOG_PATH', '/app/logs/access.log')
 
-def _get_static_config_path() -> str:
-    s = load_settings()
-    return s.get('static_config_path', '').strip() or os.environ.get('STATIC_CONFIG_PATH', '')
 
-def _get_restart_method() -> str:
-    return os.environ.get('RESTART_METHOD', 'proxy').lower()
 
-_DBIP_URL = 'https://download.db-ip.com/free/dbip-country-lite-{ym}.mmdb.gz'
-_geoip_lock  = threading.Lock()
-_geoip_state = {'reader': None, 'path': None, 'mtime': None}
-_geoip_cache = {}
 
-def _geoip_enabled() -> bool:
-    s = load_settings()
-    return bool(s.get('geoip_enabled', False))
 
-def _geoip_db_path() -> str:
-    s = load_settings()
-    return (s.get('geoip_db_path') or '').strip() or os.environ.get('GEOIP_DB_PATH', '').strip() or os.path.join(GEOIP_DIR, 'dbip-country-lite.mmdb')
 
-def _geoip_reader():
-    path = _geoip_db_path()
-    if not path or not os.path.exists(path):
-        return None
-    try:
-        mtime = os.path.getmtime(path)
-    except OSError:
-        return None
-    with _geoip_lock:
-        st = _geoip_state
-        if st['reader'] is not None and st['path'] == path and st['mtime'] == mtime:
-            return st['reader']
-        try:
-            import maxminddb
-            reader = maxminddb.open_database(path)
-        except Exception:
-            logger.exception("GeoIP database open failed")
-            return None
-        if st['reader'] is not None:
-            try:
-                st['reader'].close()
-            except Exception:
-                pass
-        st.update({'reader': reader, 'path': path, 'mtime': mtime})
-        _geoip_cache.clear()
-        return reader
 
-_GEOIP_SENTINEL = object()
 
-def _geoip_lookup(ip: str, reader=_GEOIP_SENTINEL):
-    if not ip:
-        return None
-    cached = _geoip_cache.get(ip)
-    if cached is not None:
-        return cached or None
-    if reader is _GEOIP_SENTINEL:
-        reader = _geoip_reader()
-    if reader is None:
-        return None
-    try:
-        rec = reader.get(ip) or {}
-    except Exception:
-        rec = {}
-    country = rec.get('country') or {}
-    cc = str(country.get('iso_code') or '').upper()
-    name = ((country.get('names') or {}).get('en')) or cc
-    result = {'country_code': cc, 'country_name': name} if cc else None
-    if len(_geoip_cache) > 50000:
-        _geoip_cache.clear()
-    _geoip_cache[ip] = result or {}
-    return result
 
-def _geoip_download():
-    import gzip
-    now = time.gmtime()
-    y, m = now.tm_year, now.tm_mon
-    pm = (y, m - 1) if m > 1 else (y - 1, 12)
-    months = [time.strftime('%Y-%m', now), '%04d-%02d' % pm]
-    last_err = 'unknown error'
-    for ym in months:
-        url = _DBIP_URL.format(ym=ym)
-        try:
-            resp = requests.get(url, timeout=90, headers={'User-Agent': f'traefik-manager/{APP_VERSION}'})
-            if resp.status_code == 200 and resp.content:
-                data = gzip.decompress(resp.content)
-                path = _geoip_db_path()
-                os.makedirs(os.path.dirname(path), exist_ok=True)
-                tmp = f"{path}.tmp.{os.getpid()}.{threading.get_ident()}"
-                try:
-                    with open(tmp, 'wb') as f:
-                        f.write(data)
-                    os.replace(tmp, path)
-                finally:
-                    if os.path.exists(tmp):
-                        try:
-                            os.unlink(tmp)
-                        except OSError:
-                            pass
-                with _geoip_lock:
-                    _geoip_state['reader'] = None
-                    _geoip_state['mtime'] = None
-                    _geoip_cache.clear()
-                logger.info(f"GeoIP database updated (DB-IP {ym})")
-                return True, ym
-            last_err = f'HTTP {resp.status_code}'
-        except Exception as e:
-            last_err = str(e)
-    return False, last_err
 
-def _geoip_status() -> dict:
-    path = _geoip_db_path()
-    available = bool(path and os.path.exists(path))
-    db_date = None
-    if available:
-        try:
-            db_date = time.strftime('%Y-%m-%d', time.gmtime(os.path.getmtime(path)))
-        except OSError:
-            db_date = None
-    return {'enabled': _geoip_enabled(), 'available': available, 'db_path': path, 'db_date': db_date}
+
 
 def _geoip_maybe_autoupdate():
     try:
@@ -630,415 +346,11 @@ def _get_signal_file_path() -> str:
     return os.environ.get('SIGNAL_FILE_PATH', '/signals/restart.sig')
 
 
-OPTIONAL_TABS = ['dashboard', 'routemap', 'docker', 'kubernetes', 'swarm', 'nomad', 'ecs', 'consulcatalog', 'redis', 'etcd', 'consul', 'zookeeper', 'http_provider', 'file_external', 'certs', 'tls', 'crowdsec', 'plugins', 'logs']
-
-def load_settings() -> dict:
-    defaults = {
-        'domains':              [d.strip() for d in os.environ.get('DOMAINS', 'example.com').split(',') if d.strip()] or ['example.com'],
-        'cert_resolver':        os.environ.get('CERT_RESOLVER', 'cloudflare'),
-        'traefik_api_url':      os.environ.get('TRAEFIK_API_URL', 'http://traefik:8080'),
-        'auth_enabled':         True,
-        'password_hash':        '',
-        'visible_tabs':         {t: False for t in OPTIONAL_TABS},
-        'must_change_password': False,
-        'setup_complete':       False,
-        'otp_secret':           '',
-        'otp_enabled':          False,
-        'disabled_routes':      {},
-        'managed_middlewares':  {},
-        'api_keys':             [],
-        'api_key_enabled':      False,
-        'self_route':           {'domain': '', 'service_url': ''},
-        'acme_json_path':       '',
-        'access_log_path':      '',
-        'static_config_path':   '',
-        'oidc_enabled':         False,
-        'oidc_provider_url':    '',
-        'oidc_client_id':       '',
-        'oidc_client_secret':   '',
-        'oidc_display_name':    'OIDC',
-        'oidc_allowed_emails':  '',
-        'oidc_allowed_groups':  '',
-        'oidc_groups_claim':    'groups',
-        'oidc_allow_any_authenticated': False,
-        'default_theme':        'dark',
-        'geoip_enabled':        False,
-        'geoip_db_path':        '',
-        'webhook_url':          '',
-        'webhook_type':         'discord',
-        'webhook_username':     '',
-        'webhook_password':     '',
-        'crowdsec_lapi_url':    '',
-        'crowdsec_api_key':     '',
-        'crowdsec_machine_id':       '',
-        'crowdsec_machine_password': '',
-        'traefik_api_user':          os.environ.get('TRAEFIK_API_USER', ''),
-        'traefik_api_password':      os.environ.get('TRAEFIK_API_PASSWORD', ''),
-        'git_backup_enabled':        False,
-        'git_backup_repo':           '',
-        'git_backup_branch':         'main',
-        'git_backup_username':       '',
-        'git_backup_token':          '',
-        'git_backup_commit_message': 'traefik-manager: {action} at {timestamp}',
-        'git_backup_auto_push':      True,
-        'agents':                    [],
-        'agent_api_rate_limit':      int(os.environ.get('AGENT_API_RATE_LIMIT', 30)),
-        'backup_keep_count':         int(os.environ.get('BACKUP_KEEP_COUNT', 0)),
-    }
-    if not os.path.exists(SETTINGS_PATH):
-        return defaults
-    try:
-        with open(SETTINGS_PATH, 'r') as f:
-            raw = f.read()
-        try:
-            data = _yaml_safe.load(raw) or {}
-        except Exception:
-            import re as _re
-            stripped = _re.sub(r'(?m)^[-\.]{3}\s*$\n?', '', raw)
-            try:
-                data = _yaml_safe.load(stripped) or {}
-            except Exception:
-                data = {}
-                for part in _re.split(r'(?m)^---\s*$', raw):
-                    try:
-                        doc = _yaml_safe.load(part.strip())
-                        if isinstance(doc, dict):
-                            data.update(doc)
-                    except Exception:
-                        pass
-        merged = defaults.copy()
-        if 'domains' in data and isinstance(data['domains'], list):
-            merged['domains'] = [str(d).strip() for d in data['domains'] if str(d).strip()]
-        if 'cert_resolver' in data:
-            merged['cert_resolver'] = str(data['cert_resolver']).strip()
-        if 'traefik_api_url' in data:
-            merged['traefik_api_url'] = _safe_api_url(str(data['traefik_api_url'])) or defaults['traefik_api_url']
-        if 'auth_enabled' in data:
-            merged['auth_enabled'] = bool(data['auth_enabled'])
-        if 'password_hash' in data:
-            merged['password_hash'] = str(data['password_hash']).strip()
-        if 'visible_tabs' in data and isinstance(data['visible_tabs'], dict):
-            vt = {t: False for t in OPTIONAL_TABS}
-            for t in OPTIONAL_TABS:
-                if t in data['visible_tabs']:
-                    vt[t] = bool(data['visible_tabs'][t])
-            merged['visible_tabs'] = vt
-        if 'must_change_password' in data:
-            merged['must_change_password'] = bool(data['must_change_password'])
-        if 'setup_complete' in data:
-            merged['setup_complete'] = bool(data['setup_complete'])
-        if 'otp_secret' in data:
-            merged['otp_secret'] = _decrypt_otp_secret(str(data['otp_secret']).strip())
-        if 'otp_enabled' in data:
-            merged['otp_enabled'] = bool(data['otp_enabled'])
-        else:
-            if merged['password_hash']:
-                merged['setup_complete'] = True
-        if 'disabled_routes' in data and isinstance(data['disabled_routes'], dict):
-            merged['disabled_routes'] = dict(data['disabled_routes'])
-        if 'managed_middlewares' in data and isinstance(data['managed_middlewares'], dict):
-            merged['managed_middlewares'] = dict(data['managed_middlewares'])
-        if 'api_keys' in data and isinstance(data['api_keys'], list):
-            keys = []
-            for k in data['api_keys']:
-                if isinstance(k, dict) and k.get('name') and k.get('hash') and k.get('preview'):
-                    keys.append({
-                        'name':       str(k['name'])[:50],
-                        'hash':       str(k['hash']),
-                        'preview':    str(k['preview']),
-                        'created_at': str(k.get('created_at', '')),
-                    })
-            merged['api_keys'] = keys
-        elif 'api_key_hash' in data and str(data['api_key_hash']).strip():
-            merged['api_keys'] = [{
-                'name':       'Default',
-                'hash':       str(data['api_key_hash']).strip(),
-                'preview':    str(data.get('api_key_preview', '')).strip(),
-                'created_at': '',
-            }]
-        merged['api_key_enabled'] = len(merged['api_keys']) > 0
-        if 'self_route' in data and isinstance(data['self_route'], dict):
-            sr = data['self_route']
-            merged['self_route'] = {
-                'domain':      str(sr.get('domain', '')).strip(),
-                'service_url': str(sr.get('service_url', '')).strip(),
-                'router_name': str(sr.get('router_name', 'traefik-manager')).strip() or 'traefik-manager',
-                'entry_point': str(sr.get('entry_point', '')).strip(),
-            }
-        if 'acme_json_path' in data:
-            merged['acme_json_path'] = str(data['acme_json_path']).strip()
-        if 'access_log_path' in data:
-            merged['access_log_path'] = str(data['access_log_path']).strip()
-        if 'static_config_path' in data:
-            merged['static_config_path'] = str(data['static_config_path']).strip()
-        if 'oidc_enabled' in data:
-            merged['oidc_enabled'] = bool(data['oidc_enabled'])
-        if 'oidc_provider_url' in data:
-            merged['oidc_provider_url'] = str(data['oidc_provider_url']).strip()
-        if 'oidc_client_id' in data:
-            merged['oidc_client_id'] = str(data['oidc_client_id']).strip()
-        if 'oidc_client_secret' in data:
-            merged['oidc_client_secret'] = _decrypt_otp_secret(str(data['oidc_client_secret']).strip())
-        if 'oidc_display_name' in data:
-            merged['oidc_display_name'] = str(data['oidc_display_name']).strip()
-        if 'oidc_allowed_emails' in data:
-            merged['oidc_allowed_emails'] = str(data['oidc_allowed_emails']).strip()
-        if 'oidc_allowed_groups' in data:
-            merged['oidc_allowed_groups'] = str(data['oidc_allowed_groups']).strip()
-        if 'oidc_allow_any_authenticated' in data:
-            merged['oidc_allow_any_authenticated'] = bool(data['oidc_allow_any_authenticated'])
-        if 'oidc_groups_claim' in data:
-            merged['oidc_groups_claim'] = str(data['oidc_groups_claim']).strip()
-        if 'default_theme' in data:
-            _dt = str(data['default_theme']).strip().lower()
-            merged['default_theme'] = _dt if _dt in ('dark', 'light', 'system') else 'dark'
-        if 'geoip_enabled' in data:
-            merged['geoip_enabled'] = bool(data['geoip_enabled'])
-        if 'geoip_db_path' in data:
-            merged['geoip_db_path'] = str(data['geoip_db_path']).strip()
-        if 'webhook_url' in data:
-            merged['webhook_url'] = str(data['webhook_url']).strip()
-        if 'webhook_type' in data:
-            merged['webhook_type'] = str(data['webhook_type']).strip()
-        if 'webhook_username' in data:
-            merged['webhook_username'] = str(data['webhook_username']).strip()
-        if 'webhook_password' in data:
-            merged['webhook_password'] = _decrypt_otp_secret(str(data['webhook_password']))
-        if 'crowdsec_lapi_url' in data:
-            merged['crowdsec_lapi_url'] = str(data['crowdsec_lapi_url']).strip()
-        if 'crowdsec_api_key' in data:
-            merged['crowdsec_api_key'] = _decrypt_otp_secret(str(data['crowdsec_api_key']))
-        if 'crowdsec_machine_id' in data:
-            merged['crowdsec_machine_id'] = str(data['crowdsec_machine_id']).strip()
-        if 'crowdsec_machine_password' in data:
-            merged['crowdsec_machine_password'] = _decrypt_otp_secret(str(data['crowdsec_machine_password']))
-        if 'traefik_api_user' in data:
-            merged['traefik_api_user'] = str(data['traefik_api_user']).strip()
-        if 'traefik_api_password' in data:
-            merged['traefik_api_password'] = _decrypt_otp_secret(str(data['traefik_api_password']))
-        if 'git_backup_enabled' in data:
-            merged['git_backup_enabled'] = bool(data['git_backup_enabled'])
-        if 'git_backup_repo' in data:
-            merged['git_backup_repo'] = str(data['git_backup_repo']).strip()
-        if 'git_backup_branch' in data:
-            merged['git_backup_branch'] = str(data['git_backup_branch']).strip() or 'main'
-        if 'git_backup_username' in data:
-            merged['git_backup_username'] = str(data['git_backup_username']).strip()
-        if 'git_backup_token' in data:
-            merged['git_backup_token'] = _decrypt_otp_secret(str(data['git_backup_token']))
-        if 'git_backup_commit_message' in data:
-            merged['git_backup_commit_message'] = str(data['git_backup_commit_message']).strip() or 'traefik-manager: {action} at {timestamp}'
-        if 'git_backup_auto_push' in data:
-            merged['git_backup_auto_push'] = bool(data['git_backup_auto_push'])
-        merged['agents'] = load_agents()
-        if 'agent_api_rate_limit' in data:
-            try:
-                merged['agent_api_rate_limit'] = max(1, int(data['agent_api_rate_limit']))
-            except Exception:
-                pass
-        if 'backup_keep_count' in data:
-            try:
-                merged['backup_keep_count'] = max(0, int(data['backup_keep_count']))
-            except Exception:
-                pass
-        return merged
-    except Exception as e:
-        logger.warning(f"Could not load manager.yml, using defaults: {e}")
-        return defaults
 
 
-def save_settings(domains, cert_resolver, traefik_api_url,
-                  auth_enabled=True, password_hash='', visible_tabs=None,
-                  must_change_password=None, setup_complete=None,
-                  otp_secret=None, otp_enabled=None,
-                  api_keys=None,
-                  disabled_routes=None,
-                  managed_middlewares=None,
-                  self_route=None,
-                  acme_json_path=None,
-                  access_log_path=None,
-                  static_config_path=None,
-                  oidc_enabled=None, oidc_provider_url=None, oidc_client_id=None,
-                  oidc_client_secret=None, oidc_display_name=None,
-                  oidc_allowed_emails=None, oidc_allowed_groups=None,
-                  oidc_allow_any_authenticated=None,
-                  oidc_groups_claim=None, webhook_url=None, webhook_type=None,
-                  webhook_username=None, webhook_password=None,
-                  crowdsec_lapi_url=None, crowdsec_api_key=None,
-                  crowdsec_machine_id=None, crowdsec_machine_password=None,
-                  traefik_api_user=None, traefik_api_password=None,
-                  git_backup_enabled=None, git_backup_repo=None,
-                  git_backup_branch=None, git_backup_username=None,
-                  git_backup_token=None, git_backup_commit_message=None,
-                  git_backup_auto_push=None,
-                  agent_api_rate_limit=None, backup_keep_count=None,
-                  default_theme=None,
-                  geoip_enabled=None, geoip_db_path=None):
-    if visible_tabs is None:
-        visible_tabs = {t: False for t in OPTIONAL_TABS}
-    _cur = load_settings()
-    if must_change_password is None:
-        must_change_password = _cur.get('must_change_password', False)
-    if setup_complete is None:
-        setup_complete = _cur.get('setup_complete', False)
-    if otp_secret is None:
-        otp_secret = _cur.get('otp_secret', '')
-    if otp_enabled is None:
-        otp_enabled = _cur.get('otp_enabled', False)
-    if api_keys is None:
-        api_keys = _cur.get('api_keys', [])
-    if self_route is None:
-        self_route = _cur.get('self_route', {'domain': '', 'service_url': ''})
-    if disabled_routes is None:
-        disabled_routes = _cur.get('disabled_routes', {})
-    if managed_middlewares is None:
-        managed_middlewares = _cur.get('managed_middlewares', {})
-    if acme_json_path is None:
-        acme_json_path = _cur.get('acme_json_path', '')
-    if default_theme is None:
-        default_theme = _cur.get('default_theme', 'dark')
-    default_theme = str(default_theme).strip().lower()
-    if default_theme not in ('dark', 'light', 'system'):
-        default_theme = 'dark'
-    if geoip_enabled is None:
-        geoip_enabled = _cur.get('geoip_enabled', False)
-    if geoip_db_path is None:
-        geoip_db_path = _cur.get('geoip_db_path', '')
-    if access_log_path is None:
-        access_log_path = _cur.get('access_log_path', '')
-    if static_config_path is None:
-        static_config_path = _cur.get('static_config_path', '')
-    if oidc_enabled is None:
-        oidc_enabled = _cur.get('oidc_enabled', False)
-    if oidc_provider_url is None:
-        oidc_provider_url = _cur.get('oidc_provider_url', '')
-    if oidc_client_id is None:
-        oidc_client_id = _cur.get('oidc_client_id', '')
-    if oidc_client_secret is None:
-        oidc_client_secret = _cur.get('oidc_client_secret', '')
-    if oidc_display_name is None:
-        oidc_display_name = _cur.get('oidc_display_name', 'OIDC')
-    if oidc_allowed_emails is None:
-        oidc_allowed_emails = _cur.get('oidc_allowed_emails', '')
-    if oidc_allowed_groups is None:
-        oidc_allowed_groups = _cur.get('oidc_allowed_groups', '')
-    if oidc_allow_any_authenticated is None:
-        oidc_allow_any_authenticated = _cur.get('oidc_allow_any_authenticated', False)
-    if oidc_groups_claim is None:
-        oidc_groups_claim = _cur.get('oidc_groups_claim', 'groups')
-    if webhook_url is None:
-        webhook_url = _cur.get('webhook_url', '')
-    if webhook_type is None:
-        webhook_type = _cur.get('webhook_type', 'discord')
-    if webhook_username is None:
-        webhook_username = _cur.get('webhook_username', '')
-    if webhook_password is None:
-        webhook_password = _cur.get('webhook_password', '')
-    if crowdsec_lapi_url is None:
-        crowdsec_lapi_url = _cur.get('crowdsec_lapi_url', '')
-    if crowdsec_api_key is None:
-        crowdsec_api_key = _cur.get('crowdsec_api_key', '')
-    if crowdsec_machine_id is None:
-        crowdsec_machine_id = _cur.get('crowdsec_machine_id', '')
-    if crowdsec_machine_password is None:
-        crowdsec_machine_password = _cur.get('crowdsec_machine_password', '')
-    if traefik_api_user is None:
-        traefik_api_user = _cur.get('traefik_api_user', '')
-    if traefik_api_password is None:
-        traefik_api_password = _cur.get('traefik_api_password', '')
-    if git_backup_enabled is None:
-        git_backup_enabled = _cur.get('git_backup_enabled', False)
-    if git_backup_repo is None:
-        git_backup_repo = _cur.get('git_backup_repo', '')
-    if git_backup_branch is None:
-        git_backup_branch = _cur.get('git_backup_branch', 'main')
-    if git_backup_username is None:
-        git_backup_username = _cur.get('git_backup_username', '')
-    if git_backup_token is None:
-        git_backup_token = _cur.get('git_backup_token', '')
-    if git_backup_commit_message is None:
-        git_backup_commit_message = _cur.get('git_backup_commit_message', 'traefik-manager: {action} at {timestamp}')
-    if git_backup_auto_push is None:
-        git_backup_auto_push = _cur.get('git_backup_auto_push', True)
-    if agent_api_rate_limit is None:
-        agent_api_rate_limit = _cur.get('agent_api_rate_limit', int(os.environ.get('AGENT_API_RATE_LIMIT', 30)))
-    if backup_keep_count is None:
-        backup_keep_count = _cur.get('backup_keep_count', int(os.environ.get('BACKUP_KEEP_COUNT', 0)))
-    otp_secret = _encrypt_otp_secret(otp_secret)
-    oidc_client_secret_enc = _encrypt_otp_secret(oidc_client_secret) if oidc_client_secret else ''
-    os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
-    import json as _json
-    def _plain(v):
-        try:
-            return _json.loads(_json.dumps(v, default=str))
-        except Exception:
-            return v
-    tmp = f"{SETTINGS_PATH}.tmp.{os.getpid()}.{threading.get_ident()}"
-    _doc = _plain({
-        'domains':              domains,
-        'cert_resolver':        cert_resolver,
-        'traefik_api_url':      traefik_api_url,
-        'auth_enabled':         auth_enabled,
-        'password_hash':        password_hash,
-        'visible_tabs':         visible_tabs,
-        'must_change_password': must_change_password,
-        'setup_complete':       setup_complete,
-        'otp_secret':           otp_secret,
-        'otp_enabled':          otp_enabled,
-        'disabled_routes':      disabled_routes,
-        'managed_middlewares':  managed_middlewares,
-        'api_keys':             api_keys,
-        'api_key_enabled':      len(list(api_keys)) > 0,
-        'self_route':           self_route,
-        'acme_json_path':       acme_json_path,
-        'access_log_path':      access_log_path,
-        'static_config_path':   static_config_path,
-        'oidc_enabled':         oidc_enabled,
-        'oidc_provider_url':    oidc_provider_url,
-        'oidc_client_id':       oidc_client_id,
-        'oidc_client_secret':   oidc_client_secret_enc,
-        'oidc_display_name':    oidc_display_name,
-        'oidc_allowed_emails':  oidc_allowed_emails,
-        'oidc_allowed_groups':  oidc_allowed_groups,
-        'oidc_allow_any_authenticated': bool(oidc_allow_any_authenticated),
-        'default_theme':        default_theme,
-        'geoip_enabled':        bool(geoip_enabled),
-        'geoip_db_path':        str(geoip_db_path or '').strip(),
-        'oidc_groups_claim':    oidc_groups_claim,
-        'webhook_url':          webhook_url,
-        'webhook_type':         webhook_type,
-        'webhook_username':     webhook_username,
-        'webhook_password':     _encrypt_otp_secret(webhook_password) if webhook_password else '',
-        'crowdsec_lapi_url':    crowdsec_lapi_url,
-        'crowdsec_api_key':     _encrypt_otp_secret(crowdsec_api_key) if crowdsec_api_key else '',
-        'crowdsec_machine_id':       crowdsec_machine_id,
-        'crowdsec_machine_password': _encrypt_otp_secret(crowdsec_machine_password) if crowdsec_machine_password else '',
-        'traefik_api_user':          traefik_api_user,
-        'traefik_api_password':      _encrypt_otp_secret(traefik_api_password) if traefik_api_password else '',
-        'git_backup_enabled':        git_backup_enabled,
-        'git_backup_repo':           git_backup_repo,
-        'git_backup_branch':         git_backup_branch,
-        'git_backup_username':       git_backup_username,
-        'git_backup_token':          _encrypt_otp_secret(git_backup_token) if git_backup_token else '',
-        'git_backup_commit_message': git_backup_commit_message,
-        'git_backup_auto_push':      git_backup_auto_push,
-        'agent_api_rate_limit':      agent_api_rate_limit,
-        'backup_keep_count':         backup_keep_count,
-    })
-    try:
-        with open(tmp, 'w') as f:
-            yaml.dump(_doc, f)
-        os.replace(tmp, SETTINGS_PATH)
-    finally:
-        if os.path.exists(tmp):
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-    logger.info("Manager settings saved")
 
 
-SELF_ROUTE_FILENAME = 'traefik-manager-self.yml'
+
 
 def _best_entrypoint() -> str:
     eps = traefik_api_get('/api/entrypoints') or []
@@ -1050,115 +362,11 @@ def _best_entrypoint() -> str:
         return eps[0].get('name', 'websecure')
     return 'websecure'
 
-def _self_route_path() -> str:
-    if ACTIVE_CONFIG_DIR:
-        return os.path.join(ACTIVE_CONFIG_DIR, SELF_ROUTE_FILENAME)
-    return os.path.join(os.path.dirname(os.path.abspath(CONFIG_PATH)), SELF_ROUTE_FILENAME)
-
-def _write_self_route(domain: str, service_url: str, cert_resolver: str, router_name: str = 'traefik-manager', entry_point: str = 'websecure') -> None:
-    router_entry = {
-        'rule': f'Host(`{domain}`)',
-        'entryPoints': [entry_point or 'websecure'],
-        'service': router_name,
-        'tls': {'certResolver': cert_resolver} if cert_resolver and cert_resolver.lower() != 'none' else {},
-    }
-    service_entry = {
-        'loadBalancer': {
-            'servers': [{'url': service_url}]
-        }
-    }
-    if ACTIVE_CONFIG_DIR:
-        path = _self_route_path()
-        content = {
-            'http': {
-                'routers': {router_name: router_entry},
-                'services': {router_name: service_entry},
-            }
-        }
-        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        tmp = f"{path}.tmp.{os.getpid()}.{threading.get_ident()}"
-        try:
-            with open(tmp, 'w') as f:
-                yaml.dump(content, f)
-            os.replace(tmp, path)
-        finally:
-            if os.path.exists(tmp):
-                try:
-                    os.unlink(tmp)
-                except OSError:
-                    pass
-        logger.info(f"Self-route written to new file: {path}")
-    else:
-        cfg = load_config(CONFIG_PATH)
-        cfg.setdefault('http', {}).setdefault('routers', {})[router_name] = router_entry
-        cfg['http'].setdefault('services', {})[router_name] = service_entry
-        save_config(cfg, CONFIG_PATH)
-        logger.info(f"Self-route updated in existing config: {CONFIG_PATH} (router: {router_name})")
-
-def _delete_self_route(router_name: str = 'traefik-manager') -> None:
-    if ACTIVE_CONFIG_DIR:
-        path = _self_route_path()
-        if os.path.exists(path):
-            os.remove(path)
-            logger.info(f"Self-route file deleted: {path}")
-    else:
-        cfg = load_config(CONFIG_PATH)
-        http = cfg.get('http', {})
-        http.get('routers', {}).pop(router_name, None)
-        http.get('services', {}).pop(router_name, None)
-        save_config(_strip_empty_sections(cfg), CONFIG_PATH)
-        logger.info(f"Self-route '{router_name}' removed from config: {CONFIG_PATH}")
-
-def _detect_self_route_domain() -> str:
-    import re
-    for cfg_path in CONFIG_PATHS:
-        if not os.path.exists(cfg_path):
-            continue
-        try:
-            with open(cfg_path, 'r') as f:
-                sanitized, _ = _sanitize_go_templates(f.read())
-            data = yaml.load(sanitized) or {}
-            routers = (data.get('http') or {}).get('routers') or {}
-            services = (data.get('http') or {}).get('services') or {}
-            for rname, rdata in routers.items():
-                svc_name = (rdata.get('service') or '').split('@')[0]
-                svc = services.get(svc_name) or {}
-                servers = ((svc.get('loadBalancer') or {}).get('servers') or [])
-                urls = [str(s.get('url', '')) for s in servers if s.get('url')]
-                if any('traefik-manager' in u or ':5000' in u for u in urls):
-                    rule = rdata.get('rule', '')
-                    m = re.search(r'Host\(`([^`]+)`\)', rule)
-                    if m:
-                        return m.group(1)
-        except Exception:
-            continue
-    return ''
 
 
-def _detect_self_route_from_own_labels() -> tuple[str, str]:
-    import re
-    try:
-        import docker as _docker
-        client = _docker.from_env()
-        own_id = os.environ.get('HOSTNAME', '')
-        for c in client.containers.list():
-            if not (c.id.startswith(own_id) or 'traefik-manager' in c.name):
-                continue
-            labels = c.labels or {}
-            domain = ''
-            svc_url = ''
-            for k, v in labels.items():
-                if k.startswith('traefik.http.routers.') and k.endswith('.rule'):
-                    m = re.search(r'Host\(`([^`]+)`\)', v)
-                    if m:
-                        domain = m.group(1)
-                if k.startswith('traefik.http.services.') and k.endswith('.loadbalancer.server.url'):
-                    svc_url = v
-            if domain:
-                return domain, svc_url or 'http://traefik-manager:5000'
-    except Exception:
-        pass
-    return '', ''
+
+
+
 
 
 def _detect_setup_self_route() -> tuple[str, str]:
@@ -1171,19 +379,8 @@ def _detect_setup_self_route() -> tuple[str, str]:
         return domain, 'http://traefik-manager:5000'
     return _detect_self_route_from_own_labels()
 
-def _auth_enabled() -> bool:
-    env = os.environ.get('AUTH_ENABLED', '').strip().lower()
-    if env in ('false', '0', 'no'):
-        return False
-    if env in ('true', '1', 'yes'):
-        return True
-    return load_settings().get('auth_enabled', True)
 
-def _oidc_active() -> bool:
-    return bool(load_settings().get('oidc_enabled'))
 
-def _auth_required() -> bool:
-    return _auth_enabled() or _oidc_active()
 
 
 def _hash_password(plaintext: str) -> str:
@@ -1243,13 +440,13 @@ _restart_meth = _get_restart_method()
 _oidc_on      = bool(_s.get('oidc_issuer'))
 logger.info("===========================================")
 logger.info(f"Traefik Manager v{APP_VERSION}")
-if MULTI_CONFIG:
-    for _cp in CONFIG_PATHS:
+if env.MULTI_CONFIG:
+    for _cp in env.CONFIG_PATHS:
         logger.info(f"Config File:    {_cp}")
 elif ACTIVE_CONFIG_DIR:
     logger.info(f"Config Dir:     {ACTIVE_CONFIG_DIR}")
 else:
-    logger.info(f"Config Path:    {CONFIG_PATH}")
+    logger.info(f"Config Path:    {env.CONFIG_PATH}")
 logger.info(f"Settings Path:  {SETTINGS_PATH}")
 logger.info(f"Backup Dir:     {BACKUP_DIR}")
 logger.info(f"Traefik API:    {_s['traefik_api_url']}")
@@ -1277,49 +474,24 @@ def _inject_theme():
     except Exception:
         return {'default_theme': 'dark'}
 
-def _get_csrf_token() -> str:
-    if 'csrf_token' not in session:
-        session['csrf_token'] = secrets.token_hex(32)
-    return session['csrf_token']
 
-def _check_csrf():
-    token = request.form.get('csrf_token', '') or request.headers.get('X-CSRF-Token', '')
-    if request.is_json:
-        token = (request.get_json(silent=True) or {}).get('csrf_token', '') or token
-    expected = session.get('csrf_token', '')
-    if not expected or not secrets.compare_digest(str(token), str(expected)):
-        logger.warning(f"CSRF check failed from {request.remote_addr}")
-        if request.headers.get('X-Requested-With') == 'fetch' or request.is_json:
-            raise _CsrfError()
-        abort(403)
 
-class _CsrfError(Exception):
-    pass
 
 @app.errorhandler(_CsrfError)
 def _handle_csrf_error(e):
     return jsonify({'ok': False, 'message': 'Session expired - please refresh the page.'}), 403
 
-def csrf_protect(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if request.method in ('POST', 'PUT', 'DELETE', 'PATCH'):
-            if not _check_api_key():
-                _check_csrf()
-        return f(*args, **kwargs)
-    return decorated
 
 @app.context_processor
 def inject_csrf():
     return {'csrf_token': _get_csrf_token()}
 
 
-def _check_password(plaintext: str, hashed: str) -> bool:
-    import bcrypt
-    try:
-        return bcrypt.checkpw(plaintext.encode(), hashed.encode())
-    except Exception:
-        return False
+@app.context_processor
+def inject_asset_version():
+    return {'asset_version': APP_VERSION}
+
+
 
 def _hash_api_key(key: str) -> str:
     import hashlib
@@ -1331,54 +503,11 @@ def _safe_next(next_url: str) -> str:
         return nu
     return url_for('index')
 
-def _verify_api_key(key: str, stored: str) -> bool:
-    import hashlib
-    if stored.startswith('sha256:'):
-        expected = 'sha256:' + hashlib.sha256(key.encode()).hexdigest()
-        return secrets.compare_digest(expected, stored)
-    return _check_password(key, stored)
 
 
-def _is_authenticated() -> bool:
 
-    if not _auth_required():
-        return True
-    return session.get('authenticated') is True
 
-def _check_inactivity():
-    if not session.get('authenticated'):
-        return
-    last = session.get('last_active')
-    now  = time.time()
-    timeout = INACTIVITY_TIMEOUT * 60 if not session.permanent else INACTIVITY_TIMEOUT * 60 * 24
-    if last and (now - last) > timeout:
-        logger.info(f"Session expired due to inactivity for {request.remote_addr}")
-        session.clear()
-        return
-    session['last_active'] = now
 
-def _check_api_key() -> bool:
-    key = request.headers.get('X-Api-Key', '')
-    if not key:
-        return False
-    settings = load_settings()
-    api_keys = settings.get('api_keys', [])
-    if not api_keys:
-        return False
-    return any(_verify_api_key(key, k['hash']) for k in api_keys if k.get('hash'))
-
-def login_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if _check_api_key():
-            return f(*args, **kwargs)
-        _check_inactivity()
-        if not _is_authenticated():
-            if request.headers.get('X-Api-Key'):
-                abort(401)
-            return redirect(url_for('login', next=request.path))
-        return f(*args, **kwargs)
-    return decorated
 
 def _has_password_set() -> bool:
 
@@ -1936,39 +1065,9 @@ if not os.environ.get('REQUESTS_CA_BUNDLE'):
     if os.path.exists(_SYSTEM_CA_BUNDLE):
         os.environ['REQUESTS_CA_BUNDLE'] = _SYSTEM_CA_BUNDLE
 
-def _traefik_verify():
-    if os.environ.get('TRAEFIK_INSECURE_SKIP_VERIFY', '').lower() in ('true', '1', 'yes'):
-        return False
-    return True
 
-def traefik_api_get(path):
-    settings = load_settings()
-    base_url = settings['traefik_api_url']
-    if not _safe_api_url(base_url):
-        logger.error("traefik_api_url failed safety check")
-        return None
-    u = settings.get('traefik_api_user', '')
-    p = settings.get('traefik_api_password', '')
-    auth = (u, p) if u and p else None
-    try:
-        resp = requests.get(f"{base_url}{path}", timeout=3, auth=auth, verify=_traefik_verify())
-        if resp.status_code == 200:
-            return resp.json()
-    except Exception as e:
-        logger.debug(f"Traefik API unavailable: {e}")
-    return None
 
-def traefik_api_get_all(path):
-    sep = '&' if '?' in path else '?'
-    return traefik_api_get(f"{path}{sep}per_page=1000")
 
-def _fetch_traefik_routers_and_services():
-    all_routers  = {}
-    all_services = {}
-    for proto in ('http', 'tcp', 'udp'):
-        all_routers[proto]  = traefik_api_get_all(f'/api/{proto}/routers')  or []
-        all_services[proto] = traefik_api_get_all(f'/api/{proto}/services') or []
-    return all_routers, all_services
 
 @app.route('/api/traefik/overview')
 @login_required
@@ -2029,90 +1128,14 @@ def api_version():
     return jsonify(traefik_api_get('/api/version') or {})
 
 
-def _cs_lapi_url() -> str:
-    s = load_settings()
-    return s.get('crowdsec_lapi_url', '').strip() or os.environ.get('CROWDSEC_LAPI_URL', '').strip()
 
-def _cs_api_key() -> str:
-    s = load_settings()
-    return s.get('crowdsec_api_key', '').strip() or os.environ.get('CROWDSEC_API_KEY', '').strip()
 
-def _cs_machine_id() -> str:
-    s = load_settings()
-    return s.get('crowdsec_machine_id', '').strip() or os.environ.get('CROWDSEC_MACHINE_ID', '').strip()
 
-def _cs_machine_password() -> str:
-    s = load_settings()
-    return s.get('crowdsec_machine_password', '').strip() or os.environ.get('CROWDSEC_MACHINE_PASSWORD', '').strip()
 
-def _cs_has_machine() -> bool:
-    return bool(_cs_machine_id() and _cs_machine_password())
 
-_cs_jwt_cache = {'token': '', 'expiry': None}
 
-def _cs_jwt(lapi: str = None) -> str:
-    if lapi is None:
-        lapi = _cs_lapi_url()
-    lapi = lapi.rstrip('/')
-    mid  = _cs_machine_id()
-    pw   = _cs_machine_password()
-    if not (lapi and mid and pw):
-        return ''
-    now = datetime.now(timezone.utc)
-    if _cs_jwt_cache['token'] and _cs_jwt_cache['expiry'] and now < _cs_jwt_cache['expiry']:
-        return _cs_jwt_cache['token']
-    try:
-        resp = requests.post(f"{lapi}/v1/watchers/login",
-                             json={'machine_id': mid, 'password': pw, 'scenarios': []},
-                             timeout=5)
-        resp.raise_for_status()
-        body  = resp.json() or {}
-        token = body.get('token', '')
-        if not token:
-            return ''
-        _cs_jwt_cache['token'] = token
-        try:
-            exp = datetime.fromisoformat(str(body.get('expire', '')).replace('Z', '+00:00'))
-            _cs_jwt_cache['expiry'] = exp - timedelta(minutes=2)
-        except Exception:
-            _cs_jwt_cache['expiry'] = now + timedelta(minutes=58)
-        return token
-    except Exception as e:
-        logger.warning(f"CrowdSec machine login failed: {e}")
-        return ''
 
-def _cs_machine_request(method: str, path: str, **kwargs):
-    lapi  = _cs_lapi_url().rstrip('/')
-    token = _cs_jwt(lapi)
-    if not (lapi and token):
-        return None
-    try:
-        resp = requests.request(method, f"{lapi}{path}",
-                                headers={'Authorization': f'Bearer {token}', 'Accept': 'application/json'},
-                                timeout=5, **kwargs)
-        resp.raise_for_status()
-        return resp.json() if resp.content else {}
-    except Exception as e:
-        logger.warning(f"CrowdSec machine request error {method} {path}: {e}")
-        return None
 
-def _cs_request(method: str, path: str, lapi: str = None, key: str = None, **kwargs):
-    if lapi is None:
-        lapi = _cs_lapi_url()
-    if key is None:
-        key = _cs_api_key()
-    lapi = lapi.rstrip('/')
-    if not lapi or not key:
-        return None
-    try:
-        resp = requests.request(method, f"{lapi}{path}",
-                                headers={'X-Api-Key': key, 'Accept': 'application/json'},
-                                timeout=5, **kwargs)
-        resp.raise_for_status()
-        return resp.json() if resp.content else None
-    except Exception as e:
-        logger.warning(f"CrowdSec LAPI error {method} {path}: {e}")
-        return None
 
 @app.route('/api/crowdsec/decisions')
 @login_required
@@ -2311,31 +1334,7 @@ def _apr1_hash(password: str, salt: str) -> str:
     enc += to64(a[11], 2)
     return f'$apr1${salt}${enc}'
 
-@app.route('/api/tools/digestauth', methods=['POST'])
-@login_required
-def api_digestauth():
-    import hashlib
-    data     = request.get_json(silent=True) or {}
-    username = data.get('username', '').strip()
-    realm    = data.get('realm', '').strip()
-    password = data.get('password', '')
-    if not username or not realm or not password:
-        return jsonify({'ok': False, 'error': 'username, realm and password required'}), 400
-    h = hashlib.md5(f'{username}:{realm}:{password}'.encode()).hexdigest()
-    return jsonify({'ok': True, 'hash': f'{username}:{realm}:{h}'})
 
-@app.route('/api/tools/htpasswd', methods=['POST'])
-@login_required
-def api_htpasswd():
-    import random, string
-    data     = request.get_json(silent=True) or {}
-    username = data.get('username', '').strip()
-    password = data.get('password', '')
-    if not username or not password:
-        return jsonify({'ok': False, 'error': 'username and password required'}), 400
-    salt = ''.join(random.choices(string.ascii_letters + string.digits + './', k=8))
-    h    = _apr1_hash(password, salt)
-    return jsonify({'ok': True, 'hash': f'{username}:{h}'})
 
 @app.route('/api/traefik/ping')
 @login_required
@@ -2701,11 +1700,6 @@ _CLOUDFLARE_IPS_V6 = [
 _PRIVATE_IP_RANGES = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', 'fc00::/7']
 
 
-def _trusted_ip_key(cidr: str) -> str:
-    try:
-        return str(ipaddress.ip_network(str(cidr).strip(), strict=False))
-    except ValueError:
-        return str(cidr).strip().lower()
 
 
 def _is_valid_cidr(cidr: str) -> bool:
@@ -2716,16 +1710,6 @@ def _is_valid_cidr(cidr: str) -> bool:
         return False
 
 
-def _merge_trusted_ips(existing: list, additions: list) -> tuple:
-    seen = {_trusted_ip_key(x) for x in existing}
-    added = []
-    for cidr in additions:
-        key = _trusted_ip_key(cidr)
-        if key in seen:
-            continue
-        seen.add(key)
-        added.append(cidr)
-    return list(existing) + added, added
 
 
 def _parse_cidr_input(raw) -> list:
@@ -2820,6 +1804,72 @@ def api_static_trusted_ips_preview():
         logger.exception("Trusted IPs preview failed")
         return jsonify({'error': str(e)}), 500
 
+
+
+@app.route('/api/tools/digestauth', methods=['POST'])
+@login_required
+def api_digestauth():
+    import hashlib
+    data     = request.get_json(silent=True) or {}
+    username = data.get('username', '').strip()
+    realm    = data.get('realm', '').strip()
+    password = data.get('password', '')
+    if not username or not realm or not password:
+        return jsonify({'ok': False, 'error': 'username, realm and password required'}), 400
+    h = hashlib.md5(f'{username}:{realm}:{password}'.encode()).hexdigest()
+    return jsonify({'ok': True, 'hash': f'{username}:{realm}:{h}'})
+
+@app.route('/api/tools/htpasswd', methods=['POST'])
+@login_required
+def api_htpasswd():
+    import random, string
+    data     = request.get_json(silent=True) or {}
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    if not username or not password:
+        return jsonify({'ok': False, 'error': 'username and password required'}), 400
+    salt = ''.join(random.choices(string.ascii_letters + string.digits + './', k=8))
+    h    = _apr1_hash(password, salt)
+    return jsonify({'ok': True, 'hash': f'{username}:{h}'})
+
+@app.route('/api/geoip/status')
+@login_required
+def api_geoip_status():
+    return jsonify(_geoip_status())
+
+@app.route('/api/geoip/lookup', methods=['POST'])
+@csrf_protect
+@login_required
+def api_geoip_lookup():
+    if not _geoip_enabled():
+        return jsonify({'enabled': False, 'available': False, 'results': {}})
+    data = request.get_json(silent=True) or {}
+    ips  = data.get('ips') or []
+    if not isinstance(ips, list):
+        ips = []
+    reader = _geoip_reader()
+    available = reader is not None
+    results = {}
+    if available:
+        for ip in ips[:2000]:
+            ip = str(ip).strip()
+            if not ip or ip in results:
+                continue
+            geo = _geoip_lookup(ip, reader)
+            if geo:
+                results[ip] = geo
+    return jsonify({'enabled': True, 'available': available, 'results': results})
+
+@app.route('/api/geoip/update', methods=['POST'])
+@csrf_protect
+@login_required
+@limiter.limit("6 per hour")
+def api_geoip_update():
+    ok, info = _geoip_download()
+    if ok:
+        add_notification('success', f'GeoIP database updated (DB-IP {info})')
+        return jsonify({'success': True, 'db_month': info, 'status': _geoip_status()})
+    return jsonify({'success': False, 'error': f'Download failed: {info}'}), 502
 
 @app.route('/api/setup/test-connection', methods=['POST'])
 @login_required
@@ -2965,44 +2015,7 @@ def api_plugins_install():
     return jsonify(result)
 
 
-def _parse_cert_expiry(pem_bytes):
-    try:
-        import base64
-        from cryptography import x509
-        from cryptography.hazmat.backends import default_backend
-        if isinstance(pem_bytes, str):
-            pem_bytes = base64.b64decode(pem_bytes)
-        cert_obj = x509.load_pem_x509_certificate(pem_bytes, default_backend())
-        return cert_obj.not_valid_after_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
-    except Exception as ex:
-        logger.debug(f"Cert parse error: {ex}")
-        return None
 
-def _certs_from_tls_configs():
-    import base64
-    certs = []
-    for p in CONFIG_PATHS:
-        config = load_config(p)
-        for entry in (config.get('tls') or {}).get('certificates') or []:
-            cert_file = entry.get('certFile', '')
-            if not cert_file or not os.path.exists(cert_file):
-                continue
-            try:
-                pem_bytes = open(cert_file, 'rb').read()
-                not_after = _parse_cert_expiry(pem_bytes)
-                try:
-                    from cryptography import x509
-                    from cryptography.hazmat.backends import default_backend
-                    cert_obj = x509.load_pem_x509_certificate(pem_bytes, default_backend())
-                    sans = [n.value for n in cert_obj.subject_alternative_names(x509.SubjectAlternativeName).get_values_for_type(x509.DNSName)]
-                    main = sans[0] if sans else os.path.basename(cert_file)
-                except Exception:
-                    sans = []
-                    main = os.path.basename(cert_file)
-                certs.append({'resolver': 'file', 'main': main, 'sans': sans, 'not_after': not_after, 'certFile': cert_file})
-            except Exception as ex:
-                logger.debug(f"Error reading cert file {cert_file}: {ex}")
-    return certs
 
 @app.route('/api/traefik/certs')
 @login_required
@@ -3071,49 +2084,9 @@ def api_logs():
         return jsonify({'error': str(e), 'lines': []})
 
 
-def ensure_backup_dir():
-    if not os.path.exists(BACKUP_DIR):
-        os.makedirs(BACKUP_DIR)
 
-def _backup_keep_count() -> int:
-    try:
-        v = load_settings().get('backup_keep_count')
-        if v in (None, ''):
-            v = os.environ.get('BACKUP_KEEP_COUNT', '0')
-        return max(0, int(v))
-    except Exception:
-        return 0
 
-def _prune_backups(base: str):
-    """Keep only the newest N .bak files for a given config file (0 = keep all)."""
-    keep = _backup_keep_count()
-    if keep <= 0:
-        return
-    pat = re.compile(r'^' + re.escape(base) + r'\.(\d{8}_\d{6})\.bak$')
-    matches = sorted(
-        (f for f in os.listdir(BACKUP_DIR) if pat.match(f)),
-        reverse=True,
-    )
-    for f in matches[keep:]:
-        try:
-            os.remove(os.path.join(BACKUP_DIR, f))
-            logger.info(f"Pruned old backup: {f}")
-        except OSError:
-            pass
 
-def create_backup(path=None):
-    if path is None:
-        path = CONFIG_PATH
-    ensure_backup_dir()
-    if os.path.exists(path):
-        ts   = time.strftime("%Y%m%d_%H%M%S")
-        base = os.path.basename(path)
-        dest = os.path.join(BACKUP_DIR, f"{base}.{ts}.bak")
-        shutil.copy2(path, dest)
-        logger.info(f"Backup created: {dest}")
-        _prune_backups(base)
-        return dest
-    return None
 
 def list_backups():
     ensure_backup_dir()
@@ -3153,284 +2126,22 @@ def _validated_backup_path(filename: str) -> str:
         abort(400)
     return path
 
-def _git_repo_dir():
-    return os.path.join(BACKUP_DIR, 'git-repo')
-
-_GIT_ALLOWED_SCHEMES = ('https://', 'http://', 'ssh://', 'git://')
-_GIT_PROTO_HARDENING = ['-c', 'protocol.ext.allow=never',
-                        '-c', 'protocol.file.allow=user',
-                        '-c', 'protocol.fd.allow=user']
-
-def _valid_git_url(url: str) -> bool:
-    return any((url or '').strip().lower().startswith(s) for s in _GIT_ALLOWED_SCHEMES)
-
-def _safe_git_branch(branch: str) -> str:
-    branch = re.sub(r'[^\w./-]', '', (branch or '').strip())
-    if not branch or branch.startswith('-'):
-        return 'main'
-    return branch
-
-def _git_askpass_path() -> str:
-    p = os.path.join(BACKUP_DIR, '.git-askpass.sh')
-    if not os.path.exists(p):
-        os.makedirs(BACKUP_DIR, exist_ok=True)
-        with open(p, 'w') as f:
-            f.write('#!/bin/sh\ncase "$1" in\n  Username*) printf "%s" "$GIT_ASKPASS_USER" ;;\n  *) printf "%s" "$GIT_ASKPASS_PASS" ;;\nesac\n')
-        os.chmod(p, 0o700)
-    return p
-
-def _git_run(args, cwd=None, credentials=None):
-    env = os.environ.copy()
-    env['GIT_TERMINAL_PROMPT'] = '0'
-    env['GIT_AUTHOR_NAME'] = 'Traefik Manager'
-    env['GIT_AUTHOR_EMAIL'] = 'traefik-manager@localhost'
-    env['GIT_COMMITTER_NAME'] = 'Traefik Manager'
-    env['GIT_COMMITTER_EMAIL'] = 'traefik-manager@localhost'
-    if credentials and credentials.get('token'):
-        env['GIT_ASKPASS'] = _git_askpass_path()
-        env['GIT_ASKPASS_USER'] = credentials.get('username') or 'git'
-        env['GIT_ASKPASS_PASS'] = credentials.get('token')
-    else:
-        env['GIT_ASKPASS'] = ''
-    result = subprocess.run(
-        ['git'] + _GIT_PROTO_HARDENING + args,
-        cwd=cwd or _git_repo_dir(),
-        capture_output=True,
-        text=True,
-        encoding='utf-8',
-        errors='replace',
-        timeout=30,
-        env=env
-    )
-    return result.stdout.strip(), result.stderr.strip(), result.returncode
-
-def _git_ensure_repo_at(repo_dir, repo_url, branch, creds):
-    def _fresh_clone():
-        if os.path.exists(repo_dir):
-            shutil.rmtree(repo_dir, ignore_errors=True)
-        os.makedirs(repo_dir, exist_ok=True)
-        _, _, rc = _git_run(['clone', '--branch', branch, '--', repo_url, '.'], cwd=repo_dir, credentials=creds)
-        if rc != 0:
-            _git_run(['init'], cwd=repo_dir)
-            _git_run(['remote', 'add', 'origin', repo_url], cwd=repo_dir)
-            _git_run(['pull', 'origin', branch], cwd=repo_dir, credentials=creds)
-        _git_run(['config', 'user.email', 'traefik-manager@localhost'], cwd=repo_dir)
-        _git_run(['config', 'user.name', 'Traefik Manager'], cwd=repo_dir)
-
-    valid = False
-    if os.path.exists(os.path.join(repo_dir, '.git')):
-        _, _, rc = _git_run(['rev-parse', '--git-dir'], cwd=repo_dir)
-        valid = (rc == 0)
-    if not valid:
-        _fresh_clone()
-    else:
-        _, _, rc = _git_run(['remote', 'get-url', 'origin'], cwd=repo_dir)
-        if rc != 0:
-            _, _, arc = _git_run(['remote', 'add', 'origin', repo_url], cwd=repo_dir)
-            if arc != 0:
-                _fresh_clone()
-        else:
-            _git_run(['remote', 'set-url', 'origin', repo_url], cwd=repo_dir)
-        _git_run(['config', 'user.email', 'traefik-manager@localhost'], cwd=repo_dir)
-        _git_run(['config', 'user.name', 'Traefik Manager'], cwd=repo_dir)
-    return repo_dir
-
-def _git_ensure_repo():
-    s        = load_settings()
-    repo_url = s.get('git_backup_repo', '').strip()
-    branch   = _safe_git_branch(s.get('git_backup_branch', 'main'))
-    username = s.get('git_backup_username', '').strip()
-    token    = s.get('git_backup_token', '').strip()
-    if not _valid_git_url(repo_url):
-        raise ValueError('Unsupported git repository URL scheme')
-    creds    = {'username': username, 'token': token} if token else None
-    return _git_ensure_repo_at(_git_repo_dir(), repo_url, branch, creds)
-
-@contextlib.contextmanager
-def _git_lock():
-    """Cross-process lock (flock) so concurrent gunicorn workers don't run git
-    operations on the same repo at once, which corrupts the index/remote state."""
-    os.makedirs(BACKUP_DIR, exist_ok=True)
-    f = open(os.path.join(BACKUP_DIR, '.git-push.lock'), 'w')
-    try:
-        fcntl.flock(f, fcntl.LOCK_EX)
-        yield
-    finally:
-        try:
-            fcntl.flock(f, fcntl.LOCK_UN)
-        finally:
-            f.close()
-
-def _git_push_configs(action='backup', custom_message=None):
-    s = load_settings()
-    if not s.get('git_backup_repo', '').strip():
-        return False, 'No repository configured'
-    branch = _safe_git_branch(s.get('git_backup_branch', 'main'))
-    token  = s.get('git_backup_token', '').strip()
-    creds  = {'username': s.get('git_backup_username', '').strip(), 'token': token} if token else None
-    tmpl   = s.get('git_backup_commit_message', 'traefik-manager: {action} at {timestamp}')
-
-    def _redact(text):
-        return text.replace(token, '***') if token and text else text
-
-    with _git_lock():
-        try:
-            repo_dir = _git_ensure_repo()
-        except Exception as e:
-            return False, f'Repo init failed: {_redact(str(e))}'
-        dyn_dir    = os.path.join(repo_dir, 'dynamic')
-        static_dir = os.path.join(repo_dir, 'static')
-        ts  = time.strftime('%Y-%m-%d %H:%M:%S')
-        if custom_message and custom_message.strip():
-            msg = custom_message.strip()
-        else:
-            msg = tmpl.replace('{action}', action).replace('{timestamp}', ts)
-        err = ''
-        for attempt in (1, 2):
-            _, _, frc = _git_run(['fetch', 'origin', branch], credentials=creds)
-            if frc == 0:
-                _git_run(['reset', '--hard', 'FETCH_HEAD'])
-            os.makedirs(dyn_dir,    exist_ok=True)
-            os.makedirs(static_dir, exist_ok=True)
-            for p in CONFIG_PATHS:
-                if os.path.exists(p):
-                    shutil.copy2(p, os.path.join(dyn_dir, os.path.basename(p)))
-            sp = _get_static_config_path()
-            if sp and os.path.exists(sp):
-                shutil.copy2(sp, os.path.join(static_dir, os.path.basename(sp)))
-            _git_run(['add', '-A'])
-            _, _, rc = _git_run(['diff', '--cached', '--quiet'])
-            if rc == 0:
-                return True, 'No changes'
-            _, err, rc = _git_run(['commit', '-m', msg])
-            if rc != 0:
-                return False, f'Commit failed: {_redact(err)}'
-            _, err, rc = _git_run(['push', 'origin', f'HEAD:{branch}'], credentials=creds)
-            if rc == 0:
-                logger.info(f"Git backup: {msg}")
-                return True, ''
-        return False, f'Push failed: {_redact(err)}'
-
-def _git_push_if_enabled(action='backup'):
-    try:
-        s = load_settings()
-        enabled   = s.get('git_backup_enabled')
-        auto_push = s.get('git_backup_auto_push')
-        repo      = s.get('git_backup_repo', '').strip()
-        if enabled and auto_push and repo:
-            ok, err = _git_push_configs(action)
-            if ok and err != 'No changes':
-                add_notification('success', f'Git backup pushed ({action})')
-            elif not ok:
-                logger.warning(f"Git backup failed: {err}")
-                add_notification('error', f'Git backup failed ({action}): {err}')
-    except Exception:
-        logger.exception("Git push error")
 
 
-def _git_agent_repo_dir(agent_id: str) -> str:
-    safe = re.sub(r'[^\w-]', '', str(agent_id))
-    return os.path.join(BACKUP_DIR, f'git-agent-{safe}')
 
-def _agent_git_branch(agent: dict) -> str:
-    branch = (agent.get('git_host_branch') or '').strip()
-    if not branch:
-        branch = re.sub(r'[^\w.-]+', '-', (agent.get('name') or '').strip().lower()).strip('-')
-    if not branch:
-        branch = f"agent-{str(agent.get('id', ''))[:8]}"
-    return _safe_git_branch(branch)
 
-def _git_push_agent_configs(agent, action='backup', custom_message=None):
-    s        = load_settings()
-    repo_url = s.get('git_backup_repo', '').strip()
-    if not repo_url:
-        return False, 'No repository configured on the Host'
-    if not _valid_git_url(repo_url):
-        return False, 'Unsupported git repository URL scheme'
-    branch      = _agent_git_branch(agent)
-    host_branch = _safe_git_branch(s.get('git_backup_branch', 'main'))
-    if branch == host_branch:
-        return False, f'Agent branch "{branch}" must differ from the Host branch'
-    token = s.get('git_backup_token', '').strip()
-    creds = {'username': s.get('git_backup_username', '').strip(), 'token': token} if token else None
-    tmpl  = s.get('git_backup_commit_message', 'traefik-manager: {action} at {timestamp}')
 
-    def _redact(text):
-        return text.replace(token, '***') if token and text else text
 
-    try:
-        resp = _agent_request(agent, 'GET', '/api/configs')
-        resp.raise_for_status()
-        files = (resp.json() or {}).get('files') or []
-    except Exception as e:
-        return False, f'Could not read agent configs: {e}'
-    static_content = ''
-    static_name    = ''
-    try:
-        sresp = _agent_request(agent, 'GET', '/api/static')
-        if sresp.status_code == 200:
-            static_content = (sresp.json() or {}).get('content', '') or ''
-            static_name    = os.path.basename((agent.get('static_config_path') or '').strip()) or 'traefik.yml'
-    except Exception:
-        pass
 
-    repo_dir = _git_agent_repo_dir(agent['id'])
-    ts = time.strftime('%Y-%m-%d %H:%M:%S')
-    if custom_message and custom_message.strip():
-        msg = custom_message.strip()
-    else:
-        msg = tmpl.replace('{action}', action).replace('{timestamp}', ts)
-    with _git_lock():
-        try:
-            _git_ensure_repo_at(repo_dir, repo_url, branch, creds)
-        except Exception as e:
-            return False, f'Repo init failed: {_redact(str(e))}'
-        dyn_dir    = os.path.join(repo_dir, 'dynamic')
-        static_dir = os.path.join(repo_dir, 'static')
-        err = ''
-        for attempt in (1, 2):
-            _, _, frc = _git_run(['fetch', 'origin', branch], cwd=repo_dir, credentials=creds)
-            if frc == 0:
-                _git_run(['reset', '--hard', 'FETCH_HEAD'], cwd=repo_dir)
-            os.makedirs(dyn_dir,    exist_ok=True)
-            os.makedirs(static_dir, exist_ok=True)
-            for f in files:
-                name = os.path.basename(str(f.get('name') or '').strip())
-                if not name:
-                    continue
-                with open(os.path.join(dyn_dir, name), 'w') as fh:
-                    fh.write(str(f.get('content') or ''))
-            if static_content and static_name:
-                with open(os.path.join(static_dir, static_name), 'w') as fh:
-                    fh.write(static_content)
-            _git_run(['add', '-A'], cwd=repo_dir)
-            _, _, rc = _git_run(['diff', '--cached', '--quiet'], cwd=repo_dir)
-            if rc == 0:
-                return True, 'No changes'
-            _, err, rc = _git_run(['commit', '-m', msg], cwd=repo_dir)
-            if rc != 0:
-                return False, f'Commit failed: {_redact(err)}'
-            _, err, rc = _git_run(['push', 'origin', f'HEAD:{branch}'], cwd=repo_dir, credentials=creds)
-            if rc == 0:
-                logger.info(f"Git backup ({agent.get('name')}): {msg}")
-                return True, ''
-        return False, f'Push failed: {_redact(err)}'
 
-def _git_push_agent_if_enabled(agent, action='backup'):
-    try:
-        if not agent or not agent.get('git_host_backup'):
-            return
-        s = load_settings()
-        if not (s.get('git_backup_enabled') and s.get('git_backup_auto_push') and s.get('git_backup_repo', '').strip()):
-            return
-        ok, err = _git_push_agent_configs(agent, action)
-        if ok and err != 'No changes':
-            add_notification('success', f"Git backup pushed ({agent.get('name')}: {action})")
-        elif not ok:
-            logger.warning(f"Agent git backup failed: {err}")
-            add_notification('error', f"Git backup failed ({agent.get('name')}): {err}")
-    except Exception:
-        logger.exception("Agent git push error")
+
+
+
+
+
+
+
+
 
 
 def _git_req_agent():
@@ -3555,12 +2266,6 @@ def api_git_backup_diff(sha):
         logger.exception("Git diff error")
         return jsonify({'error': str(e)}), 500
 
-def _git_show_first(repo_dir, sha, candidates):
-    for c in candidates:
-        content, _, rc = _git_run(['show', f'{sha}:{c}'], cwd=repo_dir)
-        if rc == 0 and content:
-            return content
-    return None
 
 @app.route('/api/backup/git/restore/<sha>', methods=['POST'])
 @csrf_protect
@@ -3591,12 +2296,12 @@ def api_git_backup_restore(sha):
                     restored += 1
             add_notification('warning', f"Restored {agent['name']} from git commit {sha[:8]} ({restored} files)")
             return jsonify({'ok': True})
-        for p in CONFIG_PATHS:
+        for p in env.CONFIG_PATHS:
             create_backup(p)
         sp = _get_static_config_path()
         if sp:
             create_backup(sp)
-        for p in CONFIG_PATHS:
+        for p in env.CONFIG_PATHS:
             base    = os.path.basename(p)
             content = _git_show_first(repo_dir, sha, [f'dynamic/{base}', base])
             if content:
@@ -3691,9 +2396,9 @@ def api_notifications_update():
 @login_required
 def api_tls_options_list():
     opts = []
-    for p in CONFIG_PATHS:
+    for p in env.CONFIG_PATHS:
         config = _load_config_display(p)
-        short = os.path.basename(p) if (MULTI_CONFIG or ACTIVE_CONFIG_DIR) else ''
+        short = os.path.basename(p) if (env.MULTI_CONFIG or ACTIVE_CONFIG_DIR) else ''
         for name, data in (config.get('tls') or {}).get('options', {}).items():
             data = data or {}
             buf = StringIO()
@@ -3725,7 +2430,7 @@ def api_tls_options_save():
     config_file = data.get('configFile', '').strip()
     if not name:
         return jsonify({'ok': False, 'message': 'Profile name is required'}), 400
-    target_path = _resolve_config_path(config_file) or CONFIG_PATH
+    target_path = _resolve_config_path(config_file) or env.CONFIG_PATH
     create_backup(target_path)
     config = load_config(target_path)
     opts = {}
@@ -3762,7 +2467,7 @@ def api_tls_options_save():
 @login_required
 def api_tls_options_delete(name):
     config_file = request.args.get('configFile', '').strip()
-    target_path = _resolve_config_path(config_file) or CONFIG_PATH
+    target_path = _resolve_config_path(config_file) or env.CONFIG_PATH
     config = load_config(target_path)
     tls_opts = (config.get('tls') or {}).get('options', {})
     if name not in tls_opts:
@@ -3792,8 +2497,8 @@ def api_restore(filename):
         # Strip the timestamp suffix to get the original basename
         bname = filename  # e.g. dynamic.yml.20260325_120000.bak
         # Find matching config path by basename prefix
-        target_path = CONFIG_PATH
-        for p in CONFIG_PATHS:
+        target_path = env.CONFIG_PATH
+        for p in env.CONFIG_PATHS:
             if bname.startswith(os.path.basename(p) + '.'):
                 target_path = p
                 break
@@ -3812,7 +2517,7 @@ def api_restore(filename):
 def api_backup_create():
     try:
         created = []
-        for p in CONFIG_PATHS:
+        for p in env.CONFIG_PATHS:
             dest = create_backup(p)
             if dest:
                 created.append(os.path.basename(dest))
@@ -3834,7 +2539,7 @@ def api_static_backup_create():
     try:
         dest = create_backup(path)
         if dest:
-            add_notification('success', f"Static config backup created")
+            add_notification('success', "Static config backup created")
             return jsonify({'success': True, 'name': os.path.basename(dest)})
         return jsonify({'error': 'Static config file not found'}), 400
     except Exception as e:
@@ -4085,33 +2790,7 @@ def api_save_theme():
         return jsonify({'success': False, 'error': 'Save failed'}), 500
 
 
-@app.route('/api/geoip/status')
-@login_required
-def api_geoip_status():
-    return jsonify(_geoip_status())
 
-@app.route('/api/geoip/lookup', methods=['POST'])
-@csrf_protect
-@login_required
-def api_geoip_lookup():
-    if not _geoip_enabled():
-        return jsonify({'enabled': False, 'available': False, 'results': {}})
-    data = request.get_json(silent=True) or {}
-    ips  = data.get('ips') or []
-    if not isinstance(ips, list):
-        ips = []
-    reader = _geoip_reader()
-    available = reader is not None
-    results = {}
-    if available:
-        for ip in ips[:2000]:
-            ip = str(ip).strip()
-            if not ip or ip in results:
-                continue
-            geo = _geoip_lookup(ip, reader)
-            if geo:
-                results[ip] = geo
-    return jsonify({'enabled': True, 'available': available, 'results': results})
 
 @app.route('/api/settings/geoip', methods=['POST'])
 @csrf_protect
@@ -4137,16 +2816,6 @@ def api_save_geoip():
         logger.exception("GeoIP settings save error")
         return jsonify({'success': False, 'error': 'Save failed'}), 500
 
-@app.route('/api/geoip/update', methods=['POST'])
-@csrf_protect
-@login_required
-@limiter.limit("6 per hour")
-def api_geoip_update():
-    ok, info = _geoip_download()
-    if ok:
-        add_notification('success', f'GeoIP database updated (DB-IP {info})')
-        return jsonify({'success': True, 'db_month': info, 'status': _geoip_status()})
-    return jsonify({'success': False, 'error': f'Download failed: {info}'}), 502
 
 
 _CGNAT_NETWORK = ipaddress.ip_network('100.64.0.0/10')
@@ -4220,31 +2889,6 @@ def api_save_backup_retention():
         return jsonify({'error': str(e)}), 500
 
 
-def _find_existing_self_route(hostname: str) -> dict:
-    import re
-    for cfg_path in CONFIG_PATHS:
-        if not os.path.exists(cfg_path):
-            continue
-        try:
-            with open(cfg_path, 'r') as f:
-                sanitized, _ = _sanitize_go_templates(f.read())
-            data = yaml.load(sanitized) or {}
-            routers  = (data.get('http') or {}).get('routers') or {}
-            services = (data.get('http') or {}).get('services') or {}
-            for rname, rdata in routers.items():
-                rule = rdata.get('rule', '')
-                m = re.search(r'Host\(`([^`]+)`\)', rule)
-                if m and m.group(1).lower() == hostname.lower():
-                    svc_name = (rdata.get('service') or '').split('@')[0]
-                    svc = services.get(svc_name) or {}
-                    servers = ((svc.get('loadBalancer') or {}).get('servers') or [])
-                    svc_url     = next((str(s['url']) for s in servers if s.get('url')), '')
-                    entry_pts   = rdata.get('entryPoints') or ['websecure']
-                    entry_point = entry_pts[0] if entry_pts else 'websecure'
-                    return {'domain': hostname, 'service_url': svc_url, 'router_name': rname, 'entry_point': entry_point, 'found': True}
-        except Exception:
-            continue
-    return {}
 
 @app.route('/api/settings/self-route', methods=['GET'])
 @login_required
@@ -4288,28 +2932,7 @@ def api_save_self_route():
     return jsonify({'ok': True})
 
 
-def _sanitize_go_templates(raw):
-    mapping = {}
-    counter = [0]
-    def _replace(m):
-        key = f'__TM_TEMPLATE_{counter[0]}__'
-        mapping[key] = m.group(0)
-        counter[0] += 1
-        return key
-    return re.sub(r'\{\{[^}]*\}\}', _replace, raw), mapping
 
-def _restore_go_templates(obj, mapping):
-    if not mapping:
-        return obj
-    if isinstance(obj, str):
-        for ph, orig in mapping.items():
-            obj = obj.replace(ph, orig)
-        return obj
-    if isinstance(obj, dict):
-        return {k: _restore_go_templates(v, mapping) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_restore_go_templates(item, mapping) for item in obj]
-    return obj
 
 def _file_template_map(path):
     if path and os.path.exists(path):
@@ -4318,112 +2941,15 @@ def _file_template_map(path):
         return mapping
     return {}
 
-def _load_config_display(path):
-    if not os.path.exists(path):
-        return {}
-    with open(path, 'r') as f:
-        raw = f.read()
-    sanitized, mapping = _sanitize_go_templates(raw)
-    try:
-        data = yaml.load(sanitized)
-    except Exception:
-        _y2 = YAML()
-        _y2.allow_duplicate_keys = True
-        try:
-            data = _y2.load(sanitized)
-        except Exception:
-            return {}
-    if not data or not isinstance(data, dict):
-        return {}
-    return _restore_go_templates(data, mapping) if mapping else data
 
 
-def _get_config_parse_errors():
-    errors = []
-    for p in CONFIG_PATHS:
-        if not os.path.exists(p):
-            continue
-        try:
-            with open(p, 'r') as f:
-                raw = f.read()
-            sanitized, _ = _sanitize_go_templates(raw)
-            _y = YAML()
-            _y.load(sanitized)
-        except Exception as e:
-            msg = str(e)
-            first_line = next((l.strip() for l in msg.splitlines() if l.strip()), msg)
-            errors.append({'file': os.path.basename(p), 'error': first_line})
-    return errors
-
-def load_config(path=None):
-    if path is None:
-        path = CONFIG_PATH
-    if not os.path.exists(path):
-        return {}
-    with open(path, 'r') as f:
-        raw = f.read()
-    sanitized, _ = _sanitize_go_templates(raw)
-    data = yaml.load(sanitized)
-    return data if data and isinstance(data, dict) else {}
-
-def _strip_empty_sections(config: dict) -> dict:
-    """Remove empty routers/services/middlewares dicts to avoid Traefik 'standalone element' errors."""
-    for proto in ('http', 'tcp', 'udp'):
-        if proto in config:
-            for section in ('routers', 'services', 'middlewares'):
-                if section in config[proto] and not config[proto][section]:
-                    del config[proto][section]
-            if not config[proto]:
-                del config[proto]
-    return config
-
-def _apply_managed_keys(target: dict, new: dict, managed: tuple) -> None:
-    for key in managed:
-        if key in new:
-            target[key] = new[key]
-        elif key in target:
-            del target[key]
 
 
-def _merge_router(section: dict, name: str, new: dict, managed: tuple) -> None:
-    existing = section.get(name)
-    if not isinstance(existing, dict):
-        section[name] = new
-        return
-    _apply_managed_keys(existing, new, managed)
 
 
-def _merge_service(section: dict, name: str, new_lb: dict, server_key: str, transport_name: str,
-                   managed_backends: bool = False) -> None:
-    existing = section.get(name)
-    existing_lb = existing.get('loadBalancer') if isinstance(existing, dict) else None
-    if not isinstance(existing_lb, dict):
-        if isinstance(existing, dict) and existing:
-            return
-        section[name] = {'loadBalancer': new_lb}
-        return
-    servers = existing_lb.get('servers')
-    new_servers = new_lb.get('servers') or []
-    if managed_backends:
-        existing_lb['servers'] = new_servers
-    elif isinstance(servers, list) and servers and isinstance(servers[0], dict) and new_servers:
-        servers[0][server_key] = new_servers[0][server_key]
-    else:
-        existing_lb['servers'] = new_servers
-    if managed_backends:
-        for key in ('sticky', 'healthCheck'):
-            if key in new_lb:
-                existing_lb[key] = new_lb[key]
-            elif key in existing_lb:
-                del existing_lb[key]
-    if 'passHostHeader' in new_lb:
-        existing_lb['passHostHeader'] = new_lb['passHostHeader']
-    elif 'passHostHeader' in existing_lb:
-        del existing_lb['passHostHeader']
-    if 'serversTransport' in new_lb:
-        existing_lb['serversTransport'] = new_lb['serversTransport']
-    elif existing_lb.get('serversTransport') == transport_name:
-        del existing_lb['serversTransport']
+
+
+
 
 
 def _parse_backends_json(raw):
@@ -4506,84 +3032,16 @@ def _streaming_forwarding_timeouts() -> dict:
     return {'dialTimeout': '30s', 'responseHeaderTimeout': '0s', 'idleConnTimeout': '90s'}
 
 
-def _json_plain(value: object) -> object:
-    import json as _json
-    try:
-        return _json.loads(_json.dumps(value, default=str))
-    except (TypeError, ValueError):
-        return value
 
 
-HEADERS_PRESET_FEATURES = (
-    'geolocation', 'camera', 'microphone', 'fullscreen', 'autoplay',
-    'payment', 'usb', 'display-capture', 'accelerometer', 'gyroscope', 'magnetometer',
-)
-HEADERS_PRESET_SELF_DEFAULT = ('geolocation', 'camera', 'microphone', 'fullscreen', 'autoplay')
-HEADERS_PRESET_HSTS_SECONDS = 31536000
-HEADERS_PRESET_REFERRER_DEFAULT = 'strict-origin-when-cross-origin'
-HEADERS_PRESET_REFERRER_VALUES = {
-    'no-referrer', 'strict-origin-when-cross-origin', 'same-origin',
-    'strict-origin', 'origin-when-cross-origin',
-}
-_PERM_VALUE_TO_TOKEN = {'self': '(self)', 'all': '*', 'block': '()'}
-_PERM_TOKEN_TO_VALUE = {'(self)': 'self', '*': 'all', '()': 'block'}
-_HEADERS_PRESET_KEYS = {
-    'customResponseHeaders', 'stsSeconds', 'stsIncludeSubdomains',
-    'contentTypeNosniff', 'frameDeny', 'referrerPolicy',
-}
 
 
-def _headers_preset_defaults() -> dict:
-    return {
-        'perms': {f: ('self' if f in HEADERS_PRESET_SELF_DEFAULT else 'block') for f in HEADERS_PRESET_FEATURES},
-        'hsts': True,
-        'nosniff': True,
-        'frameDeny': True,
-        'referrer': HEADERS_PRESET_REFERRER_DEFAULT,
-    }
 
 
-def _build_permissions_policy(perms: dict) -> str:
-    parts = []
-    for feat in HEADERS_PRESET_FEATURES:
-        token = _PERM_VALUE_TO_TOKEN.get(perms.get(feat, 'block'), '()')
-        parts.append(f"{feat}={token}")
-    return ', '.join(parts)
 
 
-def _build_headers_middleware(toggles: dict) -> dict:
-    headers = {}
-    pp = _build_permissions_policy(toggles.get('perms') or {})
-    if pp:
-        headers['customResponseHeaders'] = {'Permissions-Policy': pp}
-    if toggles.get('hsts'):
-        headers['stsSeconds'] = HEADERS_PRESET_HSTS_SECONDS
-        headers['stsIncludeSubdomains'] = True
-    if toggles.get('nosniff'):
-        headers['contentTypeNosniff'] = True
-    if toggles.get('frameDeny'):
-        headers['frameDeny'] = True
-    ref = (toggles.get('referrer') or '').strip()
-    if ref:
-        headers['referrerPolicy'] = ref
-    return {'headers': headers}
 
 
-def _parse_permissions_policy(value) -> dict | None:
-    if not isinstance(value, str):
-        return None
-    perms = {f: 'block' for f in HEADERS_PRESET_FEATURES}
-    for token in value.split(','):
-        token = token.strip()
-        if not token or '=' not in token:
-            return None
-        feat, _, raw = token.partition('=')
-        feat = feat.strip()
-        val = _PERM_TOKEN_TO_VALUE.get(raw.strip())
-        if feat not in HEADERS_PRESET_FEATURES or val is None:
-            return None
-        perms[feat] = val
-    return perms
 
 
 def _headers_toggles_from_form(form) -> dict:
@@ -4600,379 +3058,25 @@ def _headers_toggles_from_form(form) -> dict:
     }
 
 
-def _decode_headers_middleware(body) -> dict | None:
-    plain = _json_plain(body)
-    if not isinstance(plain, dict) or set(plain.keys()) != {'headers'}:
-        return None
-    h = plain.get('headers')
-    if not isinstance(h, dict) or not set(h.keys()).issubset(_HEADERS_PRESET_KEYS):
-        return None
-    toggles = {
-        'perms': {f: 'block' for f in HEADERS_PRESET_FEATURES},
-        'hsts': False, 'nosniff': False, 'frameDeny': False, 'referrer': '',
-    }
-    crh = h.get('customResponseHeaders')
-    if crh is not None:
-        if not isinstance(crh, dict) or set(crh.keys()) - {'Permissions-Policy'}:
-            return None
-        parsed = _parse_permissions_policy(crh.get('Permissions-Policy'))
-        if parsed is None:
-            return None
-        toggles['perms'] = parsed
-    if 'stsSeconds' in h:
-        toggles['hsts'] = True
-    if 'contentTypeNosniff' in h:
-        toggles['nosniff'] = True
-    if 'frameDeny' in h:
-        toggles['frameDeny'] = True
-    if 'referrerPolicy' in h:
-        if h.get('referrerPolicy') not in HEADERS_PRESET_REFERRER_VALUES:
-            return None
-        toggles['referrer'] = h['referrerPolicy']
-    if _build_headers_middleware(toggles) != plain:
-        return None
-    return toggles
 
 
-def save_config(data, path=None):
-    if path is None:
-        path = CONFIG_PATH
-    template_map = {}
-    if os.path.exists(path):
-        with open(path, 'r') as f:
-            _, template_map = _sanitize_go_templates(f.read())
-    stream = StringIO()
-    yaml.dump(data, stream)
-    content = stream.getvalue()
-    for placeholder, original in template_map.items():
-        content = content.replace(placeholder, original)
-    tmp = f"{path}.tmp.{os.getpid()}.{threading.get_ident()}"
-    try:
-        with open(tmp, 'w') as f:
-            f.write(content)
-        shutil.copyfile(tmp, path)
-    finally:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-    logger.info(f"Configuration saved: {path}")
 
 
-def _svc_key(name):
-    if not isinstance(name, str):
-        return ''
-    return name.split('@')[0] if '@' in name else name
-
-def _as_dict(val):
-    return val if isinstance(val, dict) else {}
-
-def _to_list(val, default=None):
-    if val is None:
-        return default if default is not None else []
-    if isinstance(val, list):
-        return val
-    if isinstance(val, str):
-        return [val]
-    return list(val) if hasattr(val, '__iter__') else []
-
-def _service_type(svc_def) -> str:
-    if isinstance(svc_def, dict):
-        for t in ('weighted', 'mirroring', 'failover'):
-            if t in svc_def:
-                return t
-    return 'loadBalancer'
 
 
-def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=None, extra_udp_svcs=None, api_svc_urls=None):
-    apps = []
-    http_config = config.get('http') or {}
-    http_svcs = dict(http_config.get('services') or {})
-    if extra_http_svcs:
-        for k, v in extra_http_svcs.items():
-            if k not in http_svcs:
-                http_svcs[k] = v
-    for rname, rdata in (http_config.get('routers') or {}).items():
-        if not isinstance(rdata, dict):
-            continue
-        svc_name = rdata.get('service', '')
-        svc_key  = _svc_key(svc_name)
-        target_url = 'N/A'
-        lb = {}
-        if svc_key in http_svcs:
-            lb = _as_dict(_as_dict(http_svcs[svc_key]).get('loadBalancer'))
-            servers = lb.get('servers', [])
-            if servers:
-                target_url = servers[0].get('url', 'Unknown')
-        if target_url == 'N/A' and api_svc_urls:
-            target_url = api_svc_urls.get(f'http:{svc_key}', 'N/A')
-        app_id = f"{config_file}::{rname}" if (MULTI_CONFIG and config_file) else rname
-        tls_http = rdata.get('tls', {})
-        transport_name = lb.get('serversTransport', '')
-        transports_cfg = http_config.get('serversTransports') or {}
-        transport_cfg  = _as_dict(transports_cfg.get(transport_name)) if transport_name else {}
-        insecure  = bool(transport_cfg.get('insecureSkipVerify', False))
-        streaming = 'forwardingTimeouts' in transport_cfg
-        apps.append({'id': app_id, 'name': rname, 'rule': rdata.get('rule', ''),
-                     'service_name': svc_name, 'target': target_url,
-                     'middlewares': _to_list(rdata.get('middlewares')),
-                     'entryPoints': _to_list(rdata.get('entryPoints')), 'protocol': 'http',
-                     'tls': bool(tls_http), 'enabled': True,
-                     'passHostHeader': lb.get('passHostHeader', True),
-                     'certResolver': tls_http.get('certResolver', '') if isinstance(tls_http, dict) else '',
-                     'tlsDomains': tls_http.get('domains', []) if isinstance(tls_http, dict) else [],
-                     'tlsOptionsProfile': tls_http.get('options', '') if isinstance(tls_http, dict) else '',
-                     'insecureSkipVerify': insecure,
-                     'streaming': streaming,
-                     'servers': [str(s.get('url', '')) for s in (lb.get('servers') or []) if isinstance(s, dict) and s.get('url')],
-                     'sticky': (lb.get('sticky') or {}).get('cookie', {}) if isinstance(lb.get('sticky'), dict) else {},
-                     'stickyEnabled': isinstance(lb.get('sticky'), dict),
-                     'healthCheck': lb.get('healthCheck') if isinstance(lb.get('healthCheck'), dict) else {},
-                     'priority': rdata.get('priority'),
-                     'serviceType': _service_type(http_svcs.get(svc_key)),
-                     'configFile': config_file, 'provider': 'file'})
-    tcp_config = config.get('tcp') or {}
-    tcp_svcs = dict(tcp_config.get('services') or {})
-    if extra_tcp_svcs:
-        for k, v in extra_tcp_svcs.items():
-            if k not in tcp_svcs:
-                tcp_svcs[k] = v
-    for rname, rdata in (tcp_config.get('routers') or {}).items():
-        if not isinstance(rdata, dict):
-            continue
-        svc_name = rdata.get('service', '')
-        svc_key  = _svc_key(svc_name)
-        target = 'N/A'
-        if svc_key in tcp_svcs:
-            servers = _as_dict(_as_dict(tcp_svcs[svc_key]).get('loadBalancer')).get('servers', [])
-            if servers:
-                target = servers[0].get('address', 'N/A')
-        if target == 'N/A' and api_svc_urls:
-            target = api_svc_urls.get(f'tcp:{svc_key}', 'N/A')
-        app_id = f"{config_file}::{rname}" if (MULTI_CONFIG and config_file) else rname
-        tls_tcp = rdata.get('tls', {})
-        apps.append({'id': app_id, 'name': rname, 'rule': rdata.get('rule', ''),
-                     'service_name': svc_name, 'target': target,
-                     'middlewares': _to_list(rdata.get('middlewares')), 'entryPoints': _to_list(rdata.get('entryPoints')),
-                     'protocol': 'tcp', 'tls': tls_tcp if isinstance(tls_tcp, dict) else ({} if tls_tcp else None), 'enabled': True,
-                     'certResolver': tls_tcp.get('certResolver', '') if isinstance(tls_tcp, dict) else '',
-                     'serviceType': _service_type(tcp_svcs.get(svc_key)),
-                     'servers': [str(s.get('address', '')) for s in (_as_dict(_as_dict(tcp_svcs.get(svc_key)).get('loadBalancer')).get('servers') or []) if isinstance(s, dict) and s.get('address')],
-                     'priority': rdata.get('priority'),
-                     'configFile': config_file, 'provider': 'file'})
-    udp_config = config.get('udp') or {}
-    udp_svcs = dict(udp_config.get('services') or {})
-    if extra_udp_svcs:
-        for k, v in extra_udp_svcs.items():
-            if k not in udp_svcs:
-                udp_svcs[k] = v
-    for rname, rdata in (udp_config.get('routers') or {}).items():
-        if not isinstance(rdata, dict):
-            continue
-        svc_name = rdata.get('service', '')
-        svc_key  = _svc_key(svc_name)
-        target = 'N/A'
-        if svc_key in udp_svcs:
-            servers = _as_dict(_as_dict(udp_svcs[svc_key]).get('loadBalancer')).get('servers', [])
-            if servers:
-                target = servers[0].get('address', 'N/A')
-        if target == 'N/A' and api_svc_urls:
-            target = api_svc_urls.get(f'udp:{svc_key}', 'N/A')
-        app_id = f"{config_file}::{rname}" if (MULTI_CONFIG and config_file) else rname
-        apps.append({'id': app_id, 'name': rname, 'rule': '',
-                     'service_name': svc_name, 'target': target,
-                     'middlewares': [], 'entryPoints': _to_list(rdata.get('entryPoints')),
-                     'protocol': 'udp', 'tls': False, 'enabled': True,
-                     'serviceType': _service_type(udp_svcs.get(svc_key)),
-                     'servers': [str(s.get('address', '')) for s in (_as_dict(_as_dict(udp_svcs.get(svc_key)).get('loadBalancer')).get('servers') or []) if isinstance(s, dict) and s.get('address')],
-                     'configFile': config_file, 'provider': 'file'})
-    return apps
 
 
-def _build_middlewares(config, config_file=''):
-    middlewares = []
-    for mname, mdata in config.get('http', {}).get('middlewares', {}).items():
-        buf = StringIO()
-        yaml.dump(mdata, buf)
-        middlewares.append({'name': mname, 'yaml': buf.getvalue(), 'type': 'http', 'configFile': config_file})
-    for mname, mdata in config.get('tcp', {}).get('middlewares', {}).items():
-        buf = StringIO()
-        yaml.dump(mdata, buf)
-        middlewares.append({'name': mname, 'yaml': buf.getvalue(), 'type': 'tcp', 'configFile': config_file})
-    return middlewares
 
 
-def _traefik_router_ep_map(all_routers: dict) -> dict:
-    ep_map = {}
-    for proto, routers in all_routers.items():
-        for r in routers:
-            name = r.get('name', '')
-            key  = name.split('@')[0] if '@' in name else name
-            eps  = r.get('entryPoints', [])
-            if key and eps:
-                ep_map[key] = eps
-    return ep_map
-
-def _traefik_service_url_map(all_services: dict = None):
-    if all_services is None:
-        all_services = {}
-        for proto in ('http', 'tcp', 'udp'):
-            all_services[proto] = traefik_api_get_all(f'/api/{proto}/services') or []
-    url_map = {}
-    for proto, addr_key in (('http', 'url'), ('tcp', 'address'), ('udp', 'address')):
-        for svc in all_services.get(proto, []):
-            key = _svc_key(svc.get('name', ''))
-            servers = svc.get('loadBalancer', {}).get('servers', [])
-            if servers and addr_key in servers[0]:
-                url_map[f'{proto}:{key}'] = servers[0][addr_key]
-    return url_map
 
 
-def _build_external_routes(all_routers: dict, svc_urls: dict, include_internal=False):
-    routes = []
-    for proto in ('http', 'tcp', 'udp'):
-        for r in all_routers.get(proto, []):
-            provider = r.get('provider', '')
-            if not provider or provider == 'file':
-                continue
-            if not include_internal and provider == 'internal':
-                continue
-            name = r.get('name', '')
-            display_name = name.split('@')[0] if '@' in name else name
-            svc_name = r.get('service', '')
-            target = svc_urls.get(f'{proto}:{_svc_key(svc_name)}', svc_name or 'N/A')
-            tls = r.get('tls', {})
-            routes.append({
-                'id':           name,
-                'name':         display_name,
-                'rule':         r.get('rule', ''),
-                'service_name': svc_name,
-                'target':       target,
-                'middlewares':  r.get('middlewares') or [],
-                'entryPoints':  r.get('entryPoints') or [],
-                'protocol':     proto,
-                'tls':          bool(tls),
-                'enabled':      r.get('status', 'enabled') == 'enabled',
-                'provider':     provider,
-                'configFile':   '',
-            })
-    return routes
 
 
-def _entrypoint_mw_map() -> dict:
-    path = _get_static_config_path()
-    if not path or not os.path.isfile(path):
-        return {}
-    try:
-        with open(path, 'r') as f:
-            cfg = yaml.load(f) or {}
-        result = {}
-        for ep_name, ep_val in cfg.get('entryPoints', {}).items():
-            mws = (ep_val or {}).get('http', {}).get('middlewares', [])
-            if mws:
-                result[ep_name] = [str(m) for m in mws]
-        return result
-    except Exception:
-        return {}
 
-def _build_all_apps(include_external=True, include_internal=False):
-    all_apps = []
-    all_middlewares = []
-    loaded = [(os.path.basename(p) if (MULTI_CONFIG or ACTIVE_CONFIG_DIR) else '', _load_config_display(p)) for p in CONFIG_PATHS]
-    combined_http = {}
-    combined_tcp  = {}
-    combined_udp  = {}
-    for _, cfg in loaded:
-        for k, v in ((cfg.get('http') or {}).get('services') or {}).items():
-            combined_http.setdefault(k, v)
-        for k, v in ((cfg.get('tcp') or {}).get('services') or {}).items():
-            combined_tcp.setdefault(k, v)
-        for k, v in ((cfg.get('udp') or {}).get('services') or {}).items():
-            combined_udp.setdefault(k, v)
-    ep_mw_map = _entrypoint_mw_map()
-    if include_external:
-        all_routers, all_services = _fetch_traefik_routers_and_services()
-        api_svc_urls  = _traefik_service_url_map(all_services)
-        router_ep_map = _traefik_router_ep_map(all_routers)
-    else:
-        all_routers = all_services = {}
-        api_svc_urls  = {}
-        router_ep_map = {}
-    for cf, config in loaded:
-        all_apps.extend(_build_apps(config, cf, combined_http, combined_tcp, combined_udp, api_svc_urls))
-        all_middlewares.extend(_build_middlewares(config, cf))
-    if include_external:
-        all_apps.extend(_build_external_routes(all_routers, api_svc_urls, include_internal=include_internal))
-    for app in all_apps:
-        if not app.get('entryPoints') and app.get('name') in router_ep_map:
-            app['entryPoints'] = router_ep_map[app['name']]
-        ep_mws = []
-        for ep in app.get('entryPoints', []):
-            for mw in ep_mw_map.get(ep, []):
-                if mw not in ep_mws:
-                    ep_mws.append(mw)
-        app['entrypointMiddlewares'] = ep_mws
-    settings = load_settings()
-    _mm_ledger = settings.get('managed_middlewares', {})
-    _http_mw_by_file = {cf: ((cfg.get('http') or {}).get('middlewares') or {}) for cf, cfg in loaded}
-    for app in all_apps:
-        if app.get('protocol') != 'http' or app.get('provider') != 'file':
-            continue
-        hdr_mw_name = f"{app.get('name')}-headers"
-        hdr_body    = _http_mw_by_file.get(app.get('configFile', ''), {}).get(hdr_mw_name)
-        owned       = hdr_mw_name in _mm_ledger
-        decoded     = _decode_headers_middleware(hdr_body) if (owned and hdr_body is not None) else None
-        if not owned or hdr_body is None:
-            hdr_state = 'off'
-        elif decoded is not None:
-            hdr_state = 'toggles'
-        else:
-            hdr_state = 'custom'
-        app['headersPreset'] = {
-            'owned':   owned,
-            'exists':  hdr_body is not None,
-            'state':   hdr_state,
-            'toggles': decoded if decoded is not None else _headers_preset_defaults(),
-        }
-    for route_id, rdata in settings.get('disabled_routes', {}).items():
-        if route_id.startswith('agent_'):
-            continue  # agent disabled routes belong to that agent, not the host
-        rname    = route_id.split('::', 1)[1] if '::' in route_id else route_id
-        proto    = rdata.get('protocol', 'http')
-        router   = rdata.get('router', {})
-        svc_name = router.get('service', '')
-        svc      = rdata.get('service', {})
-        cf       = rdata.get('configFile', '')
-        if proto == 'http':
-            servers    = svc.get('loadBalancer', {}).get('servers', [])
-            target_url = servers[0].get('url', 'N/A') if servers else 'N/A'
-            all_apps.append({'id': route_id, 'name': rname, 'rule': router.get('rule', ''),
-                             'service_name': svc_name, 'target': target_url,
-                             'middlewares': router.get('middlewares', []),
-                             'entryPoints': router.get('entryPoints', []),
-                             'protocol': 'http', 'tls': bool(router.get('tls')), 'enabled': False,
-                             'passHostHeader': svc.get('loadBalancer', {}).get('passHostHeader', True),
-                             'serviceType': _service_type(svc),
-                             'configFile': cf, 'provider': 'file', 'entrypointMiddlewares': []})
-        elif proto == 'tcp':
-            servers = svc.get('loadBalancer', {}).get('servers', [])
-            target  = servers[0].get('address', 'N/A') if servers else 'N/A'
-            all_apps.append({'id': route_id, 'name': rname, 'rule': router.get('rule', ''),
-                             'service_name': svc_name, 'target': target,
-                             'middlewares': router.get('middlewares', []), 'entryPoints': router.get('entryPoints', []),
-                             'protocol': 'tcp', 'tls': bool(router.get('tls')), 'enabled': False,
-                             'serviceType': _service_type(svc),
-                             'configFile': cf, 'provider': 'file'})
-        else:
-            servers = svc.get('loadBalancer', {}).get('servers', [])
-            target  = servers[0].get('address', 'N/A') if servers else 'N/A'
-            all_apps.append({'id': route_id, 'name': rname, 'rule': '',
-                             'service_name': svc_name, 'target': target,
-                             'middlewares': [], 'entryPoints': router.get('entryPoints', []),
-                             'protocol': 'udp', 'tls': False, 'enabled': False,
-                             'serviceType': _service_type(svc),
-                             'configFile': cf, 'provider': 'file'})
-    return all_apps, all_middlewares
+
+
+
+
 
 
 def _service_shared(config: dict, svc_name: str, exclude_router: str) -> bool:
@@ -5006,9 +3110,9 @@ def _toggle_route(route_id: str, enable: bool):
             p = _resolve_config_path(f)
             if not p and f:
                 safe = f if f.endswith(('.yml', '.yaml')) else f + '.yml'
-                candidate = os.path.join(os.path.dirname(CONFIG_PATH) or '.', safe)
-                p = candidate if _is_safe_path(candidate) else CONFIG_PATH
-            return p or CONFIG_PATH
+                candidate = os.path.join(os.path.dirname(env.CONFIG_PATH) or '.', safe)
+                p = candidate if _is_safe_path(candidate) else env.CONFIG_PATH
+            return p or env.CONFIG_PATH
         target_path = _resolve_or_fallback(cf)
         config      = load_config(target_path)
         config.setdefault(proto, {}).setdefault('routers', {})[rname] = router
@@ -5034,7 +3138,7 @@ def _toggle_route(route_id: str, enable: bool):
         svc_config   = None
         cf_prefix   = route_id.split('::', 1)[0] if '::' in route_id else ''
         _pref_path  = _resolve_config_path(cf_prefix) if cf_prefix else None
-        search_paths = [_pref_path] if _pref_path else CONFIG_PATHS
+        search_paths = [_pref_path] if _pref_path else env.CONFIG_PATHS
         for p in search_paths:
             config = load_config(p)
             for prot in ('http', 'tcp', 'udp'):
@@ -5055,7 +3159,7 @@ def _toggle_route(route_id: str, enable: bool):
         else:
             svc = dict(svc_config.get(proto, {}).get('services', {}).pop(svc_name, {}))
         if not svc:
-            for p in CONFIG_PATHS:
+            for p in env.CONFIG_PATHS:
                 if p == target_path:
                     continue
                 other = load_config(p)
@@ -5071,8 +3175,8 @@ def _toggle_route(route_id: str, enable: bool):
         router = _restore_go_templates(router, _target_map)
         if svc_path is None:
             svc = _restore_go_templates(svc, _target_map)
-        cf = os.path.basename(target_path) if (MULTI_CONFIG or ACTIVE_CONFIG_DIR) else ''
-        svc_cf = os.path.basename(svc_path) if svc_path and (MULTI_CONFIG or ACTIVE_CONFIG_DIR) else cf
+        cf = os.path.basename(target_path) if (env.MULTI_CONFIG or ACTIVE_CONFIG_DIR) else ''
+        svc_cf = os.path.basename(svc_path) if svc_path and (env.MULTI_CONFIG or ACTIVE_CONFIG_DIR) else cf
         disabled[route_id] = {'protocol': proto, 'router': router, 'service': svc, 'configFile': cf, 'serviceConfigFile': svc_cf}
         create_backup(target_path)
         save_config(_strip_empty_sections(svc_config), target_path)
@@ -5107,7 +3211,7 @@ def api_routes_all():
 @login_required
 def api_configs():
     return jsonify({
-        'files': [{'label': os.path.basename(p), 'path': p} for p in CONFIG_PATHS],
+        'files': [{'label': os.path.basename(p), 'path': p} for p in env.CONFIG_PATHS],
         'configDirSet': bool(ACTIVE_CONFIG_DIR),
     })
 
@@ -5253,7 +3357,7 @@ def api_route_raw_get(route_id):
     cf    = route_id.split('::', 1)[0] if '::' in route_id else ''
 
     target_path   = _resolve_config_path(cf) if cf else None
-    paths_to_scan = [target_path] if target_path else CONFIG_PATHS
+    paths_to_scan = [target_path] if target_path else env.CONFIG_PATHS
 
     for p in paths_to_scan:
         config = load_config(p)
@@ -5309,7 +3413,7 @@ def api_route_raw_save(route_id):
 
     target_path = _resolve_config_path(cf) if cf else None
     if not target_path:
-        for p in CONFIG_PATHS:
+        for p in env.CONFIG_PATHS:
             cfg = load_config(p)
             for proto in ('http', 'tcp', 'udp'):
                 if rname in cfg.get(proto, {}).get('routers', {}):
@@ -5395,7 +3499,7 @@ def index():
     auth_on    = _auth_required()
     no_auth    = not _auth_required()
     login_time = session.get('login_time', '')
-    config_paths_list = [{'label': os.path.basename(p), 'path': p} for p in CONFIG_PATHS]
+    config_paths_list = [{'label': os.path.basename(p), 'path': p} for p in env.CONFIG_PATHS]
     cert_resolvers    = [r.strip() for r in settings['cert_resolver'].split(',') if r.strip()]
     for r in _static_cert_resolvers():
         if r not in cert_resolvers:
@@ -5404,7 +3508,7 @@ def index():
     return render_template('index.html', apps=apps, domains=settings['domains'],
                            middlewares=middlewares, settings=settings,
                            auth_enabled=auth_on, no_auth=no_auth, login_time=login_time,
-                           multi_config=MULTI_CONFIG,
+                           multi_config=env.MULTI_CONFIG,
                            config_paths_list=config_paths_list,
                            config_dir_set=bool(ACTIVE_CONFIG_DIR),
                            cert_resolvers=cert_resolvers,
@@ -5460,7 +3564,7 @@ def save_entry():
         config_file_raw = request.form.get('configFile', '').strip()
         agent_id        = request.form.get('agent_id', '').strip()
         agent           = _agent_by_id(agent_id) if agent_id else None
-        target_path     = None if agent else (_resolve_config_path(config_file_raw) or CONFIG_PATH)
+        target_path     = None if agent else (_resolve_config_path(config_file_raw) or env.CONFIG_PATH)
         cfg_filename    = config_file_raw or 'dynamic.yml'
 
         if not svc_name:
@@ -5806,9 +3910,9 @@ def delete_entry(router_id):
                     break
         else:
             if config_file_raw:
-                search_paths = [_resolve_config_path(config_file_raw) or CONFIG_PATH]
+                search_paths = [_resolve_config_path(config_file_raw) or env.CONFIG_PATH]
             else:
-                search_paths = CONFIG_PATHS
+                search_paths = env.CONFIG_PATHS
             for target_path in search_paths:
                 config = load_config(target_path)
                 for sec in ('http', 'tcp', 'udp'):
@@ -5884,7 +3988,7 @@ def save_middleware():
         agent_id        = request.form.get('agent_id', '').strip()
         agent           = _agent_by_id(agent_id) if agent_id else None
         cfg_filename    = config_file_raw or 'dynamic.yml'
-        target_path     = None if agent else (_resolve_config_path(config_file_raw) or CONFIG_PATH)
+        target_path     = None if agent else (_resolve_config_path(config_file_raw) or env.CONFIG_PATH)
         if not mw_name:
             if fetch:
                 return jsonify({'ok': False, 'message': 'Middleware name is required'}), 400
@@ -5976,9 +4080,9 @@ def delete_middleware(mw_name):
                     break
         else:
             if config_file_raw:
-                search_paths = [_resolve_config_path(config_file_raw) or CONFIG_PATH]
+                search_paths = [_resolve_config_path(config_file_raw) or env.CONFIG_PATH]
             else:
-                search_paths = CONFIG_PATHS
+                search_paths = env.CONFIG_PATHS
             for target_path in search_paths:
                 config = load_config(target_path)
                 found = False
@@ -6216,11 +4320,6 @@ def api_test_oidc():
         return jsonify({'ok': False, 'error': str(e)})
 
 
-def _agent_by_id(agent_id: str):
-    for a in load_settings().get('agents', []):
-        if a.get('id') == agent_id:
-            return a
-    return None
 
 def _redact_agent(a: dict) -> dict:
     out = dict(a)
@@ -6230,28 +4329,8 @@ def _redact_agent(a: dict) -> dict:
     out['git_backup_token'] = '***' if out.get('git_backup_token') else ''
     return out
 
-def _agent_request(agent: dict, method: str, path: str, **kwargs):
-    url = agent['url'].rstrip('/') + '/' + path.lstrip('/')
-    headers = kwargs.pop('headers', {})
-    headers['X-Api-Key'] = agent.get('api_key', '')
-    return requests.request(method, url, headers=headers, timeout=15, **kwargs)
 
-def _agent_load_configs(agent: dict) -> dict:
-    resp = _agent_request(agent, 'GET', '/api/configs')
-    resp.raise_for_status()
-    result = {}
-    for f in (resp.json() or {}).get('files') or []:
-        try:
-            result[f['name']] = _yaml_safe.load(f['content']) or {}
-        except Exception:
-            result[f['name']] = {}
-    return result
 
-def _agent_write_config(agent: dict, filename: str, config_dict: dict):
-    stream = StringIO()
-    yaml.dump(_strip_empty_sections(config_dict) if config_dict else {}, stream)
-    resp = _agent_request(agent, 'POST', '/api/configs', json={'name': filename, 'content': stream.getvalue()})
-    resp.raise_for_status()
 
 
 @app.route('/api/mw/templates', methods=['GET'])

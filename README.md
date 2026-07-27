@@ -243,6 +243,14 @@ Features: browse routes, middlewares, and services · enable/disable routes · a
 
 Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to report bugs, suggest features, and run the project locally.
 
+## Contributors
+
+Traefik Manager is better because of the people who took the time to dig into it, file precise bug reports, and send patches. Thank you.
+
+[@fbnlrz](https://github.com/fbnlrz) · [@adrianrp1988](https://github.com/adrianrp1988) · [@akanealw](https://github.com/akanealw) · [@yhay81](https://github.com/yhay81)
+
+Thanks as well to everyone who has opened an issue or a discussion. Several features started as a question from someone running into something unexpected, and the detail in those reports is what made them fixable.
+
 ## License
 
 [GPL-3.0](LICENSE)
