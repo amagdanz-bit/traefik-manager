@@ -57,13 +57,13 @@ Click **Add Route** in the top bar. Fill in:
 | Optimize for streaming | *(HTTP only)* Sets long `forwardingTimeouts` on the service's `serversTransport` and forces `passHostHeader`, for media servers (Jellyfin/Emby/Plex). See [Streaming preset](#streaming-preset) below. |
 | Config File | Shown when multiple config files are mounted (`CONFIG_DIR` / `CONFIG_PATHS`). Select an existing file or choose **+ New file...** to type a filename - the file is created automatically in `CONFIG_DIR`. The `.yml` extension is added automatically if omitted. |
 
-For TCP routes, enter a raw SNI rule (`HostSNI(\`*\`)` for passthrough). UDP routes route by entry point only - no rule needed.
+For TCP routes, the Subdomain field builds a `HostSNI` rule. A bare label like `db` becomes ``HostSNI(`db.example.com`)`` using the selected domain, while a value that already contains a dot, like `db.other.tld`, is used as the complete hostname - the same way HTTP routes behave. You can also enter a raw SNI rule directly (``HostSNI(`*`)`` for passthrough). UDP routes route by entry point only - no rule needed.
 
 ## Editing a route
 
 Click the pencil icon on any route card, or open the detail panel and click **Edit**.
 
-Saving only rewrites the parts of the route the form owns: the rule, entry points, service reference, middlewares and TLS on the router, and the first server address, `passHostHeader` and the insecure-TLS transport on the service. Anything else you have written by hand is preserved - router `priority`, sticky sessions, health checks, additional servers, and your own `serversTransport`. An existing route also keeps the service name it already points at, rather than being renamed to `<name>-service`.
+Saving only rewrites the parts of the route the form owns: the rule, entry points, service reference, middlewares and TLS on the router, and the backends, `passHostHeader` and the insecure-TLS transport on the service. When the form manages them, backends, sticky sessions, health checks and router `priority` are written too - see [Multiple backends and load balancing](#multiple-backends-and-load-balancing). Anything else you have written by hand is preserved, including your own `serversTransport`. An existing route also keeps the service name it already points at, rather than being renamed to `<name>-service`.
 
 ::: warning Advanced service types
 If a router points at a `weighted`, `mirroring` or `failover` service instead of a `loadBalancer`, that service is left untouched, so editing the target field in the modal has no effect on it. Edit those services directly in the config file.
@@ -128,6 +128,8 @@ For HTTP routes, the **Load balancing** section adds:
 | Router priority | `router.priority` | Higher wins when several routers match the same request. Also available for TCP routes. |
 
 These round-trip on edit, so reopening a route shows the backends and settings it already has.
+
+Every route needs at least one backend host. A save that does not supply one is rejected rather than written, so a route can never end up pointing at an empty address.
 
 ::: tip Older clients are safe
 The mobile app and older cached pages post only a single target. Saving from one of those updates the first backend only - additional backends, sticky sessions, health checks, and priority are preserved rather than wiped.

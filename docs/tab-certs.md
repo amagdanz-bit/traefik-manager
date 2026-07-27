@@ -10,7 +10,7 @@ The **Certs** tab shows TLS certificates managed by Traefik, read from two sourc
 - Domain (main domain + SANs)
 - ACME resolver name (or `file` for PEM certs)
 - Expiry date (parsed from the certificate)
-- Source cert file path (for PEM certs)
+- Source file, so you can tell which storage file or PEM a certificate came from
 
 Certificates are **read-only** - they are issued and renewed automatically by Traefik. To revoke or force a renewal, do so via your Traefik configuration.
 
@@ -42,6 +42,36 @@ Environment=ACME_JSON_PATH=/etc/traefik/acme.json
 :::
 
 > **Tip:** Mount it read-only (`:ro`) - traefik-manager never writes to `acme.json`.
+
+#### Several storage files
+
+Traefik writes **one storage file per certificate resolver**, so a setup with more than one resolver has more than one file. `ACME_JSON_PATH` accepts a comma-separated list:
+
+:::tabs
+== Docker / Podman
+```yaml
+environment:
+  - ACME_JSON_PATH=/letsencrypt/ovh.json,/letsencrypt/lan.json
+volumes:
+  - /path/to/traefik/letsencrypt:/letsencrypt:ro
+```
+
+== Linux (systemd)
+```ini
+Environment=ACME_JSON_PATH=/etc/traefik/ovh.json,/etc/traefik/lan.json
+```
+:::
+
+Or point it at a **directory**, and every `.json` file inside is read:
+
+```yaml
+environment:
+  - ACME_JSON_PATH=/letsencrypt
+```
+
+Certificates from every file are listed together, each tagged with the file it came from, so you can tell which resolver issued what. A file that is missing or unreadable is reported without hiding the certificates from the others.
+
+This works the same on the Host and on a [remote agent](agent.md).
 
 ### File-based certificates (tls.yml)
 
