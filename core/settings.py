@@ -415,3 +415,19 @@ def save_settings(domains, cert_resolver, traefik_api_url,
             except OSError:
                 pass
     logger.info("Manager settings saved")
+
+
+def _get_acme_json_path() -> str:
+    s = load_settings()
+    return s.get('acme_json_path', '').strip() or os.environ.get('ACME_JSON_PATH', '/app/acme.json')
+
+def _get_access_log_path() -> str:
+    s = load_settings()
+    return s.get('access_log_path', '').strip() or os.environ.get('ACCESS_LOG_PATH', '/app/logs/access.log')
+
+def _get_static_config_path() -> str:
+    s = load_settings()
+    return s.get('static_config_path', '').strip() or os.environ.get('STATIC_CONFIG_PATH', '')
+
+def _get_restart_method() -> str:
+    return os.environ.get('RESTART_METHOD', 'proxy').lower()
