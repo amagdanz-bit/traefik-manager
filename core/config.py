@@ -187,3 +187,41 @@ def svc_key(name):
 
 def as_dict(val):
     return val if isinstance(val, dict) else {}
+
+
+def _load_config_display(path):
+    if not os.path.exists(path):
+        return {}
+    with open(path, 'r') as f:
+        raw = f.read()
+    sanitized, mapping = sanitize_go_templates(raw)
+    try:
+        data = yaml.load(sanitized)
+    except Exception:
+        _y2 = YAML()
+        _y2.allow_duplicate_keys = True
+        try:
+            data = _y2.load(sanitized)
+        except Exception:
+            return {}
+    if not data or not isinstance(data, dict):
+        return {}
+    return restore_go_templates(data, mapping) if mapping else data
+
+
+def _get_config_parse_errors():
+    errors = []
+    for p in env.CONFIG_PATHS:
+        if not os.path.exists(p):
+            continue
+        try:
+            with open(p, 'r') as f:
+                raw = f.read()
+            sanitized, _ = sanitize_go_templates(raw)
+            _y = YAML()
+            _y.load(sanitized)
+        except Exception as e:
+            msg = str(e)
+            first_line = next((l.strip() for l in msg.splitlines() if l.strip()), msg)
+            errors.append({'file': os.path.basename(p), 'error': first_line})
+    return errors
