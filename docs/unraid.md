@@ -51,6 +51,15 @@ Traefik Manager can be installed on Unraid using a custom template hosted at [un
 | **Inactivity Timeout** | Minutes before a non-remembered session is logged out - default `120` |
 | **OTP Encryption Key** | Fernet key for encrypting the 2FA secret at rest. Auto-generated if not set |
 | **Secret Key** | Session signing key. Auto-generated if not set. Set this to survive a full config wipe |
+| **Trusted Proxy Hops** | How many reverse-proxy hops to trust for `X-Forwarded-For`. Default `1` is right with Traefik alone; use `2` when Cloudflare or another proxy sits in front of Traefik as well, so the audit log records the real client |
+| **Skip Traefik API TLS Verification** | Set `true` when the Traefik API URL is https with a self-signed or Origin certificate |
+| **acme.json Path** | Only needed when it is not at the default location. Accepts several files comma-separated, or a directory, for setups with one storage file per cert resolver |
+| **Access Log Path** | Only needed when the access log is not at the default location |
+| **Plugins Directory** | Traefik's local plugins directory, for the Plugins tab |
+| **Backup Retention** | Keep only the last N backups per config file. `0` keeps everything |
+| **GeoIP Database Path** | Custom MaxMind `.mmdb`. Leave empty to use the bundled DB-IP Lite database |
+
+Every field maps to an environment variable - see [Environment Variables](env-vars.md) for the full reference and defaults.
 
 ---
 

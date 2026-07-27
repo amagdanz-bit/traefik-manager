@@ -348,6 +348,18 @@ networks:
 
 ---
 
+
+::: tip Real client IPs behind another proxy
+With one proxy in front (Traefik), the default is correct. If something else sits in front of Traefik as well - Cloudflare, a load balancer, another reverse proxy - set `PROXY_FIX_HOPS` to the number of hops you control, so the login and audit log record the real client instead of the intermediate proxy:
+
+```yaml
+environment:
+  - PROXY_FIX_HOPS=2
+```
+
+Only count hops you actually control: each trusted hop is one more `X-Forwarded-For` entry a client could forge. The [Client IP Diagnostic](tab-logs.md) in the nav bar shows what the app currently sees.
+:::
+
 ## Building from source
 
 ```bash

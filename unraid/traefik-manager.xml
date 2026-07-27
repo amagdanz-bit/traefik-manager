@@ -161,4 +161,32 @@
   <Config Name="Secret Key" Target="SECRET_KEY" Default=""
     Description="Session signing key. Auto-generated on first start and saved to /app/config/.secret_key. Set this explicitly to ensure sessions survive a full config wipe, or to share a key across multiple instances."
     Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+
+  <Config Name="Trusted Proxy Hops" Target="PROXY_FIX_HOPS" Default="1"
+    Description="How many reverse-proxy hops to trust when reading X-Forwarded-For. With Cloudflare in front of Traefik in front of this container, set 2 so the login and audit log record the real client. Set 0 to ignore the header entirely. Only count hops you actually control - each trusted hop is one more entry a client could forge."
+    Type="Variable" Display="advanced" Required="false" Mask="false">1</Config>
+
+  <Config Name="Skip Traefik API TLS Verification" Target="TRAEFIK_INSECURE_SKIP_VERIFY" Default="false"
+    Description="Set true when the Traefik API URL is https with a self-signed or Cloudflare Origin certificate."
+    Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+
+  <Config Name="acme.json Path" Target="ACME_JSON_PATH" Default=""
+    Description="Path to acme.json inside the container, when it is not the default /app/acme.json. Accepts several files comma-separated, or a directory whose .json files are all read - Traefik writes one storage file per certificate resolver."
+    Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+
+  <Config Name="Access Log Path" Target="ACCESS_LOG_PATH" Default=""
+    Description="Path to the Traefik access log inside the container, when it is not the default /app/logs/access.log."
+    Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+
+  <Config Name="Plugins Directory" Target="PLUGINS_DIR" Default=""
+    Description="Path to Traefik's local plugins directory, for the Plugins tab."
+    Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+
+  <Config Name="Backup Retention" Target="BACKUP_KEEP_COUNT" Default="0"
+    Description="Keep only the last N backups per config file. 0 keeps every backup."
+    Type="Variable" Display="advanced" Required="false" Mask="false">0</Config>
+
+  <Config Name="GeoIP Database Path" Target="GEOIP_DB_PATH" Default=""
+    Description="Path to a custom MaxMind-format .mmdb for IP geolocation. Leave empty to use the free DB-IP Lite database, downloaded on demand. Lookups run locally - no IP leaves the server."
+    Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
 </Container>
