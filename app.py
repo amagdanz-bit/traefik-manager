@@ -59,6 +59,28 @@ from core import agents_http as _agen
 from core import git as _git
 from core import auth as _auth
 from core import routes_build as _rb
+from core import crowdsec as _crowd
+_cs_lapi_url               = _crowd._cs_lapi_url
+_cs_api_key                = _crowd._cs_api_key
+_cs_machine_id             = _crowd._cs_machine_id
+_cs_machine_password       = _crowd._cs_machine_password
+_cs_has_machine            = _crowd._cs_has_machine
+_cs_request                = _crowd._cs_request
+_cs_jwt_cache              = _crowd._cs_jwt_cache
+_cs_jwt                    = _crowd._cs_jwt
+_cs_machine_request        = _crowd._cs_machine_request
+from core import geoip as _geoip
+_geoip_enabled             = _geoip._geoip_enabled
+_geoip_db_path             = _geoip._geoip_db_path
+_geoip_reader              = _geoip._geoip_reader
+_geoip_lookup              = _geoip._geoip_lookup
+_geoip_status              = _geoip._geoip_status
+_geoip_download            = _geoip._geoip_download
+_DBIP_URL                  = _geoip._DBIP_URL
+_GEOIP_SENTINEL            = _geoip._GEOIP_SENTINEL
+_geoip_cache               = _geoip._geoip_cache
+_geoip_lock                = _geoip._geoip_lock
+_geoip_state               = _geoip._geoip_state
 _trusted_ip_key                = _rb._trusted_ip_key
 _merge_trusted_ips             = _rb._merge_trusted_ips
 _apply_managed_keys            = _rb._apply_managed_keys
@@ -282,118 +304,13 @@ def _register_config_path(path: str):
 
 
 
-_DBIP_URL = 'https://download.db-ip.com/free/dbip-country-lite-{ym}.mmdb.gz'
-_geoip_lock  = threading.Lock()
-_geoip_state = {'reader': None, 'path': None, 'mtime': None}
-_geoip_cache = {}
 
-def _geoip_enabled() -> bool:
-    s = load_settings()
-    return bool(s.get('geoip_enabled', False))
 
-def _geoip_db_path() -> str:
-    s = load_settings()
-    return (s.get('geoip_db_path') or '').strip() or os.environ.get('GEOIP_DB_PATH', '').strip() or os.path.join(GEOIP_DIR, 'dbip-country-lite.mmdb')
 
-def _geoip_reader():
-    path = _geoip_db_path()
-    if not path or not os.path.exists(path):
-        return None
-    try:
-        mtime = os.path.getmtime(path)
-    except OSError:
-        return None
-    with _geoip_lock:
-        st = _geoip_state
-        if st['reader'] is not None and st['path'] == path and st['mtime'] == mtime:
-            return st['reader']
-        try:
-            import maxminddb
-            reader = maxminddb.open_database(path)
-        except Exception:
-            logger.exception("GeoIP database open failed")
-            return None
-        if st['reader'] is not None:
-            try:
-                st['reader'].close()
-            except Exception:
-                pass
-        st.update({'reader': reader, 'path': path, 'mtime': mtime})
-        _geoip_cache.clear()
-        return reader
 
-_GEOIP_SENTINEL = object()
 
-def _geoip_lookup(ip: str, reader=_GEOIP_SENTINEL):
-    if not ip:
-        return None
-    cached = _geoip_cache.get(ip)
-    if cached is not None:
-        return cached or None
-    if reader is _GEOIP_SENTINEL:
-        reader = _geoip_reader()
-    if reader is None:
-        return None
-    try:
-        rec = reader.get(ip) or {}
-    except Exception:
-        rec = {}
-    country = rec.get('country') or {}
-    cc = str(country.get('iso_code') or '').upper()
-    name = ((country.get('names') or {}).get('en')) or cc
-    result = {'country_code': cc, 'country_name': name} if cc else None
-    if len(_geoip_cache) > 50000:
-        _geoip_cache.clear()
-    _geoip_cache[ip] = result or {}
-    return result
 
-def _geoip_download():
-    import gzip
-    now = time.gmtime()
-    y, m = now.tm_year, now.tm_mon
-    pm = (y, m - 1) if m > 1 else (y - 1, 12)
-    months = [time.strftime('%Y-%m', now), '%04d-%02d' % pm]
-    last_err = 'unknown error'
-    for ym in months:
-        url = _DBIP_URL.format(ym=ym)
-        try:
-            resp = requests.get(url, timeout=90, headers={'User-Agent': f'traefik-manager/{APP_VERSION}'})
-            if resp.status_code == 200 and resp.content:
-                data = gzip.decompress(resp.content)
-                path = _geoip_db_path()
-                os.makedirs(os.path.dirname(path), exist_ok=True)
-                tmp = f"{path}.tmp.{os.getpid()}.{threading.get_ident()}"
-                try:
-                    with open(tmp, 'wb') as f:
-                        f.write(data)
-                    os.replace(tmp, path)
-                finally:
-                    if os.path.exists(tmp):
-                        try:
-                            os.unlink(tmp)
-                        except OSError:
-                            pass
-                with _geoip_lock:
-                    _geoip_state['reader'] = None
-                    _geoip_state['mtime'] = None
-                    _geoip_cache.clear()
-                logger.info(f"GeoIP database updated (DB-IP {ym})")
-                return True, ym
-            last_err = f'HTTP {resp.status_code}'
-        except Exception as e:
-            last_err = str(e)
-    return False, last_err
 
-def _geoip_status() -> dict:
-    path = _geoip_db_path()
-    available = bool(path and os.path.exists(path))
-    db_date = None
-    if available:
-        try:
-            db_date = time.strftime('%Y-%m-%d', time.gmtime(os.path.getmtime(path)))
-        except OSError:
-            db_date = None
-    return {'enabled': _geoip_enabled(), 'available': available, 'db_path': path, 'db_date': db_date}
 
 def _geoip_maybe_autoupdate():
     try:
@@ -1305,90 +1222,14 @@ def api_version():
     return jsonify(traefik_api_get('/api/version') or {})
 
 
-def _cs_lapi_url() -> str:
-    s = load_settings()
-    return s.get('crowdsec_lapi_url', '').strip() or os.environ.get('CROWDSEC_LAPI_URL', '').strip()
 
-def _cs_api_key() -> str:
-    s = load_settings()
-    return s.get('crowdsec_api_key', '').strip() or os.environ.get('CROWDSEC_API_KEY', '').strip()
 
-def _cs_machine_id() -> str:
-    s = load_settings()
-    return s.get('crowdsec_machine_id', '').strip() or os.environ.get('CROWDSEC_MACHINE_ID', '').strip()
 
-def _cs_machine_password() -> str:
-    s = load_settings()
-    return s.get('crowdsec_machine_password', '').strip() or os.environ.get('CROWDSEC_MACHINE_PASSWORD', '').strip()
 
-def _cs_has_machine() -> bool:
-    return bool(_cs_machine_id() and _cs_machine_password())
 
-_cs_jwt_cache = {'token': '', 'expiry': None}
 
-def _cs_jwt(lapi: str = None) -> str:
-    if lapi is None:
-        lapi = _cs_lapi_url()
-    lapi = lapi.rstrip('/')
-    mid  = _cs_machine_id()
-    pw   = _cs_machine_password()
-    if not (lapi and mid and pw):
-        return ''
-    now = datetime.now(timezone.utc)
-    if _cs_jwt_cache['token'] and _cs_jwt_cache['expiry'] and now < _cs_jwt_cache['expiry']:
-        return _cs_jwt_cache['token']
-    try:
-        resp = requests.post(f"{lapi}/v1/watchers/login",
-                             json={'machine_id': mid, 'password': pw, 'scenarios': []},
-                             timeout=5)
-        resp.raise_for_status()
-        body  = resp.json() or {}
-        token = body.get('token', '')
-        if not token:
-            return ''
-        _cs_jwt_cache['token'] = token
-        try:
-            exp = datetime.fromisoformat(str(body.get('expire', '')).replace('Z', '+00:00'))
-            _cs_jwt_cache['expiry'] = exp - timedelta(minutes=2)
-        except Exception:
-            _cs_jwt_cache['expiry'] = now + timedelta(minutes=58)
-        return token
-    except Exception as e:
-        logger.warning(f"CrowdSec machine login failed: {e}")
-        return ''
 
-def _cs_machine_request(method: str, path: str, **kwargs):
-    lapi  = _cs_lapi_url().rstrip('/')
-    token = _cs_jwt(lapi)
-    if not (lapi and token):
-        return None
-    try:
-        resp = requests.request(method, f"{lapi}{path}",
-                                headers={'Authorization': f'Bearer {token}', 'Accept': 'application/json'},
-                                timeout=5, **kwargs)
-        resp.raise_for_status()
-        return resp.json() if resp.content else {}
-    except Exception as e:
-        logger.warning(f"CrowdSec machine request error {method} {path}: {e}")
-        return None
 
-def _cs_request(method: str, path: str, lapi: str = None, key: str = None, **kwargs):
-    if lapi is None:
-        lapi = _cs_lapi_url()
-    if key is None:
-        key = _cs_api_key()
-    lapi = lapi.rstrip('/')
-    if not lapi or not key:
-        return None
-    try:
-        resp = requests.request(method, f"{lapi}{path}",
-                                headers={'X-Api-Key': key, 'Accept': 'application/json'},
-                                timeout=5, **kwargs)
-        resp.raise_for_status()
-        return resp.json() if resp.content else None
-    except Exception as e:
-        logger.warning(f"CrowdSec LAPI error {method} {path}: {e}")
-        return None
 
 @app.route('/api/crowdsec/decisions')
 @login_required

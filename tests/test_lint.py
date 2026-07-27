@@ -55,3 +55,27 @@ def test_pyflakes_is_clean():
     findings = _run_pyflakes()
     assert not findings, (
         'pyflakes reported %d issue(s):\n  ' % len(findings) + '\n  '.join(findings))
+
+
+def test_every_core_alias_resolves():
+    """app.py re-exports core functions as `name = _mod.attr` aliases.
+
+    A typo or a renamed function makes that an AttributeError at import time,
+    which pyflakes cannot see (it is an attribute access, not a bare name).
+    """
+    import importlib
+    import re
+
+    src = open(os.path.join(ROOT, 'app.py'), encoding='utf-8').read()
+    mods = dict(re.findall(r'^from core import (\w+) as (_\w+)$', src, re.M))
+    mods = {alias: name for name, alias in mods.items()}
+
+    broken = []
+    for name, alias, attr in re.findall(r'^(\w+)\s*=\s*(_\w+)\.(\w+)$', src, re.M):
+        if alias not in mods:
+            continue
+        module = importlib.import_module('core.' + mods[alias])
+        if not hasattr(module, attr):
+            broken.append('%s = %s.%s  (core.%s has no %s)'
+                          % (name, alias, attr, mods[alias], attr))
+    assert not broken, 'app.py aliases that do not resolve:\n  ' + '\n  '.join(broken)
