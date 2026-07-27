@@ -134,7 +134,7 @@ sudo systemctl enable --now tma
 
 | Variable | Default | Description |
 |---|---|---|
-| `ACME_JSON_PATH` | - | Path to `acme.json` - enables cert info reads |
+| `ACME_JSON_PATH` | - | Path to `acme.json` - enables cert info reads. Accepts several files comma-separated, or a directory whose `.json` files are all read (Traefik writes one storage file per cert resolver). |
 | `ACCESS_LOG_PATH` | - | Path to Traefik access log file |
 | `PLUGINS_DIR` | - | Path to Traefik plugins directory |
 | `BACKUP_DIR` | `/app/backups` | Directory where local `.bak` backup files are stored |

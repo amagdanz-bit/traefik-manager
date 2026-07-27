@@ -31,6 +31,7 @@ export default defineConfig({
       { text: 'Security', link: '/security' },
       { text: 'Hardening', link: '/hardening' },
       { text: 'API', link: '/api' },
+      { text: 'Development', link: '/development' },
       { text: 'UI Examples', link: '/ui-examples' },
       {
         text: 'v1.9.0',
@@ -67,6 +68,12 @@ export default defineConfig({
           { text: 'Podman', link: '/podman' },
           { text: 'Linux (native)', link: '/linux' },
           { text: 'Unraid', link: '/unraid' },
+        ],
+      },
+      {
+        text: 'Development',
+        items: [
+          { text: 'Development Guide', link: '/development' },
         ],
       },
       {

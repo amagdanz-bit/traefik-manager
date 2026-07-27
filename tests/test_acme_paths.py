@@ -78,3 +78,48 @@ def test_certs_endpoint_merges_multiple_files(client, monkeypatch, tmp_path):
     resolvers = {c['resolver'] for c in certs}
     assert {'ovh', 'lan'} <= resolvers
     assert {c.get('source') for c in certs} >= {'ovh.json', 'lan.json'}
+
+
+def test_certs_endpoint_with_a_single_file(client, monkeypatch, tmp_path):
+    """The common case, and the one most existing installs use.
+
+    Multi-file support reworked this code path, so the single-file behaviour is
+    pinned explicitly rather than assumed to fall out of the list handling.
+    """
+    acme = tmp_path / 'acme.json'
+    acme.write_text(json.dumps({
+        'letsencrypt': {'Certificates': [
+            {'domain': {'main': 'solo.example.com', 'sans': ['www.solo.example.com']},
+             'certificate': ''},
+        ]},
+    }))
+    monkeypatch.setenv('ACME_JSON_PATH', str(acme))
+
+    r = client.get('/api/traefik/certs')
+    assert r.status_code == 200
+    body = r.get_json()
+    certs = body.get('certs', [])
+    assert [c['main'] for c in certs] == ['solo.example.com'], body
+    assert certs[0]['resolver'] == 'letsencrypt'
+    assert certs[0]['sans'] == ['www.solo.example.com']
+    assert 'error' not in body, 'a working single-file setup reported an error: %r' % body.get('error')
+
+
+def test_missing_single_file_reports_a_useful_error(client, monkeypatch, tmp_path):
+    monkeypatch.setenv('ACME_JSON_PATH', str(tmp_path / 'nope.json'))
+    r = client.get('/api/traefik/certs')
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body.get('certs') == []
+    assert 'nope.json' in body.get('error', ''), body
+    assert 'ACME_JSON_PATH' in body.get('error', '')
+
+
+def test_empty_acme_file_is_not_an_error(client, monkeypatch, tmp_path):
+    """Traefik writes an empty file before the first certificate is issued."""
+    acme = tmp_path / 'acme.json'
+    acme.write_text('')
+    monkeypatch.setenv('ACME_JSON_PATH', str(acme))
+    r = client.get('/api/traefik/certs')
+    assert r.status_code == 200
+    assert r.get_json().get('certs') == []

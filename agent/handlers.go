@@ -1144,28 +1144,92 @@ func (a *App) gitRestoreHandler(w http.ResponseWriter, r *http.Request, sha stri
 	jsonOK(w, map[string]any{"ok": true})
 }
 
+// acmeJSONPaths expands ACME_JSON_PATH into the storage files to read.
+// It accepts a comma-separated list, and any entry that is a directory
+// contributes its .json files. Traefik writes one storage file per resolver.
+func acmeJSONPaths(raw string) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(p string) {
+		if p != "" && !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if info, err := os.Stat(part); err == nil && info.IsDir() {
+			entries, err := os.ReadDir(part)
+			if err != nil {
+				continue
+			}
+			var names []string
+			for _, e := range entries {
+				if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+					names = append(names, e.Name())
+				}
+			}
+			sort.Strings(names)
+			for _, n := range names {
+				add(filepath.Join(part, n))
+			}
+			continue
+		}
+		add(part)
+	}
+	return out
+}
+
+type certEntry struct {
+	Resolver string   `json:"resolver"`
+	Main     string   `json:"main"`
+	Sans     []string `json:"sans"`
+	NotAfter *string  `json:"not_after"`
+	Source   string   `json:"source"`
+}
+
 func (a *App) certsHandler(w http.ResponseWriter, r *http.Request) {
-	if a.cfg.ACMEJSONPath == "" {
+	var certs []certEntry
+	var errs []string
+
+	paths := acmeJSONPaths(a.cfg.ACMEJSONPath)
+	if len(paths) == 0 {
 		jsonOK(w, map[string]any{"certs": []any{}, "error": "ACME_JSON_PATH not configured"})
 		return
 	}
-	data, err := os.ReadFile(a.cfg.ACMEJSONPath)
-	if err != nil {
-		jsonOK(w, map[string]any{"certs": []any{}, "error": "acme.json not found at " + a.cfg.ACMEJSONPath})
-		return
+
+	for _, path := range paths {
+		source := filepath.Base(path)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			errs = append(errs, "acme.json not found at "+path)
+			continue
+		}
+		var acme map[string]any
+		if len(strings.TrimSpace(string(data))) == 0 {
+			continue
+		}
+		if err := json.Unmarshal(data, &acme); err != nil {
+			errs = append(errs, "failed to parse "+source)
+			continue
+		}
+		collectCerts(acme, source, &certs)
 	}
-	var acme map[string]any
-	if err := json.Unmarshal(data, &acme); err != nil {
-		jsonOK(w, map[string]any{"certs": []any{}, "error": "failed to parse acme.json"})
-		return
+
+	if certs == nil {
+		certs = []certEntry{}
 	}
-	type certEntry struct {
-		Resolver string   `json:"resolver"`
-		Main     string   `json:"main"`
-		Sans     []string `json:"sans"`
-		NotAfter *string  `json:"not_after"`
+	resp := map[string]any{"certs": certs}
+	if len(certs) == 0 && len(errs) > 0 {
+		resp["error"] = strings.Join(errs, " | ")
 	}
-	var certs []certEntry
+	jsonOK(w, resp)
+}
+
+func collectCerts(acme map[string]any, source string, certs *[]certEntry) {
 	for resolverName, resolverData := range acme {
 		rd, ok := resolverData.(map[string]any)
 		if !ok {
@@ -1196,13 +1260,9 @@ func (a *App) certsHandler(w http.ResponseWriter, r *http.Request) {
 					notAfter = &na
 				}
 			}
-			certs = append(certs, certEntry{Resolver: resolverName, Main: main, Sans: sans, NotAfter: notAfter})
+			*certs = append(*certs, certEntry{Resolver: resolverName, Main: main, Sans: sans, NotAfter: notAfter, Source: source})
 		}
 	}
-	if certs == nil {
-		certs = []certEntry{}
-	}
-	jsonOK(w, map[string]any{"certs": certs})
 }
 
 func parseCertExpiry(b64pem string) string {
