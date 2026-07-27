@@ -72,6 +72,8 @@ visible_tabs:
   http_provider: false
   file_external: false
   certs: true
+  tls: false
+  crowdsec: false
   plugins: false
   logs: true
 disabled_routes: {}
@@ -419,6 +421,8 @@ Controls which optional tabs are shown. Managed via the setup wizard or **Settin
 | `http_provider` | HTTP provider |
 | `file_external` | File provider (external) |
 | `certs` | Certificates tab |
+| `tls` | TLS Options tab |
+| `crowdsec` | CrowdSec tab |
 | `plugins` | Plugins tab |
 | `logs` | Logs tab |
 

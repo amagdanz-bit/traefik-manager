@@ -31,7 +31,6 @@ export default defineConfig({
       { text: 'Security', link: '/security' },
       { text: 'Hardening', link: '/hardening' },
       { text: 'API', link: '/api' },
-      { text: 'Development', link: '/development' },
       {
         text: 'v1.9.0',
         items: [
@@ -48,7 +47,6 @@ export default defineConfig({
       { text: 'Security', link: '/security' },
       { text: 'Traefik Hardening', link: '/hardening' },
       { text: 'API', link: '/api' },
-      { text: 'Development', link: '/development' },
       { text: 'UI Examples', link: '/ui-examples' },
       {
         text: 'Getting Started',

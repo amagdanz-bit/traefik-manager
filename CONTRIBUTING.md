@@ -98,7 +98,7 @@ CONFIG_PATH=config/dynamic.yml \
 python3 app.py
 ```
 
-The UI is available at `http://localhost:5000`. Default credentials on first run: `admin` / `admin`.
+The UI is available at `http://localhost:5000`. There is no username - login is password-only. On first run a random password is generated and printed to the console with an `AUTO-GENERATED PASSWORD` banner; use that, then the setup wizard prompts you to set a permanent one. Set `ADMIN_PASSWORD` to choose it yourself instead.
 
 ### Docker build
 
@@ -113,8 +113,11 @@ docker run -p 5000:5000 \
 ### Tests
 
 ```bash
-pip install pytest
-pytest
+pip install -r requirements-dev.txt
+
+pytest                                # Python suite
+python -m pyflakes app.py core tests  # lint - undefined names are a hard failure
+cd agent && go test ./...             # agent suite
 ```
 
 The suite runs against a temporary config directory - it never touches a real Traefik or your own config. Please run it before opening a pull request, and add a test when you change the config write path (`/save`, middleware saves, backups). Tests assert the YAML that actually lands on disk, not just the HTTP status, because that is where config-corrupting bugs show up.
@@ -124,9 +127,8 @@ The suite runs against a temporary config directory - it never touches a real Tr
 ## Project structure
 
 ```
-app.py                        # Flask app creation, blueprint registration, CLI
-core/                         # Shared helpers - settings, config I/O, auth, Traefik, agents
-blueprints/                   # One module per area (routes, middlewares, backups, ...)
+app.py                        # Flask app, routes, CLI
+core/                         # Shared logic - settings, config I/O, auth, git, Traefik, agents
 tests/                        # pytest suite - run before opening a PR
 requirements.txt              # Python dependencies
 Dockerfile
@@ -148,13 +150,15 @@ docs/                         # VitePress documentation site
     *.md                      # One page per doc
 .github/
     workflows/
-        docker.yml            # Builds and pushes Docker image on tag/branch push
+        docker.yml            # Builds and pushes Docker images on tag/branch push
+        tests.yml             # pytest + pyflakes, and the Go agent build/vet/test
         docs.yml              # Deploys VitePress docs
+        pr-base-check.yml     # Fails a PR opened against main instead of dev
         release-binaries.yml  # Builds agent binaries on a published release
 ```
 
 > [!NOTE]
-> **Refactor in progress (v1.9.0).** `app.py` and the JavaScript in `templates/index.html` are being split into the `core/`, `blueprints/` and `static/js/` layout above. Until that lands, some code still lives in the two original files. If you are planning a large change, open an issue first so we can sequence it and avoid conflicts.
+> **`app.py` still holds the route handlers.** Shared logic lives in `core/`, and the JavaScript is fully split into `static/js/`, but the ~114 Flask routes are still in `app.py`. Moving them into blueprints needs an app-factory restructure and has not been done. See the [Development guide](https://traefik-manager.xyzlab.dev/development.html) for the `core/` module graph and its conventions.
 
 ---
 

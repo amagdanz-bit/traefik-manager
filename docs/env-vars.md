@@ -62,6 +62,7 @@ Variables marked ✅ **override** the corresponding `manager.yml` field on every
 |---|---|---|---|
 | `ACME_JSON_PATH` | `/app/acme.json` | - | Path to `acme.json` for the Certificates tab. Accepts several files comma-separated, or a directory |
 | `ACCESS_LOG_PATH` | `/app/logs/access.log` | - | Path to access log for the Logs tab |
+| `PLUGINS_DIR` | _(unset)_ | - | Path to Traefik's plugins directory, for local plugin listing |
 | `GEOIP_DB_PATH` | _(auto-downloaded)_ | ✅ `geoip_db_path` | Path to a custom GeoIP `.mmdb` for [IP geolocation](geoip.md) |
 | `CROWDSEC_LAPI_URL` | _(unset)_ | ✅ `crowdsec_lapi_url` | CrowdSec LAPI base URL (e.g. `http://crowdsec:8080`) |
 | `CROWDSEC_API_KEY` | _(unset)_ | ✅ `crowdsec_api_key` | CrowdSec bouncer API key, reads decisions (stored encrypted) |
@@ -79,8 +80,10 @@ Variables marked ✅ **override** the corresponding `manager.yml` field on every
 | Variable | Default | Override | Description |
 |---|---|---|---|
 | `SECRET_KEY` | _(auto-generated)_ | - | Flask session signing key |
+| `INACTIVITY_TIMEOUT_MINUTES` | `120` | - | Log out after this many minutes of inactivity |
 | `OTP_ENCRYPTION_KEY` | _(auto-generated)_ | - | Fernet key for encrypting TOTP secrets |
 | `PROXY_FIX_HOPS` | `1` | - | Number of trusted proxy hops in front of Traefik Manager for `X-Forwarded-For` |
+| `LOG_LEVEL` | `INFO` | - | Python log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 
 ---
 

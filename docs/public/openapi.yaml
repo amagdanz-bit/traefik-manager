@@ -1867,12 +1867,12 @@ paths:
                           type: { type: string }
                           duration: { type: string }
 
-  /api/crowdsec/decisions/{id}:
+  /api/crowdsec/decisions/{decision_id}:
     delete:
       tags: [CrowdSec]
       summary: Delete a decision (unban)
       parameters:
-        - name: id
+        - name: decision_id
           in: path
           required: true
           schema: { type: integer }
