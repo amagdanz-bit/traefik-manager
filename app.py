@@ -3,7 +3,6 @@ import re
 import time
 import shutil
 import secrets
-import logging
 import threading
 import subprocess
 import fcntl
@@ -23,11 +22,9 @@ from ruamel.yaml import YAML
 from ruamel.yaml import YAML as SafeYAML
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 from io import StringIO
-from cryptography.fernet import Fernet, InvalidToken
 
 from core import env
-from core.env import (GITHUB_REPO, APP_VERSION, LOG_LEVEL, logger,
-                      PROXY_FIX_HOPS)
+from core.env import GITHUB_REPO, APP_VERSION, logger, PROXY_FIX_HOPS
 from core import crypto
 
 app = Flask(__name__)
@@ -2921,7 +2918,6 @@ def _parse_cert_expiry(pem_bytes):
         return None
 
 def _certs_from_tls_configs():
-    import base64
     certs = []
     for p in env.CONFIG_PATHS:
         config = load_config(p)
@@ -3776,7 +3772,7 @@ def api_static_backup_create():
     try:
         dest = create_backup(path)
         if dest:
-            add_notification('success', f"Static config backup created")
+            add_notification('success', "Static config backup created")
             return jsonify({'success': True, 'name': os.path.basename(dest)})
         return jsonify({'error': 'Static config file not found'}), 400
     except Exception as e:

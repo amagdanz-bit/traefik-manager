@@ -26,6 +26,9 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
+      - name: Lint (pyflakes)
+        run: python -m pyflakes app.py core tests
+
       - name: Run tests
         run: pytest -q
 
