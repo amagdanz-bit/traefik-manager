@@ -103,3 +103,32 @@ def test_known_js_only_classes_are_still_referenced():
         assert cls in blob, (
             '%r no longer appears in static/js. If that is intentional, update '
             'this canary list.' % cls)
+
+
+# attribute values may contain ">", so skip over quoted strings rather than
+# stopping at the first ">" - otherwise a long data-tip hides a broken button
+ICON_BUTTON = re.compile(
+    r'class="tm-info-btn"(?:[^>"]|"[^"]*")*>(.*?)</span>', re.S)
+
+
+def test_info_buttons_use_the_icon_not_a_bare_letter():
+    """`tm-info-btn` is styled as a circular icon button.
+
+    Putting a bare "i" inside renders a plain letter next to properly drawn
+    icons, which is what shipped in the Load Balancing section of the route
+    modal. The content must be a Phosphor icon element.
+    """
+    bad = []
+    for dirpath, dirnames, filenames in os.walk(os.path.join(ROOT, 'templates')):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for fn in filenames:
+            if not fn.endswith('.html'):
+                continue
+            path = os.path.join(dirpath, fn)
+            for m in ICON_BUTTON.finditer(open(path, encoding='utf-8').read()):
+                inner = m.group(1).strip()
+                if 'ph-' not in inner:
+                    bad.append('%s: <span class="tm-info-btn" ...>%s</span>'
+                               % (os.path.relpath(path, ROOT), inner[:40]))
+    assert not bad, (
+        'info buttons rendering something other than an icon:\n  ' + '\n  '.join(bad))
