@@ -91,6 +91,22 @@ See the [Static Config Editor](static.md) page for full setup instructions inclu
 
 ---
 
+## Multi-Server
+
+Manage unlimited remote Traefik instances from one UI through [TMA](agent.md), a small Go agent that runs next to Traefik on each server. A switcher in the nav bar changes the active server, and every tab - routes, middlewares, services, backups, logs - then works against it. No VPN or SSH required.
+
+The setup wizard generates a ready-to-paste Docker Compose or Docker Run command, and the API key is shown once and stored encrypted.
+
+---
+
+## Backups
+
+Every change writes a timestamped backup first, and any of them can be restored in one click. Retention is configurable.
+
+[Git backup](git-backup.md) additionally pushes your config to GitHub, Gitea, Forgejo, GitLab or any HTTPS remote, with commit history, side-by-side diffs and one-click restore of any commit. Agents can push to the Host's repository on their own branch, one branch per server, so a single repository covers every server.
+
+---
+
 ## Visualizations
 
 Optional tabs - toggle on in **Settings - Interface - Tabs** or during the setup wizard. No extra mounts needed.
@@ -99,6 +115,8 @@ Optional tabs - toggle on in **Settings - Interface - Tabs** or during the setup
 | -------------------------------| --------------------------------------------------------------------------------|
 | [Dashboard](tab-dashboard.md) | Routes grouped by category with app icons, custom groups, and per-card editing |
 | [Route Map](tab-routemap.md)  | Topology connection map - entry points → routes → middlewares → services       |
+| [TLS Options](tab-tls-options.md) | Named `tls.options` profiles - min/max version, ciphers, mTLS - assignable per route |
+| [CrowdSec](tab-crowdsec.md)   | Decisions and alerts from a CrowdSec LAPI; ban, captcha, bypass or unban with one click |
 
 ---
 
@@ -108,9 +126,9 @@ Optional tabs - each requires a file mounted into the container.
 
 | Tab | Mount required | Description |
 |-----|----------------|-------------|
-| [Certificates](tab-certs.md) | `acme.json:/app/acme.json:ro` | TLS certificates with expiry tracking |
+| [Certificates](tab-certs.md) | `acme.json:/app/acme.json:ro` | TLS certificates with expiry tracking. `ACME_JSON_PATH` accepts several files or a directory, for setups with one resolver per storage file |
 | [Plugins](tab-plugins.md) | `traefik.yml:/app/traefik.yml:ro` | Plugins declared in your static config |
-| [Logs](tab-logs.md) | `access.log:/app/logs/access.log:ro` | Live Traefik access log tail |
+| [Logs](tab-logs.md) | `access.log:/app/logs/access.log:ro` | Live Traefik access log tail, with source-IP classification and an optional [world map](geoip.md) |
 
 ---
 
@@ -156,6 +174,8 @@ Read-only tabs that pull live data from the Traefik API. No extra mounts needed 
 | [manager.yml](manager-yml.md)        | Full settings file reference - all keys, types, and defaults                                  |
 | [Environment Variables](env-vars.md) | All supported environment variables with override behaviour                                   |
 | [OIDC / SSO Login](oidc.md)          | Supports OpenID Connect (OIDC) as an additional login method alongside the built-in password. |
+| [Notification Webhooks](webhooks.md) | Forward events to Discord, Slack, ntfy or any JSON endpoint |
+| [Git Repository Backup](git-backup.md) | Auto-push, commit history, diff viewer and one-click restore |
 
 ---
 
@@ -165,14 +185,8 @@ Read-only tabs that pull live data from the Traefik API. No extra mounts needed 
 |------|-------------|
 | [Reset Password](reset-password.md) | CLI reset, TOTP recovery, and manual reset via manager.yml |
 | [Security](security.md) | Security controls, API keys, sessions, and hardening recommendations |
-
----
-
-## Mobile App
-
-The [traefik-manager-mobile](mobile.md) companion app connects using an API key.
-
-Go to **Settings - Authentication - App / Mobile API Keys**, click **Add Key**, enter a device name, and copy the generated key. Each device gets its own key - you can revoke one without affecting others.
+| [Traefik Hardening](hardening.md) | CVE advisories, header aliases, forwardAuth limits, and real client IPs |
+| [Development](development.md) | Project layout, running the test suite, and what a pull request needs |
 
 ---
 
@@ -296,7 +310,9 @@ accessLog:
 
 ## Mobile App
 
-A companion Android app for managing Traefik Manager on the go. Requires **v0.6.0 or higher**.
+A companion Android app for managing Traefik Manager on the go. See the [requirements table](mobile.md#requirements) for which server version each app release needs.
+
+Connect it with an API key: go to **Settings - Authentication - App / Mobile API Keys**, click **Add Key**, enter a device name, and copy the generated key. Each device gets its own key, so one can be revoked without affecting the others.
 
 <div class="vp-grid-cards">
 <div class="vp-card">
@@ -318,8 +334,13 @@ Authenticates via the API key from **Settings → Authentication**.
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.11 · Flask · Gunicorn |
-| Config | ruamel.yaml (preserves comments) |
-| Auth | bcrypt · pyotp (TOTP) · Flask sessions · CSRF |
-| Frontend | Vanilla JS · Tailwind CSS · Phosphor Icons |
-| Container | Docker · Alpine Linux |
+| Backend | Python 3.11 · Flask 3.1 · Gunicorn |
+| Agent | Go 1.23 · Alpine Linux (TMA - remote agent daemon) |
+| Config | ruamel.yaml (preserves comments and Go templates) |
+| Auth | bcrypt · pyotp (TOTP) · Flask sessions · CSRF · Flask-Limiter · Fernet |
+| Frontend | Vanilla JS · Tailwind CSS 3.4 · Phosphor Icons |
+| Editor | Monaco Editor 0.52 (VS Code engine) |
+| Route Map | dagre 0.8 (graph layout) |
+| Geolocation | maxminddb · DB-IP Lite (local lookups, no external calls) |
+| Tests | pytest · pyflakes · `go test` - run on every pull request |
+| Container | Docker · Alpine Linux · all JS/CSS bundled at build time (no CDN at runtime) |
