@@ -11,7 +11,6 @@ import contextlib
 import requests
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-from collections import deque
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 import click
@@ -51,6 +50,30 @@ load_agents       = _ag.load_agents
 save_agents_file  = _ag.save_agents_file
 _save_agents      = _ag.encrypt_agents
 _parse_agent_dict = _ag.parse_agent_dict
+from core import backups as _back
+from core import notifications as _noti
+from core import traefik as _trae
+from core import agents_http as _agen
+ensure_backup_dir            = _back.ensure_backup_dir
+_backup_keep_count           = _back._backup_keep_count
+_prune_backups               = _back._prune_backups
+create_backup                = _back.create_backup
+_is_ntfy_url                 = _noti._is_ntfy_url
+_send_webhook                = _noti._send_webhook
+_fire_webhook                = _noti._fire_webhook
+_load_notifications          = _noti._load_notifications
+_save_notifications_bg       = _noti._save_notifications_bg
+add_notification             = _noti.add_notification
+_traefik_verify              = _trae._traefik_verify
+traefik_api_get              = _trae.traefik_api_get
+traefik_api_get_all          = _trae.traefik_api_get_all
+_fetch_traefik_routers_and_services = _trae._fetch_traefik_routers_and_services
+_agent_by_id                 = _agen._agent_by_id
+_agent_request               = _agen._agent_request
+_agent_load_configs          = _agen._agent_load_configs
+_agent_write_config          = _agen._agent_write_config
+_notifications = _noti._notifications
+_notif_lock    = _noti._notif_lock
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=PROXY_FIX_HOPS, x_proto=1, x_host=1)
@@ -154,80 +177,12 @@ NOTIFICATIONS_PATH = env.NOTIFICATIONS_PATH
 AGENTS_PATH        = env.AGENTS_PATH
 TEMPLATES_PATH     = env.TEMPLATES_PATH
 
-_notifications     = deque(maxlen=200)
-_notif_lock        = threading.Lock()
 
-def _load_notifications():
-    if os.path.exists(NOTIFICATIONS_PATH):
-        try:
-            _y = SafeYAML(typ='safe')
-            with open(NOTIFICATIONS_PATH, 'r') as f:
-                data = _y.load(f) or []
-            with _notif_lock:
-                _notifications.clear()
-                for entry in data[-100:]:
-                    _notifications.append(entry)
-        except Exception:
-            pass
 
-def _save_notifications_bg():
-    try:
-        _y = SafeYAML(typ='safe')
-        with _notif_lock:
-            data = list(_notifications)
-        with open(NOTIFICATIONS_PATH, 'w') as f:
-            _y.dump(data, f)
-    except Exception:
-        logger.exception("Failed to save notifications")
 
-def _is_ntfy_url(url: str) -> bool:
-    from urllib.parse import urlparse
-    try:
-        h = urlparse(url).hostname or ''
-        return h == 'ntfy.sh' or h.startswith('ntfy.') or '/api/v1/publish' in url
-    except Exception:
-        return False
 
-def _send_webhook(url: str, wtype: str, type_: str, msg: str, ts: str, username: str = '', password: str = ''):
-    color_map = {'warning': 0xf0a500, 'error': 0xf85149, 'info': 0x58a6ff, 'success': 0x3fb950}
-    color = color_map.get(type_, 0x58a6ff)
-    tag_map = {'warning': 'warning', 'error': 'rotating_light', 'success': 'white_check_mark', 'info': 'information_source'}
-    auth = (username, password) if username else None
-    if wtype == 'discord':
-        payload = {'embeds': [{'title': msg, 'color': color, 'footer': {'text': f'Traefik Manager - {ts}'}}]}
-        requests.post(url, json=payload, timeout=5, auth=auth)
-    elif wtype == 'slack':
-        icon = {'warning': ':warning:', 'error': ':x:', 'success': ':white_check_mark:', 'info': ':information_source:'}.get(type_, ':bell:')
-        requests.post(url, json={'text': f'{icon} *Traefik Manager* - {msg}'}, timeout=5, auth=auth)
-    elif wtype == 'ntfy':
-        headers = {
-            'X-Title': 'Traefik Manager',
-            'X-Priority': '4' if type_ in ('warning', 'error') else '3',
-            'X-Tags': tag_map.get(type_, 'bell'),
-        }
-        requests.post(url, data=msg.encode('utf-8'), headers=headers, timeout=5, auth=auth)
-    else:
-        requests.post(url, json={'event': type_, 'message': msg, 'timestamp': ts}, timeout=5, auth=auth)
 
-def _fire_webhook(type_: str, msg: str, ts: str):
-    s   = load_settings()
-    url = s.get('webhook_url', '').strip()
-    if not url:
-        return
-    wtype    = s.get('webhook_type', 'discord')
-    username = s.get('webhook_username', '')
-    password = s.get('webhook_password', '')
-    try:
-        _send_webhook(url, wtype, type_, msg, ts, username, password)
-    except Exception as e:
-        logger.warning(f"Webhook delivery failed: {e}")
 
-def add_notification(type_, msg):
-    entry = {'ts': time.strftime("%Y-%m-%d %H:%M:%S"), 'type': type_, 'msg': msg}
-    with _notif_lock:
-        _notifications.append(entry)
-    _save_notifications_bg()
-    threading.Thread(target=_fire_webhook, args=(type_, msg, entry['ts']), daemon=True).start()
 
 ACTIVE_CONFIG_DIR = env.ACTIVE_CONFIG_DIR
 _ALLOWED_API_SCHEMES = env.ALLOWED_API_SCHEMES
@@ -1319,39 +1274,9 @@ if not os.environ.get('REQUESTS_CA_BUNDLE'):
     if os.path.exists(_SYSTEM_CA_BUNDLE):
         os.environ['REQUESTS_CA_BUNDLE'] = _SYSTEM_CA_BUNDLE
 
-def _traefik_verify():
-    if os.environ.get('TRAEFIK_INSECURE_SKIP_VERIFY', '').lower() in ('true', '1', 'yes'):
-        return False
-    return True
 
-def traefik_api_get(path):
-    settings = load_settings()
-    base_url = settings['traefik_api_url']
-    if not _safe_api_url(base_url):
-        logger.error("traefik_api_url failed safety check")
-        return None
-    u = settings.get('traefik_api_user', '')
-    p = settings.get('traefik_api_password', '')
-    auth = (u, p) if u and p else None
-    try:
-        resp = requests.get(f"{base_url}{path}", timeout=3, auth=auth, verify=_traefik_verify())
-        if resp.status_code == 200:
-            return resp.json()
-    except Exception as e:
-        logger.debug(f"Traefik API unavailable: {e}")
-    return None
 
-def traefik_api_get_all(path):
-    sep = '&' if '?' in path else '?'
-    return traefik_api_get(f"{path}{sep}per_page=1000")
 
-def _fetch_traefik_routers_and_services():
-    all_routers  = {}
-    all_services = {}
-    for proto in ('http', 'tcp', 'udp'):
-        all_routers[proto]  = traefik_api_get_all(f'/api/{proto}/routers')  or []
-        all_services[proto] = traefik_api_get_all(f'/api/{proto}/services') or []
-    return all_routers, all_services
 
 @app.route('/api/traefik/overview')
 @login_required
@@ -2453,49 +2378,9 @@ def api_logs():
         return jsonify({'error': str(e), 'lines': []})
 
 
-def ensure_backup_dir():
-    if not os.path.exists(BACKUP_DIR):
-        os.makedirs(BACKUP_DIR)
 
-def _backup_keep_count() -> int:
-    try:
-        v = load_settings().get('backup_keep_count')
-        if v in (None, ''):
-            v = os.environ.get('BACKUP_KEEP_COUNT', '0')
-        return max(0, int(v))
-    except Exception:
-        return 0
 
-def _prune_backups(base: str):
-    """Keep only the newest N .bak files for a given config file (0 = keep all)."""
-    keep = _backup_keep_count()
-    if keep <= 0:
-        return
-    pat = re.compile(r'^' + re.escape(base) + r'\.(\d{8}_\d{6})\.bak$')
-    matches = sorted(
-        (f for f in os.listdir(BACKUP_DIR) if pat.match(f)),
-        reverse=True,
-    )
-    for f in matches[keep:]:
-        try:
-            os.remove(os.path.join(BACKUP_DIR, f))
-            logger.info(f"Pruned old backup: {f}")
-        except OSError:
-            pass
 
-def create_backup(path=None):
-    if path is None:
-        path = env.CONFIG_PATH
-    ensure_backup_dir()
-    if os.path.exists(path):
-        ts   = time.strftime("%Y%m%d_%H%M%S")
-        base = os.path.basename(path)
-        dest = os.path.join(BACKUP_DIR, f"{base}.{ts}.bak")
-        shutil.copy2(path, dest)
-        logger.info(f"Backup created: {dest}")
-        _prune_backups(base)
-        return dest
-    return None
 
 def list_backups():
     ensure_backup_dir()
@@ -5528,11 +5413,6 @@ def api_test_oidc():
         return jsonify({'ok': False, 'error': str(e)})
 
 
-def _agent_by_id(agent_id: str):
-    for a in load_settings().get('agents', []):
-        if a.get('id') == agent_id:
-            return a
-    return None
 
 def _redact_agent(a: dict) -> dict:
     out = dict(a)
@@ -5542,28 +5422,8 @@ def _redact_agent(a: dict) -> dict:
     out['git_backup_token'] = '***' if out.get('git_backup_token') else ''
     return out
 
-def _agent_request(agent: dict, method: str, path: str, **kwargs):
-    url = agent['url'].rstrip('/') + '/' + path.lstrip('/')
-    headers = kwargs.pop('headers', {})
-    headers['X-Api-Key'] = agent.get('api_key', '')
-    return requests.request(method, url, headers=headers, timeout=15, **kwargs)
 
-def _agent_load_configs(agent: dict) -> dict:
-    resp = _agent_request(agent, 'GET', '/api/configs')
-    resp.raise_for_status()
-    result = {}
-    for f in (resp.json() or {}).get('files') or []:
-        try:
-            result[f['name']] = _yaml_safe.load(f['content']) or {}
-        except Exception:
-            result[f['name']] = {}
-    return result
 
-def _agent_write_config(agent: dict, filename: str, config_dict: dict):
-    stream = StringIO()
-    yaml.dump(_strip_empty_sections(config_dict) if config_dict else {}, stream)
-    resp = _agent_request(agent, 'POST', '/api/configs', json={'name': filename, 'content': stream.getvalue()})
-    resp.raise_for_status()
 
 
 @app.route('/api/mw/templates', methods=['GET'])
