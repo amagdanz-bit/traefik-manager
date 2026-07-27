@@ -93,8 +93,8 @@ Open **http://your-server:5000** - the setup wizard will guide you through the r
 - Add, edit, clone, delete, and enable/disable **HTTP, TCP, and UDP** routes
 - **Multiple domains per route** with a chip builder, or switch to the **advanced rule editor** for complex expressions (`PathPrefix`, `HostRegexp`, `&&` / `||`)
 - **Multiple backends per route** - point HTTP, TCP, or UDP at several servers and let Traefik load-balance across them; route cards show a `+N` badge
-- **Sticky sessions, health checks, and router priority** - `loadBalancer.sticky.cookie`, `loadBalancer.healthCheck` (path, interval, timeout), and `router.priority` as form fields instead of raw YAML. Everything round-trips on edit, and a save from the mobile app or an older cached page updates the first backend without wiping the rest
-- **Guided route presets** - **Security headers** (per-feature Permissions-Policy, HSTS, nosniff, frame-deny, referrer-policy) generates a normal, visible, editable `<route>-headers` middleware; **Optimize for streaming** sets `forwardingTimeouts` and `passHostHeader` for Jellyfin/Emby/Plex. Both work on the Host and on remote agents, and TM only ever updates or removes middlewares it created - a hand-written one of the same name is never overwritten
+- **Sticky sessions, health checks, and router priority** - `loadBalancer.sticky.cookie`, `loadBalancer.healthCheck`, and `router.priority` as form fields instead of raw YAML
+- **Guided route presets** - one-click **security headers** and **streaming** tuning for Jellyfin/Emby/Plex; the middlewares they generate stay visible and editable, and hand-written ones are never overwritten
 - **Per-route certificate resolver** - pick any configured resolver, request **wildcard certificates**, or disable TLS
 - **TLS options profiles** - create named `tls.options` (min/max version, ciphers, mTLS, SNI strict) and assign them per route
 - **insecureSkipVerify per service** for backends with self-signed certs (Proxmox, Kasm, etc.)
@@ -121,7 +121,7 @@ Open **http://your-server:5000** - the setup wizard will guide you through the r
   - **CrowdSec** - decisions and alerts from a LAPI; ban, captcha, bypass, or unban IPs with one click
 - **IP geolocation** *(optional, off by default)* - country flags and a shaded, clickable **world map** of where your traffic and bans come from, on the Logs and CrowdSec tabs; lookups run on the server against a local [DB-IP](https://db-ip.com) database (no IPs leave your machine), or point `GEOIP_DB_PATH` at your own MaxMind `.mmdb`
 - Optional tabs that read a mounted file:
-  - **Certs** *(mount `acme.json`)* - TLS certificates with expiry tracking
+  - **Certs** *(mount `acme.json`)* - TLS certificates with expiry tracking; accepts several storage files or a directory, one per cert resolver
   - **Plugins** *(mount `traefik.yml`)* - view plugins declared in your static config, and **install new ones** by pasting the snippet from the plugin catalog - TM writes the static config, optionally creates the matching middleware, and prompts a restart
   - **Logs** *(mount the Traefik access log)* - parsed access log cards with full-detail panel
 - **Client IP Diagnostic** - a read-only tool in the top nav showing what this instance actually sees for your own request: the trusted client IP (the one that feeds the login and audit log, `ipAllowList`, and CrowdSec), the raw socket peer, the trusted proxy hop count, and the forwarding headers as received. Warns when the trusted IP is private, loopback, or CGNAT while you expect public clients
@@ -228,13 +228,15 @@ Features: browse routes, middlewares, and services · enable/disable routes · a
 
 | Layer     | Technology                                    |
 | -----------| -----------------------------------------------|
-| Backend   | Python 3.11 · Flask · Gunicorn                |
+| Backend   | Python 3.11 · Flask 3.1 · Gunicorn            |
 | Agent     | Go 1.23 · Alpine Linux (TMA - remote agent daemon) |
-| Config    | ruamel.yaml (preserves comments)              |
+| Config    | ruamel.yaml (preserves comments and Go templates) |
 | Auth      | bcrypt · pyotp (TOTP) · Flask sessions · CSRF · Flask-Limiter · Fernet |
-| Frontend  | Vanilla JS · Tailwind CSS · Phosphor Icons    |
-| Editor    | Monaco Editor (VS Code engine)                |
-| Route Map | dagre (graph layout)                          |
+| Frontend  | Vanilla JS · Tailwind CSS 3.4 · Phosphor Icons |
+| Editor    | Monaco Editor 0.52 (VS Code engine)           |
+| Route Map | dagre 0.8 (graph layout)                      |
+| Geolocation | maxminddb · DB-IP Lite (local lookups, no external calls) |
+| Tests     | pytest · pyflakes · `go test` - run on every pull request |
 | Container | Docker · Alpine Linux · all JS/CSS dependencies bundled at build time (no CDN at runtime) |
 
 ---
@@ -247,7 +249,12 @@ Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to rep
 
 Traefik Manager is better because of the people who took the time to dig into it, file precise bug reports, and send patches. Thank you.
 
-[@fbnlrz](https://github.com/fbnlrz) · [@adrianrp1988](https://github.com/adrianrp1988) · [@akanealw](https://github.com/akanealw) · [@yhay81](https://github.com/yhay81)
+<p align="center">
+<a href="https://github.com/fbnlrz" title="Fabi (@fbnlrz) - client-IP feature set, guided route presets, config-safety fixes"><img src="https://images.weserv.nl/?url=github.com/fbnlrz.png&w=140&h=140&fit=cover&mask=circle" width="70" height="70" alt="fbnlrz"></a>
+<a href="https://github.com/adrianrp1988" title="Adrian Rodriguez (@adrianrp1988) - TCP middlewares on TCP routes"><img src="https://images.weserv.nl/?url=github.com/adrianrp1988.png&w=140&h=140&fit=cover&mask=circle" width="70" height="70" alt="adrianrp1988"></a>
+<a href="https://github.com/akanealw" title="@akanealw - Authelia forward-auth template fix"><img src="https://images.weserv.nl/?url=github.com/akanealw.png&w=140&h=140&fit=cover&mask=circle" width="70" height="70" alt="akanealw"></a>
+<a href="https://github.com/yhay81" title="Yusuke Hayashi (@yhay81) - community support"><img src="https://images.weserv.nl/?url=github.com/yhay81.png&w=140&h=140&fit=cover&mask=circle" width="70" height="70" alt="yhay81"></a>
+</p>
 
 Thanks as well to everyone who has opened an issue or a discussion. Several features started as a question from someone running into something unexpected, and the detail in those reports is what made them fixable.
 
