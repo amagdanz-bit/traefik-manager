@@ -330,8 +330,12 @@ These can be changed without a container restart via **Settings - Connection**. 
 
 Path to Traefik's `acme.json` inside the TM container. Required for the Certificates tab.
 
+Accepts several files comma-separated, or a directory whose `.json` files are all read - useful when you run more than one cert resolver, since Traefik gives each its own storage file.
+
 ```yaml
 acme_json_path: /letsencrypt/acme.json
+acme_json_path: /letsencrypt/ovh.json, /letsencrypt/lan.json
+acme_json_path: /letsencrypt
 ```
 
 ---

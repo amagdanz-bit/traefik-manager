@@ -134,3 +134,81 @@ def test_comments_survive_a_save(client):
     assert "# top level comment" in raw, "ruamel round-trip dropped a comment"
     assert "# inline note" in raw
     assert "existing" in read_config()["http"]["routers"]
+
+
+# ---- #122: backend validation ------------------------------------------------
+
+def test_tcp_save_without_a_backend_is_rejected(client):
+    """A single targetIp lands at index 0, which TCP does not read, so the old
+    code wrote `address: ':'` and returned 200."""
+    r = post_form(client, "/save", serviceName="badtcp", subdomain="badtcp",
+                  protocol="tcp", targetIp="10.0.0.9", targetPort="5432")
+    assert r.status_code == 400, "a TCP save with no reachable backend should be refused"
+    cfg = read_config()
+    assert "badtcp" not in (cfg.get("tcp", {}).get("routers") or {})
+
+
+def test_udp_save_without_a_backend_is_rejected(client):
+    r = post_form(client, "/save", serviceName="badudp", subdomain="badudp",
+                  protocol="udp", targetIp="10.0.0.9", targetPort="53")
+    assert r.status_code == 400
+    assert "badudp" not in (read_config().get("udp", {}).get("routers") or {})
+
+
+def test_http_save_without_a_backend_is_rejected(client):
+    r = post_form(client, "/save", serviceName="badhttp", subdomain="badhttp.example.com",
+                  protocol="http", scheme="http", targetPort="8080")
+    assert r.status_code == 400
+    assert "badhttp" not in (read_config().get("http", {}).get("routers") or {})
+
+
+def test_no_route_ever_gets_an_empty_address(client):
+    """Whatever a client sends, `address: ':'` must never reach the config."""
+    for proto, port in (("tcp", "5432"), ("udp", "53")):
+        post_form(client, "/save", serviceName=f"x{proto}", subdomain=f"x{proto}",
+                  protocol=proto, targetIp="", targetPort=port)
+    raw = open(str(__import__("conftest").DYNAMIC_PATH)).read()
+    assert "address: ':'" not in raw and 'address: ":"' not in raw
+
+
+def test_backends_json_alone_is_enough(client):
+    """A client that sends only backendsJson must still be accepted."""
+    r = post_form(client, "/save", serviceName="jsononly", subdomain="jsononly",
+                  protocol="tcp",
+                  backendsJsonTcp=json.dumps({"servers": [{"host": "10.0.0.7", "port": "6379"}]}))
+    assert r.status_code < 400, r.data[:200]
+    lb = read_config()["tcp"]["services"]["jsononly-service"]["loadBalancer"]
+    assert lb["servers"][0]["address"] == "10.0.0.7:6379"
+
+
+# ---- #123: subdomain handling -------------------------------------------------
+
+def test_tcp_does_not_double_append_the_domain(client):
+    """A fully qualified subdomain must be used as-is, matching HTTP."""
+    r = post_form(client, "/save", serviceName="fqdn", subdomain="db.other.tld",
+                  protocol="tcp", targetIp=["", "10.0.0.9", ""],
+                  targetPort=["", "5432", ""])
+    assert r.status_code < 400
+    rule = read_config()["tcp"]["routers"]["fqdn"]["rule"]
+    assert rule == "HostSNI(`db.other.tld`)", rule
+    assert ".example.com" not in rule, "the base domain was appended to an FQDN"
+
+
+def test_tcp_still_appends_the_domain_to_a_bare_label(client):
+    r = post_form(client, "/save", serviceName="bare", subdomain="db",
+                  protocol="tcp", targetIp=["", "10.0.0.9", ""],
+                  targetPort=["", "5432", ""])
+    assert r.status_code < 400
+    assert read_config()["tcp"]["routers"]["bare"]["rule"] == "HostSNI(`db.example.com`)"
+
+
+def test_http_and_tcp_treat_subdomains_the_same(client):
+    """The inconsistency in #123: same input, same host, whichever protocol."""
+    post_form(client, "/save", serviceName="hsame", subdomain="svc.other.tld",
+              protocol="http", scheme="http", targetIp="10.0.0.1", targetPort="80")
+    post_form(client, "/save", serviceName="tsame", subdomain="svc.other.tld",
+              protocol="tcp", targetIp=["", "10.0.0.2", ""], targetPort=["", "443", ""])
+    cfg = read_config()
+    assert "svc.other.tld" in cfg["http"]["routers"]["hsame"]["rule"]
+    assert "svc.other.tld" in cfg["tcp"]["routers"]["tsame"]["rule"]
+    assert "other.tld.example.com" not in str(cfg)

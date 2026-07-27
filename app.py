@@ -2024,8 +2024,14 @@ def api_certs():
     certs = []
     errors = []
 
-    acme_path = _readable_config_path(_get_acme_json_path())
-    if acme_path and os.path.exists(acme_path):
+    acme_paths = _settings.get_acme_json_paths()
+    found_any  = False
+    for configured in acme_paths:
+        acme_path = _readable_config_path(configured)
+        if not (acme_path and os.path.exists(acme_path)):
+            errors.append(f'acme.json not found at {configured}.')
+            continue
+        found_any = True
         try:
             with open(acme_path, 'r') as f:
                 raw = f.read().strip()
@@ -2036,14 +2042,17 @@ def api_certs():
                 for c in (resolver_data.get('Certificates') or resolver_data.get('certificates') or []):
                     domain    = c.get('domain', {})
                     not_after = _parse_cert_expiry(c.get('certificate', ''))
-                    certs.append({'resolver': resolver_name, 'main': domain.get('main', ''), 'sans': domain.get('sans', []) or [], 'not_after': not_after})
+                    certs.append({'resolver': resolver_name, 'main': domain.get('main', ''),
+                                  'sans': domain.get('sans', []) or [], 'not_after': not_after,
+                                  'source': os.path.basename(acme_path)})
         except PermissionError:
             errors.append(f'Permission denied reading {acme_path}. Run: chmod o+r {acme_path}')
         except Exception as e:
             logger.exception("Error reading acme.json")
-            errors.append(str(e))
-    else:
-        errors.append(f'acme.json not found at {acme_path}. Set ACME_JSON_PATH env var or configure the path in Settings.')
+            errors.append(f'{os.path.basename(acme_path)}: {e}')
+    if not acme_paths or not found_any:
+        errors.append('Set ACME_JSON_PATH env var or configure the path in Settings. '
+                      'Several files can be given comma-separated, or point it at a directory.')
 
     certs.extend(_certs_from_tls_configs())
 
@@ -3578,6 +3587,18 @@ def save_entry():
             flash("Invalid protocol", "error")
             return redirect(url_for('index'))
 
+        _backends_field = {'http': 'backendsJsonHttp', 'tcp': 'backendsJsonTcp',
+                           'udp': 'backendsJsonUdp'}[protocol]
+        _has_backends_json = bool((_parse_backends_json(request.form.get(_backends_field)) or {}).get('servers'))
+        if not target_ip and not _has_backends_json:
+            _msg = (f"A backend host is required for {protocol.upper()} routes. "
+                    f"Send targetIp (repeated per protocol, index "
+                    f"{ {'http': 0, 'tcp': 1, 'udp': 2}[protocol] }) or {_backends_field}.")
+            if fetch:
+                return jsonify({'ok': False, 'message': _msg}), 400
+            flash(_msg, "error")
+            return redirect(url_for('index'))
+
         router_name  = svc_name
         service_name = f"{svc_name}-service"
         if agent:
@@ -3790,7 +3811,13 @@ def save_entry():
                            managed_backends=_managed_backends)
 
         elif protocol == 'tcp':
-            rule = tcp_rule or (f"HostSNI(`{subdomain}.{domain}`)" if subdomain else "HostSNI(`*`)")
+            if tcp_rule:
+                rule = tcp_rule
+            elif subdomain:
+                _sni = subdomain if '.' in subdomain else f"{subdomain}.{domain}"
+                rule = f"HostSNI(`{_sni}`)"
+            else:
+                rule = "HostSNI(`*`)"
             config.setdefault('tcp', {}).setdefault('routers', {})
             config['tcp'].setdefault('services', {})
             router_entry = {'rule': rule, 'service': service_name}

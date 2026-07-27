@@ -421,6 +421,32 @@ def _get_acme_json_path() -> str:
     s = load_settings()
     return s.get('acme_json_path', '').strip() or os.environ.get('ACME_JSON_PATH', '/app/acme.json')
 
+
+def get_acme_json_paths() -> list:
+    """Every acme storage file to read, in order.
+
+    The setting takes a comma-separated list, and any entry that is a directory
+    contributes its .json files. Traefik writes one storage file per resolver,
+    so a setup with several resolvers has several files.
+    """
+    raw = _get_acme_json_path()
+    out = []
+    for part in (p.strip() for p in raw.split(',')):
+        if not part:
+            continue
+        if os.path.isdir(part):
+            try:
+                for name in sorted(os.listdir(part)):
+                    if name.endswith('.json'):
+                        full = os.path.join(part, name)
+                        if os.path.isfile(full) and full not in out:
+                            out.append(full)
+            except OSError as e:
+                logger.warning(f"Could not list acme directory {part!r}: {e}")
+        elif part not in out:
+            out.append(part)
+    return out
+
 def _get_access_log_path() -> str:
     s = load_settings()
     return s.get('access_log_path', '').strip() or os.environ.get('ACCESS_LOG_PATH', '/app/logs/access.log')

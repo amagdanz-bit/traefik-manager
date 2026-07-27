@@ -60,7 +60,7 @@ Variables marked ✅ **override** the corresponding `manager.yml` field on every
 
 | Variable | Default | Override | Description |
 |---|---|---|---|
-| `ACME_JSON_PATH` | `/app/acme.json` | - | Path to `acme.json` for the Certificates tab |
+| `ACME_JSON_PATH` | `/app/acme.json` | - | Path to `acme.json` for the Certificates tab. Accepts several files comma-separated, or a directory |
 | `ACCESS_LOG_PATH` | `/app/logs/access.log` | - | Path to access log for the Logs tab |
 | `GEOIP_DB_PATH` | _(auto-downloaded)_ | ✅ `geoip_db_path` | Path to a custom GeoIP `.mmdb` for [IP geolocation](geoip.md) |
 | `CROWDSEC_LAPI_URL` | _(unset)_ | ✅ `crowdsec_lapi_url` | CrowdSec LAPI base URL (e.g. `http://crowdsec:8080`) |
@@ -506,6 +506,17 @@ Environment=SIGNAL_FILE_PATH=/var/lib/traefik-manager/signals/restart.sig
 **Default:** `/app/acme.json`
 
 Path to Traefik's `acme.json`. Required for the **Certificates** tab. Can also be set via **Settings → System Monitoring → File Paths** without a restart.
+
+**Several storage files.** Traefik writes one storage file per certificate resolver, so a setup with more than one resolver has more than one file. Give them comma-separated, or point this at a directory and every `.json` file in it is read:
+
+```yaml
+# comma-separated
+- ACME_JSON_PATH=/letsencrypt/ovh.json,/letsencrypt/lan.json
+# or a directory
+- ACME_JSON_PATH=/letsencrypt
+```
+
+Certificates from every file are shown together, each tagged with the file it came from.
 
 :::tabs
 == Docker / Podman
