@@ -99,6 +99,49 @@ components:
         passHostHeader: { type: boolean }
         configFile: { type: string }
 
+    Agent:
+      type: object
+      description: "A registered remote server. Secrets are returned redacted as `***`."
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: "vps-frankfurt" }
+        url: { type: string, example: "https://agent.example.com:8090", description: "Base URL of the agent, no trailing slash." }
+        api_key: { type: string, example: "***", description: "Always redacted. The raw key is returned once, on create and on rotate." }
+        created_at: { type: string, format: date-time }
+        traefik_api_url: { type: string, example: "http://traefik:8080" }
+        traefik_insecure_skip_verify: { type: boolean }
+        cert_resolver: { type: string, description: "Optional per-agent resolver, for resolvers no route uses yet." }
+        config_path: { type: string, example: "/app/config" }
+        static_config_path: { type: string }
+        acme_json_path: { type: string }
+        access_log_path: { type: string }
+        plugins_dir: { type: string }
+        backup_dir: { type: string }
+        backup_keep_count: { type: string }
+        restart_method: { type: string, enum: ["", proxy, poison-pill, socket] }
+        traefik_container: { type: string }
+        docker_host: { type: string }
+        signal_file_path: { type: string }
+        crowdsec_lapi_url: { type: string }
+        crowdsec_api_key: { type: string, example: "***" }
+        crowdsec_machine_id: { type: string }
+        crowdsec_machine_password: { type: string, example: "***" }
+        git_backup_enabled: { type: boolean }
+        git_backup_repo: { type: string }
+        git_backup_branch: { type: string }
+        git_backup_username: { type: string }
+        git_backup_token: { type: string, example: "***" }
+        git_backup_auto_push: { type: boolean }
+        git_backup_commit_message: { type: string }
+        git_host_backup: { type: boolean, description: "Push this agent's config to the Host's repository instead of its own." }
+        git_host_branch: { type: string, description: "Branch used on the Host repository. Must be unique per server." }
+        tma_port: { type: string }
+        tma_rate_limit: { type: string }
+        domains:
+          type: array
+          items: { type: string }
+          description: "Domains offered in the route form for this server."
+
     Middleware:
       type: object
       properties:
@@ -140,6 +183,11 @@ tags:
     description: Read and edit Traefik's static config (`traefik.yml`) via the Static Config editor.
   - name: CrowdSec
     description: Active decisions and alerts from a CrowdSec LAPI, with unban support.
+  - name: Agents
+    description: |
+      Managing remote Traefik Manager Agents (TMA) from this instance. These run
+      on the Host and are not the agent's own API - for that see the
+      [Agent API reference](https://traefik-manager.xyzlab.dev/api-agent.html).
   - name: Utility
     description: Version info, router names, and connection testing.
 
@@ -1768,6 +1816,281 @@ paths:
               schema: { $ref: "#/components/schemas/ErrorResponse" }
         "404":
           description: No static config on disk and no current_raw supplied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  # ─── Agents ───────────────────────────────────────────────────────────────
+
+  /api/agents:
+    get:
+      tags: [Agents]
+      summary: List agents
+      description: Every registered remote server. Secrets are redacted to `***`.
+      responses:
+        "200":
+          description: Agent list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items: { $ref: "#/components/schemas/Agent" }
+    post:
+      tags: [Agents]
+      summary: Register an agent
+      description: |
+        Register a remote server. An API key is generated server-side and returned
+        **once** as `api_key_raw` - it is redacted on every later read, so store it
+        when you receive it. Use it as the agent's `TMA_API_KEY`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, url]
+              properties:
+                name: { type: string, example: "vps-frankfurt" }
+                url: { type: string, example: "https://agent.example.com:8090" }
+                traefik_api_url: { type: string }
+                config_path: { type: string }
+                domains: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  agent: { $ref: "#/components/schemas/Agent" }
+                  api_key_raw: { type: string, description: "Shown once. Not retrievable later." }
+        "400":
+          description: name and url are required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/agents/{agent_id}:
+    put:
+      tags: [Agents]
+      summary: Update an agent
+      description: |
+        Update any subset of the agent's fields. Omitted fields keep their value.
+
+        When `git_host_backup` is enabled the agent pushes to the **Host's**
+        repository, and `git_host_branch` must be unique: a branch already used by
+        the Host or by another agent is rejected with 400, since two servers sharing
+        a branch would overwrite each other's configs.
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Agent" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  agent: { $ref: "#/components/schemas/Agent" }
+        "400":
+          description: Branch already in use by the Host or another agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Agent not found
+    delete:
+      tags: [Agents]
+      summary: Remove an agent
+      description: Removes the registration from this instance. The agent itself keeps running; stop it separately.
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkResponse" }
+        "404":
+          description: Agent not found
+
+  /api/agents/{agent_id}/health:
+    get:
+      tags: [Agents]
+      summary: Agent health check
+      description: |
+        Calls the agent's unauthenticated `/health` and reports round-trip latency.
+        Always returns 200 for a known agent - an unreachable agent is reported as
+        `ok: false` with `latency_ms: -1`, so a failing server does not read as a
+        failing request.
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Health result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  latency_ms: { type: integer, description: "Round trip in ms, or -1 when unreachable.", example: 34 }
+                  version: { type: string, description: "Agent version, when it answered." }
+                  status: { type: integer, description: "HTTP status from the agent." }
+                  error: { type: string, description: "Present only on failure." }
+        "404":
+          description: Agent not found
+
+  /api/agents/{agent_id}/rotate-key:
+    post:
+      tags: [Agents]
+      summary: Rotate an agent's API key
+      description: |
+        Generates a new key and stores it. The new key is returned **once** as
+        `api_key_raw`.
+
+        The old key stops working immediately, so the agent cannot be reached until
+        its `TMA_API_KEY` is updated and it is restarted.
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  agent: { $ref: "#/components/schemas/Agent" }
+                  api_key_raw: { type: string, description: "Shown once. Not retrievable later." }
+        "404":
+          description: Agent not found
+
+  /api/agents/{agent_id}/routes:
+    get:
+      tags: [Agents]
+      summary: Routes on an agent
+      description: |
+        The same shape as `GET /api/routes`, built from that agent's config files
+        and enriched from its Traefik API. Route objects are identical to the Host's,
+        so a client can render either without special-casing.
+
+        If the agent's Traefik API cannot be reached, routes from its config files
+        are still returned and the failure is reported in `configErrors`.
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Routes and middlewares
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  apps:
+                    type: array
+                    items: { $ref: "#/components/schemas/Route" }
+                  middlewares:
+                    type: array
+                    items: { $ref: "#/components/schemas/Middleware" }
+                  configErrors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        file: { type: string }
+                        error: { type: string }
+        "404":
+          description: Agent not found
+
+  /api/agents/{agent_id}/cert-resolvers:
+    get:
+      tags: [Agents]
+      summary: Cert resolvers available on an agent
+      description: |
+        Resolver names offered in the route form for this server. Collected from the
+        resolvers already used by that server's routers (via its Traefik API), merged
+        with anything found in its static config when it is mounted, plus the agent's
+        optional `cert_resolver` field.
+
+        This is why an agent does not need its static config mounted to offer
+        resolvers.
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Resolver names
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resolvers:
+                    type: array
+                    items: { type: string }
+                    example: ["letsencrypt", "cloudflare"]
+        "404":
+          description: Agent not found
+
+  /api/agents/proxy/{agent_id}/{path}:
+    get:
+      tags: [Agents]
+      summary: Proxy a request to an agent
+      description: |
+        Forwards the request to `\/api\/{path}` on that agent, adding its stored API
+        key. Lets a browser or the mobile app reach an agent it has no credentials
+        for, without exposing the key.
+
+        The agent's status code and body are returned as-is. Method, query string and
+        JSON body are forwarded; GET, POST, PUT, DELETE and PATCH are accepted.
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: path
+          in: path
+          required: true
+          description: "Path on the agent below /api/, e.g. `traefik/routers`."
+          schema: { type: string }
+          example: traefik/routers
+      responses:
+        "200":
+          description: Whatever the agent returned
+        "404":
+          description: Agent not found
+        "502":
+          description: The agent could not be reached
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorResponse" }

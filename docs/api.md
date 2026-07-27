@@ -976,14 +976,57 @@ Returns `"ok": false` if the agent is unreachable.
 
 ---
 
-### `GET /api/agents/proxy/{id}/{path}`
-### `POST /api/agents/proxy/{id}/{path}`
+### `POST /api/agents/{id}/rotate-key`
 
-Proxy a request to the agent's API. TM injects the `X-Api-Key` header automatically.
+Generate a new API key for an agent. The new key is returned once as `api_key_raw`.
+
+```json
+{ "ok": true, "agent": { "id": "uuid", "api_key": "***" }, "api_key_raw": "the-new-key" }
+```
+
+The old key stops working immediately, so the agent is unreachable until its `TMA_API_KEY` is updated and it is restarted.
+
+---
+
+### `GET /api/agents/{id}/routes`
+
+Routes and middlewares on that agent, in the same shape as [`GET /api/routes`](#get-api-routes) - built from the agent's config files and enriched from its Traefik API. Route objects are identical to the Host's, so a client can render either without special-casing.
+
+```json
+{
+  "apps": [ /* Route[] */ ],
+  "middlewares": [ /* Middleware[] */ ],
+  "configErrors": [ { "file": "Agent Traefik API", "error": "..." } ]
+}
+```
+
+If the agent's Traefik API is unreachable, routes from its config files are still returned and the failure appears in `configErrors`.
+
+---
+
+### `GET /api/agents/{id}/cert-resolvers`
+
+Cert resolver names to offer in the route form for that server.
+
+```json
+{ "resolvers": ["letsencrypt", "cloudflare"] }
+```
+
+Collected from the resolvers already used by that server's routers (via its Traefik API), merged with anything in its static config when mounted, plus the agent's optional `cert_resolver` field. This is why an agent does not need its static config mounted to offer resolvers.
+
+---
+
+### `/api/agents/proxy/{id}/{path}`
+
+Proxy a request to the agent's API. TM injects the `X-Api-Key` header automatically, so a browser or the mobile app can reach an agent without ever holding its key.
+
+Accepts `GET`, `POST`, `PUT`, `DELETE` and `PATCH`. The method, query string and JSON body are forwarded, and the agent's status code and body are returned as-is.
 
 For example, `GET /api/agents/proxy/abc123/traefik/routers` proxies to `GET https://agent-host:8090/api/traefik/routers`.
 
-See [Agent API Reference](api-agent.md) for all available agent endpoints.
+Returns `502` if the agent cannot be reached.
+
+See the [Agent API Reference](api-agent.md) for every endpoint an agent exposes.
 
 ---
 
