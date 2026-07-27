@@ -25,26 +25,12 @@ from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 from io import StringIO
 from cryptography.fernet import Fernet, InvalidToken
 
-GITHUB_REPO  = "chr0nzz/traefik-manager"
-APP_VERSION  = "1.9.0"
-
-
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(
-    level=LOG_LEVEL,
-    format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
-)
-logger = logging.getLogger("traefik-manager")
-
-
-def _proxy_fix_hops() -> int:
-    try:
-        return max(0, int(os.environ.get('PROXY_FIX_HOPS', '1')))
-    except ValueError:
-        return 1
+from core import env
+from core.env import (GITHUB_REPO, APP_VERSION, LOG_LEVEL, logger,
+                      PROXY_FIX_HOPS)
+from core import crypto
 
 app = Flask(__name__)
-PROXY_FIX_HOPS = _proxy_fix_hops()
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=PROXY_FIX_HOPS, x_proto=1, x_host=1)
 
 _CONFIG_DIR      = os.path.dirname(os.environ.get('SETTINGS_PATH', '/app/config/manager.yml'))
@@ -72,34 +58,10 @@ def _load_or_create_secret_key() -> bytes:
 
 app.secret_key = _load_or_create_secret_key()
 
-_OTP_KEY_PATH = os.path.join(_CONFIG_DIR, '.otp_key')
-
-def _get_otp_fernet() -> Fernet:
-    key = os.environ.get('OTP_ENCRYPTION_KEY', '').strip()
-    if not key:
-        if os.path.exists(_OTP_KEY_PATH):
-            with open(_OTP_KEY_PATH) as f:
-                key = f.read().strip()
-        else:
-            key = Fernet.generate_key().decode()
-            os.makedirs(os.path.dirname(_OTP_KEY_PATH), exist_ok=True)
-            with open(_OTP_KEY_PATH, 'w') as f:
-                f.write(key)
-    return Fernet(key.encode() if isinstance(key, str) else key)
-
-def _encrypt_otp_secret(secret: str) -> str:
-    if not secret:
-        return ''
-    return _get_otp_fernet().encrypt(secret.encode()).decode()
-
-def _decrypt_otp_secret(token: str) -> str:
-    if not token:
-        return ''
-    try:
-        return _get_otp_fernet().decrypt(token.encode()).decode()
-    except (InvalidToken, Exception):
-        logger.warning("Failed to decrypt secret (encryption key mismatch?) - treating as empty")
-        return ''
+_OTP_KEY_PATH        = env.OTP_KEY_PATH
+_get_otp_fernet      = crypto.get_otp_fernet
+_encrypt_otp_secret  = crypto.encrypt_secret
+_decrypt_otp_secret  = crypto.decrypt_secret
 
 def _save_agents(agents: list) -> list:
     out = []
@@ -283,16 +245,15 @@ yaml = _ThreadLocalYAML()
 _yaml_safe = _ThreadLocalYAML(typ='safe')
 
 
-BACKUP_DIR    = os.environ.get('BACKUP_DIR',    '/app/backups')
-SETTINGS_PATH      = os.environ.get('SETTINGS_PATH', '/app/config/manager.yml')
-_CONFIG_DIR        = os.path.dirname(os.path.abspath(SETTINGS_PATH))
-GROUPS_CACHE_DIR   = os.path.join(_CONFIG_DIR, 'cache')
-GEOIP_DIR          = os.path.join(_CONFIG_DIR, 'geoip')
-GROUPS_CONFIG_FILE  = os.path.join(_CONFIG_DIR, 'dashboard.yml')
-NOTIFICATIONS_PATH  = os.path.join(_CONFIG_DIR, 'notifications.yml')
-AGENTS_PATH        = os.path.join(_CONFIG_DIR, 'agents.yml')
-TEMPLATES_PATH     = os.path.join(_CONFIG_DIR, 'templates.yml')
-os.makedirs(GROUPS_CACHE_DIR, exist_ok=True)
+BACKUP_DIR         = env.BACKUP_DIR
+SETTINGS_PATH      = env.SETTINGS_PATH
+_CONFIG_DIR        = env.CONFIG_DIR
+GROUPS_CACHE_DIR   = env.GROUPS_CACHE_DIR
+GEOIP_DIR          = env.GEOIP_DIR
+GROUPS_CONFIG_FILE = env.GROUPS_CONFIG_FILE
+NOTIFICATIONS_PATH = env.NOTIFICATIONS_PATH
+AGENTS_PATH        = env.AGENTS_PATH
+TEMPLATES_PATH     = env.TEMPLATES_PATH
 
 _notifications     = deque(maxlen=200)
 _notif_lock        = threading.Lock()
@@ -369,34 +330,14 @@ def add_notification(type_, msg):
     _save_notifications_bg()
     threading.Thread(target=_fire_webhook, args=(type_, msg, entry['ts']), daemon=True).start()
 
-_config_dir = os.environ.get('CONFIG_DIR', '').strip()
-ACTIVE_CONFIG_DIR = _config_dir
-if _config_dir:
-    import glob as _glob
-    _ymls  = _glob.glob(os.path.join(_config_dir, '**', '*.yml'),  recursive=True)
-    _yamls = _glob.glob(os.path.join(_config_dir, '**', '*.yaml'), recursive=True)
-    CONFIG_PATHS = sorted(_ymls + _yamls) or [os.path.join(_config_dir, 'dynamic.yml')]
-else:
-    _raw_paths = os.environ.get('CONFIG_PATHS', '').strip()
-    if _raw_paths:
-        CONFIG_PATHS = [p.strip() for p in _raw_paths.split(',') if p.strip()]
-    else:
-        CONFIG_PATHS = [os.environ.get('CONFIG_PATH', '/app/config/dynamic.yml')]
-
-CONFIG_PATH  = CONFIG_PATHS[0]
-MULTI_CONFIG = len(CONFIG_PATHS) > 1
-
-_ALLOWED_FILE_PREFIXES = tuple(sorted(set(
-    ['/app/', os.path.abspath(BACKUP_DIR) + '/', os.path.dirname(os.path.abspath(SETTINGS_PATH)) + '/'] +
-    [os.path.dirname(os.path.abspath(p)) + '/' for p in CONFIG_PATHS]
-)))
-_ALLOWED_API_SCHEMES   = ('http://', 'https://')
+ACTIVE_CONFIG_DIR = env.ACTIVE_CONFIG_DIR
+_ALLOWED_API_SCHEMES = env.ALLOWED_API_SCHEMES
 
 def _safe_file_path(path: str) -> str:
     if not path:
         return ''
     resolved = os.path.realpath(path)
-    if any(resolved.startswith(p) for p in _ALLOWED_FILE_PREFIXES):
+    if any(resolved.startswith(p) for p in env.ALLOWED_FILE_PREFIXES):
         return resolved
     logger.warning(f"Blocked unsafe file path: {path!r}")
     return ''
@@ -407,7 +348,7 @@ def _readable_config_path(path: str) -> str:
     if not path:
         return ''
     resolved = os.path.realpath(path)
-    allowed  = list(_ALLOWED_FILE_PREFIXES)
+    allowed  = list(env.ALLOWED_FILE_PREFIXES)
     for _ev in ('STATIC_CONFIG_PATH', 'ACCESS_LOG_PATH', 'ACME_JSON_PATH', 'PLUGINS_DIR'):
         _v = os.environ.get(_ev, '').strip()
         if _v:
@@ -449,9 +390,9 @@ def _resolve_config_path(s: str) -> str:
     Returns the canonical path if valid, '' otherwise.
     If ACTIVE_CONFIG_DIR is set and s is a plain filename, allows new files in CONFIG_DIR."""
     if not s:
-        return CONFIG_PATH
+        return env.CONFIG_PATH
     s = s.strip()
-    for p in CONFIG_PATHS:
+    for p in env.CONFIG_PATHS:
         if s == p or s == os.path.basename(p):
             return p
     if ACTIVE_CONFIG_DIR and '/' not in s and '\\' not in s:
@@ -464,12 +405,8 @@ def _resolve_config_path(s: str) -> str:
     return ''
 
 def _register_config_path(path: str):
-    """Add a newly created config file to CONFIG_PATHS if not already present."""
-    global CONFIG_PATHS, CONFIG_PATH, MULTI_CONFIG
-    if path and path not in CONFIG_PATHS:
-        CONFIG_PATHS = sorted(CONFIG_PATHS + [path])
-        CONFIG_PATH  = CONFIG_PATHS[0]
-        MULTI_CONFIG = len(CONFIG_PATHS) > 1
+    """Add a newly created config file to the active set (see core.env)."""
+    env.register_config_path(path)
 
 def _safe_api_url(url: str) -> str:
     url = url.strip()
@@ -1053,7 +990,7 @@ def _best_entrypoint() -> str:
 def _self_route_path() -> str:
     if ACTIVE_CONFIG_DIR:
         return os.path.join(ACTIVE_CONFIG_DIR, SELF_ROUTE_FILENAME)
-    return os.path.join(os.path.dirname(os.path.abspath(CONFIG_PATH)), SELF_ROUTE_FILENAME)
+    return os.path.join(os.path.dirname(os.path.abspath(env.CONFIG_PATH)), SELF_ROUTE_FILENAME)
 
 def _write_self_route(domain: str, service_url: str, cert_resolver: str, router_name: str = 'traefik-manager', entry_point: str = 'websecure') -> None:
     router_entry = {
@@ -1089,11 +1026,11 @@ def _write_self_route(domain: str, service_url: str, cert_resolver: str, router_
                     pass
         logger.info(f"Self-route written to new file: {path}")
     else:
-        cfg = load_config(CONFIG_PATH)
+        cfg = load_config(env.CONFIG_PATH)
         cfg.setdefault('http', {}).setdefault('routers', {})[router_name] = router_entry
         cfg['http'].setdefault('services', {})[router_name] = service_entry
-        save_config(cfg, CONFIG_PATH)
-        logger.info(f"Self-route updated in existing config: {CONFIG_PATH} (router: {router_name})")
+        save_config(cfg, env.CONFIG_PATH)
+        logger.info(f"Self-route updated in existing config: {env.CONFIG_PATH} (router: {router_name})")
 
 def _delete_self_route(router_name: str = 'traefik-manager') -> None:
     if ACTIVE_CONFIG_DIR:
@@ -1102,16 +1039,16 @@ def _delete_self_route(router_name: str = 'traefik-manager') -> None:
             os.remove(path)
             logger.info(f"Self-route file deleted: {path}")
     else:
-        cfg = load_config(CONFIG_PATH)
+        cfg = load_config(env.CONFIG_PATH)
         http = cfg.get('http', {})
         http.get('routers', {}).pop(router_name, None)
         http.get('services', {}).pop(router_name, None)
-        save_config(_strip_empty_sections(cfg), CONFIG_PATH)
-        logger.info(f"Self-route '{router_name}' removed from config: {CONFIG_PATH}")
+        save_config(_strip_empty_sections(cfg), env.CONFIG_PATH)
+        logger.info(f"Self-route '{router_name}' removed from config: {env.CONFIG_PATH}")
 
 def _detect_self_route_domain() -> str:
     import re
-    for cfg_path in CONFIG_PATHS:
+    for cfg_path in env.CONFIG_PATHS:
         if not os.path.exists(cfg_path):
             continue
         try:
@@ -1243,13 +1180,13 @@ _restart_meth = _get_restart_method()
 _oidc_on      = bool(_s.get('oidc_issuer'))
 logger.info("===========================================")
 logger.info(f"Traefik Manager v{APP_VERSION}")
-if MULTI_CONFIG:
-    for _cp in CONFIG_PATHS:
+if env.MULTI_CONFIG:
+    for _cp in env.CONFIG_PATHS:
         logger.info(f"Config File:    {_cp}")
 elif ACTIVE_CONFIG_DIR:
     logger.info(f"Config Dir:     {ACTIVE_CONFIG_DIR}")
 else:
-    logger.info(f"Config Path:    {CONFIG_PATH}")
+    logger.info(f"Config Path:    {env.CONFIG_PATH}")
 logger.info(f"Settings Path:  {SETTINGS_PATH}")
 logger.info(f"Backup Dir:     {BACKUP_DIR}")
 logger.info(f"Traefik API:    {_s['traefik_api_url']}")
@@ -2986,7 +2923,7 @@ def _parse_cert_expiry(pem_bytes):
 def _certs_from_tls_configs():
     import base64
     certs = []
-    for p in CONFIG_PATHS:
+    for p in env.CONFIG_PATHS:
         config = load_config(p)
         for entry in (config.get('tls') or {}).get('certificates') or []:
             cert_file = entry.get('certFile', '')
@@ -3108,7 +3045,7 @@ def _prune_backups(base: str):
 
 def create_backup(path=None):
     if path is None:
-        path = CONFIG_PATH
+        path = env.CONFIG_PATH
     ensure_backup_dir()
     if os.path.exists(path):
         ts   = time.strftime("%Y%m%d_%H%M%S")
@@ -3297,7 +3234,7 @@ def _git_push_configs(action='backup', custom_message=None):
                 _git_run(['reset', '--hard', 'FETCH_HEAD'])
             os.makedirs(dyn_dir,    exist_ok=True)
             os.makedirs(static_dir, exist_ok=True)
-            for p in CONFIG_PATHS:
+            for p in env.CONFIG_PATHS:
                 if os.path.exists(p):
                     shutil.copy2(p, os.path.join(dyn_dir, os.path.basename(p)))
             sp = _get_static_config_path()
@@ -3596,12 +3533,12 @@ def api_git_backup_restore(sha):
                     restored += 1
             add_notification('warning', f"Restored {agent['name']} from git commit {sha[:8]} ({restored} files)")
             return jsonify({'ok': True})
-        for p in CONFIG_PATHS:
+        for p in env.CONFIG_PATHS:
             create_backup(p)
         sp = _get_static_config_path()
         if sp:
             create_backup(sp)
-        for p in CONFIG_PATHS:
+        for p in env.CONFIG_PATHS:
             base    = os.path.basename(p)
             content = _git_show_first(repo_dir, sha, [f'dynamic/{base}', base])
             if content:
@@ -3696,9 +3633,9 @@ def api_notifications_update():
 @login_required
 def api_tls_options_list():
     opts = []
-    for p in CONFIG_PATHS:
+    for p in env.CONFIG_PATHS:
         config = _load_config_display(p)
-        short = os.path.basename(p) if (MULTI_CONFIG or ACTIVE_CONFIG_DIR) else ''
+        short = os.path.basename(p) if (env.MULTI_CONFIG or ACTIVE_CONFIG_DIR) else ''
         for name, data in (config.get('tls') or {}).get('options', {}).items():
             data = data or {}
             buf = StringIO()
@@ -3730,7 +3667,7 @@ def api_tls_options_save():
     config_file = data.get('configFile', '').strip()
     if not name:
         return jsonify({'ok': False, 'message': 'Profile name is required'}), 400
-    target_path = _resolve_config_path(config_file) or CONFIG_PATH
+    target_path = _resolve_config_path(config_file) or env.CONFIG_PATH
     create_backup(target_path)
     config = load_config(target_path)
     opts = {}
@@ -3767,7 +3704,7 @@ def api_tls_options_save():
 @login_required
 def api_tls_options_delete(name):
     config_file = request.args.get('configFile', '').strip()
-    target_path = _resolve_config_path(config_file) or CONFIG_PATH
+    target_path = _resolve_config_path(config_file) or env.CONFIG_PATH
     config = load_config(target_path)
     tls_opts = (config.get('tls') or {}).get('options', {})
     if name not in tls_opts:
@@ -3797,8 +3734,8 @@ def api_restore(filename):
         # Strip the timestamp suffix to get the original basename
         bname = filename  # e.g. dynamic.yml.20260325_120000.bak
         # Find matching config path by basename prefix
-        target_path = CONFIG_PATH
-        for p in CONFIG_PATHS:
+        target_path = env.CONFIG_PATH
+        for p in env.CONFIG_PATHS:
             if bname.startswith(os.path.basename(p) + '.'):
                 target_path = p
                 break
@@ -3817,7 +3754,7 @@ def api_restore(filename):
 def api_backup_create():
     try:
         created = []
-        for p in CONFIG_PATHS:
+        for p in env.CONFIG_PATHS:
             dest = create_backup(p)
             if dest:
                 created.append(os.path.basename(dest))
@@ -4227,7 +4164,7 @@ def api_save_backup_retention():
 
 def _find_existing_self_route(hostname: str) -> dict:
     import re
-    for cfg_path in CONFIG_PATHS:
+    for cfg_path in env.CONFIG_PATHS:
         if not os.path.exists(cfg_path):
             continue
         try:
@@ -4345,7 +4282,7 @@ def _load_config_display(path):
 
 def _get_config_parse_errors():
     errors = []
-    for p in CONFIG_PATHS:
+    for p in env.CONFIG_PATHS:
         if not os.path.exists(p):
             continue
         try:
@@ -4362,7 +4299,7 @@ def _get_config_parse_errors():
 
 def load_config(path=None):
     if path is None:
-        path = CONFIG_PATH
+        path = env.CONFIG_PATH
     if not os.path.exists(path):
         return {}
     with open(path, 'r') as f:
@@ -4641,7 +4578,7 @@ def _decode_headers_middleware(body) -> dict | None:
 
 def save_config(data, path=None):
     if path is None:
-        path = CONFIG_PATH
+        path = env.CONFIG_PATH
     template_map = {}
     if os.path.exists(path):
         with open(path, 'r') as f:
@@ -4711,7 +4648,7 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
                 target_url = servers[0].get('url', 'Unknown')
         if target_url == 'N/A' and api_svc_urls:
             target_url = api_svc_urls.get(f'http:{svc_key}', 'N/A')
-        app_id = f"{config_file}::{rname}" if (MULTI_CONFIG and config_file) else rname
+        app_id = f"{config_file}::{rname}" if (env.MULTI_CONFIG and config_file) else rname
         tls_http = rdata.get('tls', {})
         transport_name = lb.get('serversTransport', '')
         transports_cfg = http_config.get('serversTransports') or {}
@@ -4754,7 +4691,7 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
                 target = servers[0].get('address', 'N/A')
         if target == 'N/A' and api_svc_urls:
             target = api_svc_urls.get(f'tcp:{svc_key}', 'N/A')
-        app_id = f"{config_file}::{rname}" if (MULTI_CONFIG and config_file) else rname
+        app_id = f"{config_file}::{rname}" if (env.MULTI_CONFIG and config_file) else rname
         tls_tcp = rdata.get('tls', {})
         apps.append({'id': app_id, 'name': rname, 'rule': rdata.get('rule', ''),
                      'service_name': svc_name, 'target': target,
@@ -4783,7 +4720,7 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
                 target = servers[0].get('address', 'N/A')
         if target == 'N/A' and api_svc_urls:
             target = api_svc_urls.get(f'udp:{svc_key}', 'N/A')
-        app_id = f"{config_file}::{rname}" if (MULTI_CONFIG and config_file) else rname
+        app_id = f"{config_file}::{rname}" if (env.MULTI_CONFIG and config_file) else rname
         apps.append({'id': app_id, 'name': rname, 'rule': '',
                      'service_name': svc_name, 'target': target,
                      'middlewares': [], 'entryPoints': _to_list(rdata.get('entryPoints')),
@@ -4883,7 +4820,7 @@ def _entrypoint_mw_map() -> dict:
 def _build_all_apps(include_external=True, include_internal=False):
     all_apps = []
     all_middlewares = []
-    loaded = [(os.path.basename(p) if (MULTI_CONFIG or ACTIVE_CONFIG_DIR) else '', _load_config_display(p)) for p in CONFIG_PATHS]
+    loaded = [(os.path.basename(p) if (env.MULTI_CONFIG or ACTIVE_CONFIG_DIR) else '', _load_config_display(p)) for p in env.CONFIG_PATHS]
     combined_http = {}
     combined_tcp  = {}
     combined_udp  = {}
@@ -5011,9 +4948,9 @@ def _toggle_route(route_id: str, enable: bool):
             p = _resolve_config_path(f)
             if not p and f:
                 safe = f if f.endswith(('.yml', '.yaml')) else f + '.yml'
-                candidate = os.path.join(os.path.dirname(CONFIG_PATH) or '.', safe)
-                p = candidate if _is_safe_path(candidate) else CONFIG_PATH
-            return p or CONFIG_PATH
+                candidate = os.path.join(os.path.dirname(env.CONFIG_PATH) or '.', safe)
+                p = candidate if _is_safe_path(candidate) else env.CONFIG_PATH
+            return p or env.CONFIG_PATH
         target_path = _resolve_or_fallback(cf)
         config      = load_config(target_path)
         config.setdefault(proto, {}).setdefault('routers', {})[rname] = router
@@ -5039,7 +4976,7 @@ def _toggle_route(route_id: str, enable: bool):
         svc_config   = None
         cf_prefix   = route_id.split('::', 1)[0] if '::' in route_id else ''
         _pref_path  = _resolve_config_path(cf_prefix) if cf_prefix else None
-        search_paths = [_pref_path] if _pref_path else CONFIG_PATHS
+        search_paths = [_pref_path] if _pref_path else env.CONFIG_PATHS
         for p in search_paths:
             config = load_config(p)
             for prot in ('http', 'tcp', 'udp'):
@@ -5060,7 +4997,7 @@ def _toggle_route(route_id: str, enable: bool):
         else:
             svc = dict(svc_config.get(proto, {}).get('services', {}).pop(svc_name, {}))
         if not svc:
-            for p in CONFIG_PATHS:
+            for p in env.CONFIG_PATHS:
                 if p == target_path:
                     continue
                 other = load_config(p)
@@ -5076,8 +5013,8 @@ def _toggle_route(route_id: str, enable: bool):
         router = _restore_go_templates(router, _target_map)
         if svc_path is None:
             svc = _restore_go_templates(svc, _target_map)
-        cf = os.path.basename(target_path) if (MULTI_CONFIG or ACTIVE_CONFIG_DIR) else ''
-        svc_cf = os.path.basename(svc_path) if svc_path and (MULTI_CONFIG or ACTIVE_CONFIG_DIR) else cf
+        cf = os.path.basename(target_path) if (env.MULTI_CONFIG or ACTIVE_CONFIG_DIR) else ''
+        svc_cf = os.path.basename(svc_path) if svc_path and (env.MULTI_CONFIG or ACTIVE_CONFIG_DIR) else cf
         disabled[route_id] = {'protocol': proto, 'router': router, 'service': svc, 'configFile': cf, 'serviceConfigFile': svc_cf}
         create_backup(target_path)
         save_config(_strip_empty_sections(svc_config), target_path)
@@ -5112,7 +5049,7 @@ def api_routes_all():
 @login_required
 def api_configs():
     return jsonify({
-        'files': [{'label': os.path.basename(p), 'path': p} for p in CONFIG_PATHS],
+        'files': [{'label': os.path.basename(p), 'path': p} for p in env.CONFIG_PATHS],
         'configDirSet': bool(ACTIVE_CONFIG_DIR),
     })
 
@@ -5258,7 +5195,7 @@ def api_route_raw_get(route_id):
     cf    = route_id.split('::', 1)[0] if '::' in route_id else ''
 
     target_path   = _resolve_config_path(cf) if cf else None
-    paths_to_scan = [target_path] if target_path else CONFIG_PATHS
+    paths_to_scan = [target_path] if target_path else env.CONFIG_PATHS
 
     for p in paths_to_scan:
         config = load_config(p)
@@ -5314,7 +5251,7 @@ def api_route_raw_save(route_id):
 
     target_path = _resolve_config_path(cf) if cf else None
     if not target_path:
-        for p in CONFIG_PATHS:
+        for p in env.CONFIG_PATHS:
             cfg = load_config(p)
             for proto in ('http', 'tcp', 'udp'):
                 if rname in cfg.get(proto, {}).get('routers', {}):
@@ -5400,7 +5337,7 @@ def index():
     auth_on    = _auth_required()
     no_auth    = not _auth_required()
     login_time = session.get('login_time', '')
-    config_paths_list = [{'label': os.path.basename(p), 'path': p} for p in CONFIG_PATHS]
+    config_paths_list = [{'label': os.path.basename(p), 'path': p} for p in env.CONFIG_PATHS]
     cert_resolvers    = [r.strip() for r in settings['cert_resolver'].split(',') if r.strip()]
     for r in _static_cert_resolvers():
         if r not in cert_resolvers:
@@ -5409,7 +5346,7 @@ def index():
     return render_template('index.html', apps=apps, domains=settings['domains'],
                            middlewares=middlewares, settings=settings,
                            auth_enabled=auth_on, no_auth=no_auth, login_time=login_time,
-                           multi_config=MULTI_CONFIG,
+                           multi_config=env.MULTI_CONFIG,
                            config_paths_list=config_paths_list,
                            config_dir_set=bool(ACTIVE_CONFIG_DIR),
                            cert_resolvers=cert_resolvers,
@@ -5465,7 +5402,7 @@ def save_entry():
         config_file_raw = request.form.get('configFile', '').strip()
         agent_id        = request.form.get('agent_id', '').strip()
         agent           = _agent_by_id(agent_id) if agent_id else None
-        target_path     = None if agent else (_resolve_config_path(config_file_raw) or CONFIG_PATH)
+        target_path     = None if agent else (_resolve_config_path(config_file_raw) or env.CONFIG_PATH)
         cfg_filename    = config_file_raw or 'dynamic.yml'
 
         if not svc_name:
@@ -5811,9 +5748,9 @@ def delete_entry(router_id):
                     break
         else:
             if config_file_raw:
-                search_paths = [_resolve_config_path(config_file_raw) or CONFIG_PATH]
+                search_paths = [_resolve_config_path(config_file_raw) or env.CONFIG_PATH]
             else:
-                search_paths = CONFIG_PATHS
+                search_paths = env.CONFIG_PATHS
             for target_path in search_paths:
                 config = load_config(target_path)
                 for sec in ('http', 'tcp', 'udp'):
@@ -5889,7 +5826,7 @@ def save_middleware():
         agent_id        = request.form.get('agent_id', '').strip()
         agent           = _agent_by_id(agent_id) if agent_id else None
         cfg_filename    = config_file_raw or 'dynamic.yml'
-        target_path     = None if agent else (_resolve_config_path(config_file_raw) or CONFIG_PATH)
+        target_path     = None if agent else (_resolve_config_path(config_file_raw) or env.CONFIG_PATH)
         if not mw_name:
             if fetch:
                 return jsonify({'ok': False, 'message': 'Middleware name is required'}), 400
@@ -5981,9 +5918,9 @@ def delete_middleware(mw_name):
                     break
         else:
             if config_file_raw:
-                search_paths = [_resolve_config_path(config_file_raw) or CONFIG_PATH]
+                search_paths = [_resolve_config_path(config_file_raw) or env.CONFIG_PATH]
             else:
-                search_paths = CONFIG_PATHS
+                search_paths = env.CONFIG_PATHS
             for target_path in search_paths:
                 config = load_config(target_path)
                 found = False
