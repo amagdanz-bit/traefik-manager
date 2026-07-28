@@ -3,6 +3,12 @@
 # This file is managed by the app. You can also edit it manually.
 # Restart the container after any manual changes.
 # Full reference: https://traefik-manager.xyzlab.dev/manager-yml
+#
+# Some state lives in companion files next to this one and is not shown here:
+#   agents.yml         registered remote servers (secrets encrypted)
+#   templates.yml      custom middleware templates
+#   notifications.yml  recent notification history
+#   dashboard.yml      dashboard groups and per-card overrides
 # -----------------------------------------------------------------------------
 
 # -- Domains ------------------------------------------------------------------
@@ -11,14 +17,24 @@ domains:
   - example.lan
 
 # -- Certificate Resolver -----------------------------------------------------
+# One or more names, comma-separated. The first is the default for new routes.
+# Use "none" if you manage certificates externally.
 cert_resolver: cloudflare
 
-# -- Traefik API URL ----------------------------------------------------------
+# -- Traefik API --------------------------------------------------------------
+# Point at the internal API. A public dashboard URL behind auth returns 401.
 traefik_api_url: http://traefik:8080
+
+# Only if that API sits behind basic auth. Both are required together.
+traefik_api_user: ""
+traefik_api_password: ""
 
 # -- File Paths ---------------------------------------------------------------
 # Paths inside the container. Mount the files and set these accordingly.
 # Can also be set via env vars: ACME_JSON_PATH, ACCESS_LOG_PATH, STATIC_CONFIG_PATH
+#
+# acme_json_path accepts several files comma-separated, or a directory whose
+# .json files are all read - Traefik writes one storage file per cert resolver.
 acme_json_path: ""
 access_log_path: ""
 static_config_path: ""
@@ -55,6 +71,8 @@ api_keys: []
 
 # -- OIDC / SSO ---------------------------------------------------------------
 # Managed via Settings -> Authentication -> OIDC. Do not edit by hand.
+# Leave oidc_allowed_emails and oidc_allowed_groups empty to allow any account,
+# or set oidc_allow_any_authenticated: true to be explicit about it.
 oidc_enabled: false
 oidc_provider_url: ""
 oidc_client_id: ""
@@ -63,6 +81,7 @@ oidc_display_name: "OIDC"
 oidc_allowed_emails: ""
 oidc_allowed_groups: ""
 oidc_groups_claim: "groups"
+oidc_allow_any_authenticated: false
 
 # -- Notification Webhooks ----------------------------------------------------
 # Managed via Settings -> Notifications.
@@ -71,6 +90,67 @@ webhook_url: ""
 webhook_type: "discord"
 webhook_username: ""
 webhook_password: ""
+
+# -- CrowdSec -----------------------------------------------------------------
+# Managed via Settings -> Security. The bouncer key reads decisions; the machine
+# login is additionally required to read alerts and to unban.
+crowdsec_lapi_url: ""
+crowdsec_api_key: ""
+crowdsec_machine_id: ""
+crowdsec_machine_password: ""
+
+# -- Git Backup ---------------------------------------------------------------
+# Managed via Settings -> Backups -> Git. https:// or ssh:// only.
+# The token is stored encrypted and passed to git via an askpass helper,
+# never embedded in the remote URL.
+git_backup_enabled: false
+git_backup_repo: ""
+git_backup_branch: "main"
+git_backup_username: ""
+git_backup_token: ""
+git_backup_auto_push: true
+git_backup_commit_message: "traefik-manager: {action} at {timestamp}"
+
+# -- Backups ------------------------------------------------------------------
+# Keep only the last N backups per config file. 0 keeps everything.
+backup_keep_count: 0
+
+# -- Geolocation --------------------------------------------------------------
+# Country flags and a world map on the Logs and CrowdSec tabs. Lookups run
+# locally against a bundled database - no IP leaves this instance.
+# Leave geoip_db_path empty to use the free DB-IP Lite database.
+geoip_enabled: false
+geoip_db_path: ""
+
+# -- Interface ----------------------------------------------------------------
+# default_theme: dark | light | system. Set by the theme toggle in the nav bar.
+default_theme: "dark"
+
+# Display preferences, kept here rather than in the browser so they follow you
+# across browsers and devices. Set by the toggles in Settings -> Interface and
+# the card/list buttons on Routes, Middlewares and Services. Unknown keys are
+# dropped. Managed automatically; no need to edit by hand.
+#
+# ui_prefs:
+#   showStatCards: true
+#   compactStatCards: false
+#   showEntrypoints: true
+#   showDocsLink: true
+#   showApiLink: false
+#   showShortcutsBtn: true
+#   showIpDiagBtn: true
+#   showTraefikBadge: true
+#   showTmBadge: true
+#   showRouteIcons: false
+#   routeViewMode: grid    # grid | list
+#   mwViewMode: grid
+#   svcViewMode: grid
+ui_prefs: {}
+
+# -- Agents -------------------------------------------------------------------
+# Registered servers live in agents.yml, not here. This is only the rate limit
+# this instance applies to its own /api/agents/* endpoints (requests/minute).
+agent_api_rate_limit: 30
 
 # -- Tab Visibility -----------------------------------------------------------
 # Show or hide optional tabs. Routes, Middlewares, and Services are always on.
@@ -97,6 +177,8 @@ visible_tabs:
   file_external: false
   # System
   certs: false
+  tls: false
+  crowdsec: false
   plugins: false
   logs: false
 
@@ -111,3 +193,9 @@ self_route:
 # -- Disabled Routes ----------------------------------------------------------
 # Stores config of disabled routes so they can be re-enabled. Managed automatically.
 disabled_routes: {}
+
+# -- Managed Middlewares ------------------------------------------------------
+# Ownership ledger for middlewares the guided route presets generated. TM only
+# updates or removes middlewares listed here, so a hand-written middleware of
+# the same name is never overwritten. Managed automatically.
+managed_middlewares: {}
