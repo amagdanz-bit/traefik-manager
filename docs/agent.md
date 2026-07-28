@@ -127,8 +127,24 @@ sudo systemctl enable --now tma
 | `TRAEFIK_API_USER` | - | Username for a Traefik API behind basic auth. Set together with `TRAEFIK_API_PASSWORD`; when both are set the agent sends HTTP Basic Auth on every Traefik API call. Leave empty for an unauthenticated API. |
 | `TRAEFIK_API_PASSWORD` | - | Password paired with `TRAEFIK_API_USER`. |
 | `TRAEFIK_INSECURE_SKIP_VERIFY` | `false` | Skip TLS certificate verification for HTTPS Traefik API URLs. Useful when using a self-signed cert or Cloudflare Origin Certificate. |
-| `CONFIG_PATH` | `/app/config` | Dynamic config directory or file |
+| `CONFIG_PATH` | `/app/config` | Dynamic config directory or file. This is the **only** config-location variable the agent has - see the note below |
 | `STATIC_CONFIG_PATH` | - | Path to `traefik.yml` - enables static config R/W |
+
+::: warning CONFIG_DIR and CONFIG_PATHS are Host-only
+The agent reads **`CONFIG_PATH` only**. `CONFIG_DIR` and `CONFIG_PATHS`, which the Host supports, do not exist in the agent and are ignored if you set them.
+
+`CONFIG_PATH` covers both cases on its own:
+
+```ini
+# a directory - every .yml/.yaml file directly inside it is managed
+Environment=CONFIG_PATH=/etc/traefik/conf.d
+
+# or a single file
+Environment=CONFIG_PATH=/etc/traefik/dynamic.yml
+```
+
+A directory is read **one level deep**, not recursively. Point it at the folder that actually holds your router files: pointing at a parent like `/etc/traefik` picks up `traefik.yml` (your *static* config, which has no routers) and never descends into `conf.d`, so the Routes and Middlewares tabs come back empty with no error.
+:::
 
 ### Optional paths
 

@@ -1,5 +1,9 @@
 # Running on Linux (without Docker)
 
+::: tip This page is the Traefik Manager server
+Installing the **agent** (TMA) on a remote server is a different setup with a different variable set - it uses `CONFIG_PATH` only, and has no `CONFIG_DIR` or `CONFIG_PATHS`. See [Agent](agent.md) for that.
+:::
+
 Traefik Manager is a standard Python/Flask application and runs natively on any Linux system with Python 3.11+. No container runtime required.
 
 ---
