@@ -5,7 +5,9 @@ document.querySelectorAll('.toast-item').forEach(t => {
     }, 5000);
 });
 
-window._showRouteIcons = localStorage.getItem('showRouteIcons') === 'true';
+window._showRouteIcons = tmPref('showRouteIcons');
+_tmAdoptLocalPrefs();
+_tmSyncViewIcons();
 document.addEventListener('mousedown', e => { _backdropMd = e.target; });
 
 ['appModal','mwModal'].forEach(id => {

@@ -2,10 +2,11 @@ let _allServices = [];
 let _svcFilter = 'all';
 let _protoLiveFilter = 'all';
 let _providerFilter = 'all';
-let _svcViewMode = 'grid';
+let _svcViewMode = tmPref('svcViewMode');
 
 function toggleSvcView() {
     _svcViewMode = _svcViewMode === 'grid' ? 'list' : 'grid';
+    tmSetPref('svcViewMode', _svcViewMode);
     const icon = document.getElementById('svcViewIcon');
     if (icon) icon.className = _svcViewMode === 'grid' ? 'ph-bold ph-list' : 'ph-bold ph-squares-four';
     renderServicesTable();

@@ -378,6 +378,30 @@ The default theme for the UI and the login page. One of `dark`, `light`, or `sys
 default_theme: light
 ```
 
+### `ui_prefs`
+
+**Type:** map - **Default:** `{}`
+
+Display preferences, stored here rather than in the browser so they follow you across browsers, devices and private windows. Set by the toggles in **Settings - Interface** and by the card/list buttons on the Routes, Middlewares and Services tabs. Managed automatically; there is no need to edit it by hand.
+
+| Key | Values | Default |
+|---|---|---|
+| `showStatCards`, `compactStatCards`, `showEntrypoints` | boolean | `true`, `false`, `true` |
+| `showDocsLink`, `showApiLink`, `showShortcutsBtn`, `showIpDiagBtn` | boolean | `true`, `false`, `true`, `true` |
+| `showTraefikBadge`, `showTmBadge`, `showRouteIcons` | boolean | `true`, `true`, `false` |
+| `routeViewMode`, `mwViewMode`, `svcViewMode` | `grid` or `list` | `grid` |
+
+```yaml
+ui_prefs:
+  showApiLink: true
+  compactStatCards: true
+  svcViewMode: list
+```
+
+Unknown keys are dropped rather than stored. A few things stay in the browser deliberately, because they describe that device rather than a preference: the active server, dismissed notices, and notification read markers.
+
+---
+
 ### `geoip_enabled`
 
 **Type:** boolean - **Default:** `false`

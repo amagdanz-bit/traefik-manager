@@ -142,6 +142,24 @@ components:
           items: { type: string }
           description: "Domains offered in the route form for this server."
 
+    UiPrefs:
+      type: object
+      description: "Display preferences. Unknown keys are dropped."
+      properties:
+        showStatCards: { type: boolean, default: true }
+        compactStatCards: { type: boolean, default: false }
+        showEntrypoints: { type: boolean, default: true }
+        showDocsLink: { type: boolean, default: true }
+        showApiLink: { type: boolean, default: false }
+        showShortcutsBtn: { type: boolean, default: true }
+        showIpDiagBtn: { type: boolean, default: true }
+        showTraefikBadge: { type: boolean, default: true }
+        showTmBadge: { type: boolean, default: true }
+        showRouteIcons: { type: boolean, default: false }
+        routeViewMode: { type: string, enum: [grid, list], default: grid }
+        mwViewMode: { type: string, enum: [grid, list], default: grid }
+        svcViewMode: { type: string, enum: [grid, list], default: grid }
+
     Middleware:
       type: object
       properties:
@@ -1028,6 +1046,55 @@ paths:
                 properties:
                   success: { type: boolean }
                   visible_tabs: { type: object }
+
+  /api/settings/ui:
+    get:
+      tags: [Settings]
+      summary: Get display preferences
+      description: |
+        Cosmetic preferences stored server-side rather than in the browser, so
+        they follow the user across browsers, devices and private windows.
+      responses:
+        "200":
+          description: Current preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  ui_prefs: { $ref: "#/components/schemas/UiPrefs" }
+    post:
+      tags: [Settings]
+      summary: Update display preferences
+      description: |
+        Updates one or more preferences. Keys not sent keep their current value.
+
+        Only the documented keys are stored - anything else is dropped rather
+        than written, since this endpoint writes into `manager.yml`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ui_prefs: { $ref: "#/components/schemas/UiPrefs" }
+      responses:
+        "200":
+          description: The merged preferences after the update
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  ui_prefs: { $ref: "#/components/schemas/UiPrefs" }
+        "400":
+          description: ui_prefs was not an object
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   /api/settings/theme:
     post:

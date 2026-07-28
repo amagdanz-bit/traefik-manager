@@ -22,7 +22,7 @@ async function loadOverviewStats() {
             document.getElementById('versionText').textContent = 'v' + _currentVersion;
             const vtm = document.getElementById('versionTextMobile');
             if (vtm) vtm.textContent = 'v' + _currentVersion;
-            if (localStorage.getItem('showTraefikBadge') !== 'false') {
+            if (tmPref('showTraefikBadge')) {
                 document.getElementById('versionBadge')?.classList.remove('hidden');
                 document.getElementById('versionBadgeMobile')?.classList.remove('hidden');
                 document.getElementById('versionBadgeMobile')?.classList.add('flex');

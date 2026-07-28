@@ -12,6 +12,30 @@ from core.env import logger
 OPTIONAL_TABS = ['dashboard', 'routemap', 'docker', 'kubernetes', 'swarm', 'nomad', 'ecs', 'consulcatalog', 'redis', 'etcd', 'consul', 'zookeeper', 'http_provider', 'file_external', 'certs', 'tls', 'crowdsec', 'plugins', 'logs']
 
 
+UI_PREF_BOOLS = (
+    'showStatCards', 'compactStatCards', 'showEntrypoints',
+    'showDocsLink', 'showApiLink', 'showShortcutsBtn', 'showIpDiagBtn',
+    'showTraefikBadge', 'showTmBadge', 'showRouteIcons',
+)
+UI_PREF_VIEWS = ('routeViewMode', 'mwViewMode', 'svcViewMode')
+UI_PREF_KEYS = UI_PREF_BOOLS + UI_PREF_VIEWS
+
+
+def sanitize_ui_prefs(prefs) -> dict:
+    if not isinstance(prefs, dict):
+        return {}
+    out = {}
+    for k in UI_PREF_BOOLS:
+        if k in prefs:
+            out[k] = bool(prefs[k])
+    for k in UI_PREF_VIEWS:
+        if k in prefs:
+            v = str(prefs[k]).strip().lower()
+            if v in ('grid', 'list'):
+                out[k] = v
+    return out
+
+
 def load_settings() -> dict:
     defaults = {
         'domains':              [d.strip() for d in os.environ.get('DOMAINS', 'example.com').split(',') if d.strip()] or ['example.com'],
@@ -42,6 +66,7 @@ def load_settings() -> dict:
         'oidc_groups_claim':    'groups',
         'oidc_allow_any_authenticated': False,
         'default_theme':        'dark',
+        'ui_prefs':             {},
         'geoip_enabled':        False,
         'geoip_db_path':        '',
         'webhook_url':          '',
@@ -172,6 +197,8 @@ def load_settings() -> dict:
         if 'default_theme' in data:
             _dt = str(data['default_theme']).strip().lower()
             merged['default_theme'] = _dt if _dt in ('dark', 'light', 'system') else 'dark'
+        if isinstance(data.get('ui_prefs'), dict):
+            merged['ui_prefs'] = sanitize_ui_prefs(data['ui_prefs'])
         if 'geoip_enabled' in data:
             merged['geoip_enabled'] = bool(data['geoip_enabled'])
         if 'geoip_db_path' in data:
@@ -251,7 +278,7 @@ def save_settings(domains, cert_resolver, traefik_api_url,
                   git_backup_token=None, git_backup_commit_message=None,
                   git_backup_auto_push=None,
                   agent_api_rate_limit=None, backup_keep_count=None,
-                  default_theme=None,
+                  default_theme=None, ui_prefs=None,
                   geoip_enabled=None, geoip_db_path=None):
     if visible_tabs is None:
         visible_tabs = {t: False for t in OPTIONAL_TABS}
@@ -274,6 +301,9 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         managed_middlewares = _cur.get('managed_middlewares', {})
     if acme_json_path is None:
         acme_json_path = _cur.get('acme_json_path', '')
+    if ui_prefs is None:
+        ui_prefs = _cur.get('ui_prefs', {})
+    ui_prefs = sanitize_ui_prefs(ui_prefs)
     if default_theme is None:
         default_theme = _cur.get('default_theme', 'dark')
     default_theme = str(default_theme).strip().lower()
@@ -381,6 +411,7 @@ def save_settings(domains, cert_resolver, traefik_api_url,
         'oidc_allowed_groups':  oidc_allowed_groups,
         'oidc_allow_any_authenticated': bool(oidc_allow_any_authenticated),
         'default_theme':        default_theme,
+        'ui_prefs':             ui_prefs,
         'geoip_enabled':        bool(geoip_enabled),
         'geoip_db_path':        str(geoip_db_path or '').strip(),
         'oidc_groups_claim':    oidc_groups_claim,

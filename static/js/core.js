@@ -176,6 +176,75 @@ function applyTheme(theme) {
     });
 }
 
+const TM_PREF_DEFAULTS = {
+    showStatCards: true, compactStatCards: false, showEntrypoints: true,
+    showDocsLink: true, showApiLink: false, showShortcutsBtn: true,
+    showIpDiagBtn: true, showTraefikBadge: true, showTmBadge: true,
+    showRouteIcons: false,
+    routeViewMode: 'grid', mwViewMode: 'grid', svcViewMode: 'grid',
+};
+
+let _prefSaveTimer = null;
+let _prefPending = {};
+
+function tmPref(key) {
+    const server = window.TM_UI_PREFS || {};
+    if (Object.prototype.hasOwnProperty.call(server, key)) return server[key];
+    const local = localStorage.getItem(key);
+    if (local !== null) {
+        const dflt = TM_PREF_DEFAULTS[key];
+        return typeof dflt === 'boolean' ? local !== 'false' : local;
+    }
+    return TM_PREF_DEFAULTS[key];
+}
+
+function tmSetPref(key, value) {
+    window.TM_UI_PREFS = window.TM_UI_PREFS || {};
+    window.TM_UI_PREFS[key] = value;
+    localStorage.setItem(key, String(value));
+    _prefPending[key] = value;
+    clearTimeout(_prefSaveTimer);
+    _prefSaveTimer = setTimeout(_tmFlushPrefs, 400);
+}
+
+function _tmFlushPrefs() {
+    const payload = _prefPending;
+    _prefPending = {};
+    if (!Object.keys(payload).length) return;
+    fetch('/api/settings/ui', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+        body: JSON.stringify({ ui_prefs: payload })
+    }).catch(() => {});
+}
+
+function _tmAdoptLocalPrefs() {
+    const server = window.TM_UI_PREFS || {};
+    if (Object.keys(server).length) return;
+    const adopted = {};
+    Object.keys(TM_PREF_DEFAULTS).forEach(k => {
+        const v = localStorage.getItem(k);
+        if (v === null) return;
+        const dflt = TM_PREF_DEFAULTS[k];
+        adopted[k] = typeof dflt === 'boolean' ? v !== 'false' : v;
+    });
+    if (!Object.keys(adopted).length) return;
+    window.TM_UI_PREFS = adopted;
+    fetch('/api/settings/ui', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+        body: JSON.stringify({ ui_prefs: adopted })
+    }).catch(() => {});
+}
+
+function _tmSyncViewIcons() {
+    [['svcViewIcon', 'svcViewMode'], ['mwViewIcon', 'mwViewMode'], ['routeViewIcon', 'routeViewMode']]
+        .forEach(([iconId, key]) => {
+            const icon = document.getElementById(iconId);
+            if (icon) icon.className = tmPref(key) === 'grid' ? 'ph-bold ph-list' : 'ph-bold ph-squares-four';
+        });
+}
+
 function setTheme(theme) {
     localStorage.setItem('tm-theme', theme);
     applyTheme(theme);

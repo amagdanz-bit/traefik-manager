@@ -1369,7 +1369,7 @@ async function handleEdit(btn) {
     await _loadAgentResolversIntoSelects();
     document.getElementById('appModal').style.display = 'flex';
 }
-let _routeViewMode = 'grid';
+let _routeViewMode = tmPref('routeViewMode');
 let _bulkMode = false;
 let _bulkSelected = new Set();
 
@@ -1451,6 +1451,7 @@ async function bulkDelete() {
 
 function toggleRouteView() {
     _routeViewMode = _routeViewMode === 'grid' ? 'list' : 'grid';
+    tmSetPref('routeViewMode', _routeViewMode);
     const icon = document.getElementById('routeViewIcon');
     if (icon) icon.className = _routeViewMode === 'grid' ? 'ph-bold ph-list' : 'ph-bold ph-squares-four';
     refreshRoutes();

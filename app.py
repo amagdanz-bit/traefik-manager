@@ -2774,6 +2774,38 @@ def api_save_tabs():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/settings/ui', methods=['GET', 'POST'])
+@csrf_protect
+@login_required
+def api_ui_prefs():
+    """Display preferences, stored server-side so they follow the user.
+
+    These are cosmetic - which nav buttons and stat cards are shown, and whether
+    each tab renders as cards or a list. Unknown keys are dropped rather than
+    stored, so this endpoint cannot be used to write arbitrary data into
+    manager.yml.
+    """
+    existing = load_settings()
+    if request.method == 'GET':
+        return jsonify({'ok': True, 'ui_prefs': existing.get('ui_prefs', {})})
+    data = request.get_json(silent=True) or {}
+    incoming = data.get('ui_prefs', data)
+    if not isinstance(incoming, dict):
+        return jsonify({'ok': False, 'message': 'ui_prefs must be an object'}), 400
+    merged = dict(existing.get('ui_prefs', {}))
+    merged.update(_settings.sanitize_ui_prefs(incoming))
+    save_settings(
+        domains=existing['domains'],
+        cert_resolver=existing['cert_resolver'],
+        traefik_api_url=existing['traefik_api_url'],
+        auth_enabled=existing['auth_enabled'],
+        password_hash=existing['password_hash'],
+        visible_tabs=existing['visible_tabs'],
+        ui_prefs=merged,
+    )
+    return jsonify({'ok': True, 'ui_prefs': merged})
+
+
 @app.route('/api/settings/theme', methods=['POST'])
 @csrf_protect
 @login_required
@@ -3521,7 +3553,8 @@ def index():
                            config_paths_list=config_paths_list,
                            config_dir_set=bool(ACTIVE_CONFIG_DIR),
                            cert_resolvers=cert_resolvers,
-                           crowdsec_enabled=bool(_cs_lapi_url() and _cs_api_key()))
+                           crowdsec_enabled=bool(_cs_lapi_url() and _cs_api_key()),
+                           ui_prefs=settings.get('ui_prefs', {}))
 
 
 def _is_fetch():

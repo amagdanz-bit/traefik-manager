@@ -563,10 +563,11 @@ function filterMw(f) {
         if (emptyText) emptyText.textContent = search ? `No middlewares match "${search}"` : 'No middlewares found';
     }
 }
-let _mwViewMode = 'grid';
+let _mwViewMode = tmPref('mwViewMode');
 
 function toggleMwView() {
     _mwViewMode = _mwViewMode === 'grid' ? 'list' : 'grid';
+    tmSetPref('mwViewMode', _mwViewMode);
     const icon = document.getElementById('mwViewIcon');
     if (icon) icon.className = _mwViewMode === 'grid' ? 'ph-bold ph-list' : 'ph-bold ph-squares-four';
     renderMwGrid(_allMiddlewares);

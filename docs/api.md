@@ -435,6 +435,30 @@ Test connectivity to a Traefik API URL before saving. Accepts optional credentia
 
 ---
 
+### `GET /api/settings/ui`
+
+Display preferences stored server-side, so they follow the user across browsers and devices.
+
+```json
+{ "ok": true, "ui_prefs": { "showApiLink": true, "svcViewMode": "list" } }
+```
+
+---
+
+### `POST /api/settings/ui`
+
+Update one or more preferences. Keys not sent keep their current value.
+
+```json
+{ "ui_prefs": { "showDocsLink": false, "mwViewMode": "list" } }
+```
+
+Accepted keys are the booleans `showStatCards`, `compactStatCards`, `showEntrypoints`, `showDocsLink`, `showApiLink`, `showShortcutsBtn`, `showIpDiagBtn`, `showTraefikBadge`, `showTmBadge`, `showRouteIcons`, and the view modes `routeViewMode`, `mwViewMode`, `svcViewMode`, each `grid` or `list`.
+
+Anything else is dropped rather than stored - this endpoint writes into `manager.yml`, so it only ever accepts the keys above. Returns `400` if `ui_prefs` is not an object.
+
+---
+
 ## TLS Options
 
 ### `GET /api/tls-options`

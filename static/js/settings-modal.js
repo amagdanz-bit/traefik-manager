@@ -904,14 +904,14 @@ function formatBytes(bytes) {
 }
 
 function toggleTraefikBadge() {
-    const show = localStorage.getItem('showTraefikBadge') !== 'false';
-    localStorage.setItem('showTraefikBadge', show ? 'false' : 'true');
+    const show = tmPref('showTraefikBadge');
+    tmSetPref('showTraefikBadge', !show);
     _applyTraefikBadgeVisibility();
 }
 
 function toggleRouteIcons() {
-    const show = localStorage.getItem('showRouteIcons') === 'true';
-    localStorage.setItem('showRouteIcons', show ? 'false' : 'true');
+    const show = tmPref('showRouteIcons');
+    tmSetPref('showRouteIcons', !show);
     window._showRouteIcons = !show;
     const tog = document.getElementById('toggle-route-icons');
     if (tog) tog.classList.toggle('on', !show);
@@ -922,7 +922,7 @@ function toggleRouteIcons() {
 }
 
 function _applyTraefikBadgeVisibility() {
-    const show = localStorage.getItem('showTraefikBadge') !== 'false';
+    const show = tmPref('showTraefikBadge');
     const hasVersion = (document.getElementById('versionText').textContent || '').trim() !== '-';
     const badge  = document.getElementById('versionBadge');
     const badgeM = document.getElementById('versionBadgeMobile');
@@ -936,13 +936,13 @@ function _applyTraefikBadgeVisibility() {
 }
 
 function toggleTmBadge() {
-    const show = localStorage.getItem('showTmBadge') !== 'false';
-    localStorage.setItem('showTmBadge', show ? 'false' : 'true');
+    const show = tmPref('showTmBadge');
+    tmSetPref('showTmBadge', !show);
     _applyTmBadgeVisibility();
 }
 
 function _applyTmBadgeVisibility() {
-    const show = localStorage.getItem('showTmBadge') !== 'false';
+    const show = tmPref('showTmBadge');
     const hasVersion = (document.getElementById('tmVersionText').textContent || '').trim() !== '-';
     const badge  = document.getElementById('tmVersionBadge');
     const badgeM = document.getElementById('tmVersionBadgeMobile');
@@ -956,29 +956,29 @@ function _applyTmBadgeVisibility() {
 }
 
 function toggleShortcutsBtn() {
-    const show = localStorage.getItem('showShortcutsBtn') !== 'false';
-    localStorage.setItem('showShortcutsBtn', show ? 'false' : 'true');
+    const show = tmPref('showShortcutsBtn');
+    tmSetPref('showShortcutsBtn', !show);
     document.documentElement.classList.toggle('tm-hide-shortcuts', show);
     const t = document.getElementById('toggle-shortcuts-btn');
     if (t) t.classList.toggle('on', !show);
 }
 
 function toggleIpDiagBtn() {
-    const show = localStorage.getItem('showIpDiagBtn') !== 'false';
-    localStorage.setItem('showIpDiagBtn', show ? 'false' : 'true');
+    const show = tmPref('showIpDiagBtn');
+    tmSetPref('showIpDiagBtn', !show);
     document.documentElement.classList.toggle('tm-hide-ipdiag', show);
     const t = document.getElementById('toggle-ipdiag-btn');
     if (t) t.classList.toggle('on', !show);
 }
 
 function toggleDocsLink() {
-    const show = localStorage.getItem('showDocsLink') !== 'false';
-    localStorage.setItem('showDocsLink', show ? 'false' : 'true');
+    const show = tmPref('showDocsLink');
+    tmSetPref('showDocsLink', !show);
     _applyDocsLinkVisibility();
 }
 
 function _applyDocsLinkVisibility() {
-    const show = localStorage.getItem('showDocsLink') !== 'false';
+    const show = tmPref('showDocsLink');
     document.documentElement.classList.toggle('tm-hide-docs', !show);
     document.querySelectorAll('.nav-docs-link').forEach(el => el.classList.toggle('hidden', !show));
     const tog = document.getElementById('toggle-docs-link');
@@ -986,13 +986,13 @@ function _applyDocsLinkVisibility() {
 }
 
 function toggleApiLink() {
-    const show = localStorage.getItem('showApiLink') === 'true';
-    localStorage.setItem('showApiLink', show ? 'false' : 'true');
+    const show = tmPref('showApiLink');
+    tmSetPref('showApiLink', !show);
     _applyApiLinkVisibility();
 }
 
 function _applyApiLinkVisibility() {
-    const show = localStorage.getItem('showApiLink') === 'true';
+    const show = tmPref('showApiLink');
     document.documentElement.classList.toggle('tm-hide-api', !show);
     document.querySelectorAll('.nav-api-link').forEach(el => el.classList.toggle('hidden', !show));
     const tog = document.getElementById('toggle-api-link');
@@ -1088,7 +1088,7 @@ function renderReleaseNotes(md) {
     return html;
 }
 
-function _uiPref(key) { return localStorage.getItem(key) !== 'false'; }
+function _uiPref(key) { return tmPref(key); }
 
 function _applyEntrypointsVisibility() {
     const bar  = document.getElementById('entrypointsBar');
@@ -1101,7 +1101,7 @@ function _applyEntrypointsVisibility() {
 function applyUiPrefs() {
     const html = document.documentElement;
     const showStats = _uiPref('showStatCards');
-    const compact = localStorage.getItem('compactStatCards') === 'true';
+    const compact = tmPref('compactStatCards');
     html.classList.toggle('tm-hide-stats', !showStats);
     html.classList.toggle('tm-compact-stats', compact);
     html.classList.toggle('tm-hide-entrypoints', !_uiPref('showEntrypoints'));
@@ -1119,21 +1119,17 @@ function loadUiTogglesIntoModal() {
     const sh = document.getElementById('toggle-shortcuts-btn');
     if (sc) sc.classList.toggle('on', _uiPref('showStatCards'));
     if (ep) ep.classList.toggle('on', _uiPref('showEntrypoints'));
-    if (cs) cs.classList.toggle('on', localStorage.getItem('compactStatCards') === 'true');
-    if (sh) sh.classList.toggle('on', localStorage.getItem('showShortcutsBtn') !== 'false');
+    if (cs) cs.classList.toggle('on', tmPref('compactStatCards'));
+    if (sh) sh.classList.toggle('on', tmPref('showShortcutsBtn'));
     const ipd = document.getElementById('toggle-ipdiag-btn');
-    if (ipd) ipd.classList.toggle('on', localStorage.getItem('showIpDiagBtn') !== 'false');
+    if (ipd) ipd.classList.toggle('on', tmPref('showIpDiagBtn'));
     const ri = document.getElementById('toggle-route-icons');
-    if (ri) ri.classList.toggle('on', localStorage.getItem('showRouteIcons') === 'true');
+    if (ri) ri.classList.toggle('on', tmPref('showRouteIcons'));
     loadGeoipSettings();
 }
 
 function toggleUiPref(key) {
-    // compactStatCards defaults off; all others default on
-    const current = key === 'compactStatCards'
-        ? localStorage.getItem(key) === 'true'
-        : _uiPref(key);
-    localStorage.setItem(key, current ? 'false' : 'true');
+    tmSetPref(key, !tmPref(key));
     applyUiPrefs();
     loadUiTogglesIntoModal();
 }
