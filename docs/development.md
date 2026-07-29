@@ -97,6 +97,7 @@ The suite runs against a temporary config directory and never touches a real Tra
 | `test_acme_paths.py` | Single and multiple acme storage files |
 | `test_endpoints.py` | Every `url_for()` target resolves; no duplicate routes |
 | `test_assets.py` | Tailwind scans every file that emits utility classes |
+| `test_css.py` | No unshrinkable `min-width`/`min-height` floors in `app.css`; `resize` always paired with a scroll context |
 | `test_lint.py` | No undefined names; every `core` alias in `app.py` resolves |
 | `test_ui_prefs.py` | Interface preferences round-trip through settings; unknown keys are dropped |
 
