@@ -88,7 +88,7 @@ The suite runs against a temporary config directory and never touches a real Tra
 
 | Area | What it asserts |
 |---|---|
-| `test_routes.py` | Route saves for HTTP, TCP and UDP; backend validation; the multi-backend safeguard; comment preservation |
+| `test_routes.py` | Route saves for HTTP, TCP and UDP; backend validation; the multi-backend safeguard; the mobile client contract, including that a backend edit preserves sticky, health checks and priority; comment preservation |
 | `test_presets.py` | Security-headers and streaming presets, the ownership ledger, refuse-to-overwrite |
 | `test_middlewares.py` | Middleware save and delete, unrelated middlewares preserved |
 | `test_backups.py` | Backups created before a write and containing the previous content |
@@ -98,6 +98,7 @@ The suite runs against a temporary config directory and never touches a real Tra
 | `test_endpoints.py` | Every `url_for()` target resolves; no duplicate routes |
 | `test_assets.py` | Tailwind scans every file that emits utility classes |
 | `test_lint.py` | No undefined names; every `core` alias in `app.py` resolves |
+| `test_ui_prefs.py` | Interface preferences round-trip through settings; unknown keys are dropped |
 
 ### Conventions
 

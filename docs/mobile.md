@@ -61,7 +61,7 @@ Tap the **hamburger icon** (top-left of any screen) to open the navigation drawe
 
 | Section | Items |
 |---|---|
-| General | Appearance, App Lock, Traefik, Server, Active Server |
+| General | Appearance, App Lock, Traefik, Server, Active Server, Client IP |
 | Tabs | Logs, Certificates, Plugins, CrowdSec |
 | Data | Backups |
 | Info | About |
@@ -89,6 +89,9 @@ Tap the **hamburger icon** (top-left of any screen) to open the navigation drawe
 - Toggle **Skip TLS Verification** per route for backends with self-signed certificates (`insecureSkipVerify`)
 - **Wildcard Certificate Domains** - when TLS is enabled, toggle on to specify a main domain and SANs (e.g. `*.example.com`) for wildcard certificate requests via DNS challenge
 - **TLS Options profile** - select any named TLS options profile configured on your Traefik instance to apply it to the route
+- Add and remove **backends** on a route, for both new and existing routes, so traffic is load balanced across several servers. HTTP backends take a per-backend `http`/`https` scheme
+- Sticky sessions, health checks and router priority are read back with the route and preserved when you save. They are configured on the web app; the phone shows them as chips on the route card
+- A route with more than one backend shows a `+N` badge on its card
 - Edit existing routes
 - Delete routes with confirmation
 - Tap a domain to open it in the browser
@@ -192,6 +195,10 @@ All settings are accessed from the navigation drawer (hamburger icon in the top 
 
 Switch between Light, Dark, and System theme. On Android 12+, **Dynamic Color** adapts the app's UI chrome (backgrounds, cards, borders) to your wallpaper palette while keeping status colors (green/yellow/red) semantically distinct.
 
+### Client IP
+
+A read-only diagnostic showing what the server sees for your request: the trusted client IP that feeds the login rate limiter, audit log, `ipAllowList` and CrowdSec, the raw socket peer before any header is trusted, the trusted proxy hop count (`PROXY_FIX_HOPS`), the `X-Forwarded-For` chain and the forwarding headers as received. Each address is tagged public, private, CGNAT, loopback or link-local, and the screen warns when the trusted IP is not public while forwarding headers are present - the signature of a wrong `trustedIPs` or hop count. Needs server v1.8.0 or newer.
+
 ### App Lock
 
 Require biometric or device PIN authentication when the app opens or returns from background.
@@ -261,7 +268,7 @@ When using this split-route pattern, keep Traefik Manager's built-in auth **enab
 
 | | |
 |---|---|
-| Traefik Manager (server) | **v1.5.0 or higher** for mobile v1.5.0; v0.12.0+ for mobile v0.11.0+; v0.11.0+ for mobile v0.10.0 |
+| Traefik Manager (server) | **v1.8.0 or higher** for mobile v1.6.0; v1.5.0+ for mobile v1.5.0; v0.12.0+ for mobile v0.11.0+; v0.11.0+ for mobile v0.10.0 |
 | Android | 7.0+ (API 24+) |
 | iOS | 16+ (build from source required) |
 
