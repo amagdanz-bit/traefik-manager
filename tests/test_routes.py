@@ -1,3 +1,4 @@
+import pytest
 import json
 
 from conftest import read_config, write_config, post_form
@@ -260,3 +261,78 @@ def test_mobile_edit_preserves_load_balancing(client):
     assert len(lb['servers']) == 2, 'mobile edit wiped the second backend'
     assert lb['sticky']['cookie']['name'] == 'keep'
     assert cfg['http']['routers']['multi']['priority'] == 42
+
+
+def test_mobile_backend_edit_round_trips_through_the_api(client):
+    """The app now sends backendsJson when it edits backends, which puts the save
+    in managed-backends mode - there the server replaces the service block, so
+    anything the app fails to echo back is deleted. Read the route the way the
+    app does, rebuild the payload the way it does, and assert nothing is lost."""
+    post_form(client, "/save", serviceName='lb', subdomain='lb.example.com',
+              protocol='http', scheme='http', targetIp='10.0.0.1', targetPort='80',
+              backendsJsonHttp=json.dumps({
+                  'servers': [{'scheme': 'http', 'host': '10.0.0.1', 'port': '80'},
+                              {'scheme': 'http', 'host': '10.0.0.2', 'port': '80'}],
+                  'sticky': {'enabled': True, 'cookieName': 'webcookie', 'secure': True},
+                  'healthCheck': {'enabled': True, 'path': '/hz', 'interval': '10s'},
+                  'priority': 42}))
+
+    route = next(a for a in client.get("/api/routes/all").get_json()['apps']
+                 if a['id'] == 'lb')
+
+    # src/api/routes.ts buildForm(), fed by app/route/[id].tsx populateForm()
+    servers = [{'scheme': s.split(':')[0], 'host': s.split('//')[1].split(':')[0],
+                'port': s.split(':')[-1]} for s in route['servers']]
+    payload = {'servers': servers + [{'scheme': 'http', 'host': '10.0.0.3', 'port': '80'}]}
+    if route['stickyEnabled']:
+        payload['sticky'] = {'enabled': True,
+                             'cookieName': route['sticky'].get('name', ''),
+                             'secure':     bool(route['sticky'].get('secure')),
+                             'httpOnly':   bool(route['sticky'].get('httpOnly'))}
+    if route['healthCheck']:
+        payload['healthCheck'] = {'enabled': True,
+                                  'path':     route['healthCheck'].get('path', ''),
+                                  'interval': route['healthCheck'].get('interval', ''),
+                                  'timeout':  route['healthCheck'].get('timeout', '')}
+    if isinstance(route['priority'], int):
+        payload['priority'] = route['priority']
+
+    r = _mobile_save(client, 'http', '10.0.0.1', '80', serviceName='lb',
+                     subdomain='lb.example.com', scheme='http', isEdit='true',
+                     originalId='lb', backendsJsonHttp=json.dumps(payload))
+    assert r.status_code < 400, r.data[:200]
+
+    cfg = read_config()
+    lb  = cfg['http']['services']['lb-service']['loadBalancer']
+    assert len(lb['servers']) == 3
+    assert lb['sticky']['cookie']['name'] == 'webcookie', 'sticky lost on backend edit'
+    assert lb['sticky']['cookie']['secure'] is True
+    assert lb['healthCheck']['path'] == '/hz', 'health check lost on backend edit'
+    assert lb['healthCheck']['interval'] == '10s'
+    assert cfg['http']['routers']['lb']['priority'] == 42
+
+
+@pytest.mark.parametrize("proto,ip,port,expected", [
+    ('tcp', '10.0.0.9:5432',  '',     '10.0.0.9:5432'),
+    ('tcp', '[::1]:5432',     '',     '[::1]:5432'),
+    ('udp', '10.0.0.53:53',   '',     '10.0.0.53:53'),
+    ('tcp', '10.0.0.9',       '5432', '10.0.0.9:5432'),
+])
+def test_tcp_udp_save_recovers_a_combined_host_port(client, proto, ip, port, expected):
+    """Mobile v1.5.0 and earlier parsed a TCP/UDP target with new URL(), which
+    left the whole host:port in targetIp and no port. That used to be written
+    out as 'host:port:'. The combined form is now split back apart."""
+    r = _mobile_save(client, proto, ip, port, serviceName='sv', subdomain='sv')
+    assert r.status_code < 400, r.data[:200]
+    lb = read_config()[proto]['services']['sv-service']['loadBalancer']
+    assert lb['servers'][0]['address'] == expected
+
+
+@pytest.mark.parametrize("proto,ip", [('tcp', '10.0.0.9'), ('udp', '10.0.0.53'), ('tcp', '::1')])
+def test_tcp_udp_save_refuses_a_missing_port(client, proto, ip):
+    """A TCP/UDP address with no port is never valid - refuse it rather than
+    writing 'host:' and reporting success."""
+    r = _mobile_save(client, proto, ip, '', serviceName='sv', subdomain='sv')
+    assert r.status_code == 400
+    assert b'port is required' in r.data
+    assert 'sv-service' not in read_config().get(proto, {}).get('services', {})

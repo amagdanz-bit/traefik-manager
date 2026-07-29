@@ -137,6 +137,11 @@ A service can point at several servers. Send the `backendsJson*` field matching 
 - Rows with an empty `host` are skipped. Invalid JSON falls back to `targetIp`/`targetPort` rather than failing the save.
 - `interval` and `timeout` take Go durations (`10s`, `1m`); a bare number is read as seconds.
 - `sticky`, `healthCheck`, and `priority` apply to HTTP. TCP accepts `servers` and `priority`; UDP accepts `servers` only.
+- TCP and UDP require a port. Sending it joined to the host (`targetIp=10.0.0.9:5432` with an empty `targetPort`) is accepted and split back apart, including bracketed IPv6; a target with no port at all is refused with `400`.
+
+::: warning Sending `backendsJson*` replaces the whole service
+A save that includes `backendsJson*` is authoritative for that service: `servers` is replaced outright, and `sticky` or `healthCheck` absent from the payload are **deleted**. A client that edits backends must read the route first and echo `sticky`, `healthCheck`, and `priority` back, or it will silently drop them. Omit `backendsJson*` entirely to use the merge behaviour described below instead.
+:::
 
 ::: tip Editing from a single-backend client
 A save that omits `backendsJson*` on an edit replaces only the **first** backend. Any additional backends, plus `sticky`, `healthCheck`, and `priority`, are preserved. This is what keeps the mobile app and older cached pages from wiping a multi-backend route.

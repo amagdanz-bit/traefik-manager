@@ -3632,6 +3632,19 @@ def save_entry():
             flash(_msg, "error")
             return redirect(url_for('index'))
 
+        if protocol in ('tcp', 'udp') and not _has_backends_json and not target_port:
+            _host, _sep, _tail = target_ip.rpartition(':')
+            if _sep and _tail.isdigit() and (':' not in _host or _host.endswith(']')):
+                target_ip, target_port = _host, _tail
+            else:
+                _msg = (f"A backend port is required for {protocol.upper()} routes. "
+                        f"Send targetPort (repeated per protocol, index "
+                        f"{ {'tcp': 1, 'udp': 2}[protocol] }) or {_backends_field}.")
+                if fetch:
+                    return jsonify({'ok': False, 'message': _msg}), 400
+                flash(_msg, "error")
+                return redirect(url_for('index'))
+
         router_name  = svc_name
         service_name = f"{svc_name}-service"
         if agent:
