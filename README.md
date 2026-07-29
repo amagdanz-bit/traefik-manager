@@ -11,7 +11,6 @@ Add routes, manage middlewares, monitor services, and view TLS certificates - al
 [![Version](https://img.shields.io/github/v/release/chr0nzz/traefik-manager)](https://github.com/chr0nzz/traefik-manager/releases)
 [![Build](https://img.shields.io/github/actions/workflow/status/chr0nzz/traefik-manager/docker.yml?logo=githubactions&logoColor=white&label=build)](https://github.com/chr0nzz/traefik-manager/actions/workflows/docker.yml)
 [![Docker Image](https://img.shields.io/badge/ghcr.io-chr0nzz%2Ftraefik--manager-blue?logo=docker&logoColor=white)](https://github.com/chr0nzz/traefik-manager/pkgs/container/traefik-manager)
-[![Image Size](https://ghcr-badge.egpl.dev/chr0nzz/traefik-manager/size?label=image%20size)](https://github.com/chr0nzz/traefik-manager/pkgs/container/traefik-manager)
 [![Last Commit](https://img.shields.io/github/last-commit/chr0nzz/traefik-manager/dev?label=last%20commit)](https://github.com/chr0nzz/traefik-manager/commits/dev)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-xyzlab.dev-blue)](https://traefik-manager.xyzlab.dev/)
