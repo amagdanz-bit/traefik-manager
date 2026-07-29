@@ -212,3 +212,51 @@ def test_http_and_tcp_treat_subdomains_the_same(client):
     assert "svc.other.tld" in cfg["http"]["routers"]["hsame"]["rule"]
     assert "svc.other.tld" in cfg["tcp"]["routers"]["tsame"]["rule"]
     assert "other.tld.example.com" not in str(cfg)
+
+
+# ---- mobile client contract --------------------------------------------------
+
+def _mobile_save(client, proto, ip, port, **extra):
+    """Exactly how the mobile app posts /save: targetIp/targetPort as a repeated
+    field with the value in the slot for that protocol."""
+    slot = {'http': 0, 'tcp': 1, 'udp': 2}[proto]
+    ips, ports = ['', '', ''], ['', '', '']
+    ips[slot], ports[slot] = ip, port
+    return post_form(client, "/save", protocol=proto, targetIp=ips, targetPort=ports, **extra)
+
+
+def test_mobile_shaped_save_works_for_every_protocol(client):
+    for proto, ip, port, extra in (
+            ('http', '10.0.0.1', '8080', dict(serviceName='mh', subdomain='mh.example.com', scheme='http')),
+            ('tcp',  '10.0.0.9', '5432', dict(serviceName='mt', subdomain='mt')),
+            ('udp',  '10.0.0.53', '53',  dict(serviceName='mu', subdomain='mu'))):
+        r = _mobile_save(client, proto, ip, port, **extra)
+        assert r.status_code < 400, '%s save failed: %s' % (proto, r.data[:200])
+
+    cfg = read_config()
+    assert cfg['http']['services']['mh-service']['loadBalancer']['servers'][0]['url'] == 'http://10.0.0.1:8080'
+    assert cfg['tcp']['services']['mt-service']['loadBalancer']['servers'][0]['address'] == '10.0.0.9:5432'
+    assert cfg['udp']['services']['mu-service']['loadBalancer']['servers'][0]['address'] == '10.0.0.53:53'
+
+
+def test_mobile_edit_preserves_load_balancing(client):
+    """The mobile app sends no backendsJson, so a save from it must leave extra
+    backends, sticky and priority alone."""
+    post_form(client, "/save", serviceName='multi', subdomain='multi.example.com',
+              protocol='http', scheme='http', targetIp='10.0.0.1', targetPort='80',
+              backendsJsonHttp=json.dumps({
+                  'servers': [{'scheme': 'http', 'host': '10.0.0.1', 'port': '80'},
+                              {'scheme': 'http', 'host': '10.0.0.2', 'port': '80'}],
+                  'sticky': {'enabled': True, 'cookieName': 'keep'},
+                  'priority': 42}))
+
+    _mobile_save(client, 'http', '10.9.9.9', '99', serviceName='multi',
+                 subdomain='multi.example.com', scheme='http',
+                 isEdit='true', originalId='multi')
+
+    cfg = read_config()
+    lb = cfg['http']['services']['multi-service']['loadBalancer']
+    assert '10.9.9.9:99' in lb['servers'][0]['url']
+    assert len(lb['servers']) == 2, 'mobile edit wiped the second backend'
+    assert lb['sticky']['cookie']['name'] == 'keep'
+    assert cfg['http']['routers']['multi']['priority'] == 42
