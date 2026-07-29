@@ -247,13 +247,13 @@ Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to rep
 
 ## Contributors
 
-Traefik Manager is better because of the people who took the time to dig into it, file precise bug reports, and send patches. Thank you.
+Traefik Manager is better because of the people who took the time to dig into it and send patches. Thank you.
 
 <p align="center">
 <a href="https://github.com/fbnlrz" title="Fabi (@fbnlrz) - client-IP feature set, guided route presets, config-safety fixes"><img src="https://images.weserv.nl/?url=github.com/fbnlrz.png&w=140&h=140&fit=cover&mask=circle" width="70" height="70" alt="fbnlrz"></a>
 <a href="https://github.com/adrianrp1988" title="Adrian Rodriguez (@adrianrp1988) - TCP middlewares on TCP routes"><img src="https://images.weserv.nl/?url=github.com/adrianrp1988.png&w=140&h=140&fit=cover&mask=circle" width="70" height="70" alt="adrianrp1988"></a>
 <a href="https://github.com/akanealw" title="@akanealw - Authelia forward-auth template fix"><img src="https://images.weserv.nl/?url=github.com/akanealw.png&w=140&h=140&fit=cover&mask=circle" width="70" height="70" alt="akanealw"></a>
-<a href="https://github.com/yhay81" title="Yusuke Hayashi (@yhay81) - community support"><img src="https://images.weserv.nl/?url=github.com/yhay81.png&w=140&h=140&fit=cover&mask=circle" width="70" height="70" alt="yhay81"></a>
+<a href="https://github.com/maca134" title="@maca134 - horizontally resizable modals"><img src="https://images.weserv.nl/?url=github.com/maca134.png&w=140&h=140&fit=cover&mask=circle" width="70" height="70" alt="maca134"></a>
 </p>
 
 Thanks as well to everyone who has opened an issue or a discussion. Several features started as a question from someone running into something unexpected, and the detail in those reports is what made them fixable.

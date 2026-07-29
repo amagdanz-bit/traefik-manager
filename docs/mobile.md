@@ -151,6 +151,19 @@ The Logs tab requires `ACCESS_LOG_PATH` to be set in your Traefik Manager server
 - Tap any card to open a full detail screen with all fields and the raw log line
 - Adjustable line count: 100, 150, or 200 lines
 - Pull to refresh
+- Country flags per request when GeoIP is enabled on the server, with a ranked country strip above the list; tap a country to filter to it
+- Both the CLF and `json` Traefik access-log formats are parsed
+
+### CrowdSec
+
+The CrowdSec tab is hidden by default. To enable it, open the drawer and go to **CrowdSec**, then toggle **Show CrowdSec Tab**. It needs CrowdSec credentials configured in the web app under **Settings -> Security**.
+
+- Active decisions listed with the banned address, scenario, type (ban, captcha, bypass), expiry and origin
+- Counts for bans, captchas and bypasses, and filtering by decision type
+- Search by address or scenario
+- Delete a decision to unban an address
+- Country flags on each decision when GeoIP is enabled, with a ranked country strip; tap a country to filter to it
+- Pull to refresh
 
 ### Backups
 
