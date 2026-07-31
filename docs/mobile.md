@@ -184,9 +184,20 @@ To rename an agent, tap the pencil icon on its row - the name becomes an editabl
 
 ### Widget (Android)
 
-A home screen widget shows a live count of healthy, warning, and error services at a glance. Add it from your launcher's widget picker after installing the app.
+A home screen widget shows the health of every server - the Host and each registered agent - as its own row, with a status dot, service counts, and a green/yellow/red status bar. Add it from your launcher's widget picker after installing the app.
 
-The widget connects using the same API key saved when you first connected the app. If the widget stops updating or shows offline, disconnect and reconnect the server in **Settings → Server** - this refreshes the stored credentials.
+The layout adapts to the widget's size:
+
+| Size | Shows |
+|---|---|
+| 2x1 | One aggregate bar and total counts across all servers |
+| 2x2 | A server list with per-server counts |
+| 4x2 and wider | Full rows with a per-server status bar and count chips |
+| Taller sizes | Up to six server rows, then `+N more` |
+
+An unreachable server shows a muted row instead of taking the whole widget down. If the last refresh failed entirely, the widget keeps the last known counts and labels them `offline` with the age of the data. Tapping a server row opens the app on the Servers screen; the title opens the app; the arrow refreshes immediately. The widget follows the phone's system dark/light theme and refreshes every 15 minutes.
+
+The widget connects using the same API key saved when you first connected the app, and reads agent status through the hub, so it works from anywhere the hub is reachable. Multi-server rows need server v1.5.0 or newer; older servers show the connected server only. If the widget stops updating or shows offline, disconnect and reconnect the server in **Settings → Server** - this refreshes the stored credentials.
 
 ### Edit Mode
 
