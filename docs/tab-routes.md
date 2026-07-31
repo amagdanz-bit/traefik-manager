@@ -44,7 +44,8 @@ Click **Add Route** in the top bar. Fill in:
 | Name | Unique identifier (used as the router and service key in `dynamic.yml`) |
 | Rule Mode | **Simple** (default) - use the Subdomain + Domain chip builder to generate a `Host()` rule. **Advanced rule** - type any valid Traefik rule directly (`PathPrefix`, `HostRegexp`, compound rules with `&&` / `\|\|`, etc.). Switch modes with the Simple / Advanced rule toggle at the top of the HTTP section. When editing a route with a complex rule, the form automatically opens in Advanced mode. |
 | Subdomain + Domain(s) | *(Simple mode only)* Subdomain field plus one or more domain chips. The chip list combines the Domains from Settings - Connection with domains **auto-detected from your existing routes**, and a **+** chip lets you type any other domain on the spot - no Settings trip required. With multiple domains selected, generates a multi-host rule: `Host(\`sub.d1.com\`) \|\| Host(\`sub.d2.com\`)`. Entering a full hostname (with dots) in the Subdomain field uses it as-is. The domain list is a form convenience only - it never affects your Traefik configuration. Long domain names are truncated in the chip display. |
-| Target IP / Port | Backend server to forward to |
+| Backend | **Manual** (default) - enter a Target IP / Port for a service this route owns. **Existing service** - reference a service already defined in your config instead; see [Shared services](#shared-services) |
+| Target IP / Port | *(Manual mode)* Backend server to forward to |
 | Entry Points | Selectable chips fetched from the Traefik API - click to toggle. `websecure` is pre-selected for HTTP routes. UDP entry points are single-select. Falls back to a text input if the API returns no entry points. |
 | Middlewares | Selectable chips fetched from the Traefik API - click to toggle. Falls back to a text input if the API returns no middlewares. HTTP routes offer HTTP middlewares; the TCP form has its own Middlewares chips offering TCP middlewares (`ipAllowList`, `inFlightConn`). |
 | Backend Scheme | `HTTP` or `HTTPS` - the scheme Traefik uses to connect to your backend. Use `HTTPS` when the backend serves TLS internally. |
@@ -134,6 +135,20 @@ Every route needs at least one backend host. A save that does not supply one is 
 ::: tip Older clients are safe
 The mobile app and older cached pages post only a single target. Saving from one of those updates the first backend only - additional backends, sticky sessions, health checks, and priority are preserved rather than wiped.
 :::
+
+## Shared services
+
+Several routers can point at the same service - a native Traefik pattern, useful when the same backend needs different middlewares per hostname (an internal name with no auth and an external one behind Authelia, for example) or when one edge Traefik fans multiple domains into the same downstream instance (#125).
+
+Switch the **Backend** toggle in the route modal to **Existing service** and pick any service from your config files. The route then writes only a router with `service: <name>`; the service block is never created, modified, or deleted by that route. The picker lists file-provider services for the active server across all config files.
+
+Behavior worth knowing:
+
+- Deleting or disabling a route never removes a service another router still references.
+- Deleting the route that originally created a shared service keeps the service as long as another router points at it.
+- Editing a route that references a shared service keeps the reference; backends, sticky sessions and health checks are managed where the service is defined - through the route that owns it, or in YAML.
+- Older clients (the mobile app, cached pages) editing a referenced route cannot accidentally convert it into an owned service - the reference is preserved server-side.
+- Hand-written cross-provider references such as `service: whoami@docker` are preserved on edit, but the picker does not create them.
 
 ## Deleting a route
 

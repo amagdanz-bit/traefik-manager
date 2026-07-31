@@ -336,3 +336,132 @@ def test_tcp_udp_save_refuses_a_missing_port(client, proto, ip):
     assert r.status_code == 400
     assert b'port is required' in r.data
     assert 'sv-service' not in read_config().get(proto, {}).get('services', {})
+
+
+# ---- shared services (serviceRef, #125) --------------------------------------
+
+def _make_owner(client, name='app1', ip='10.0.0.50', port='80'):
+    post_form(client, "/save", serviceName=name, subdomain=name, protocol='http',
+              scheme='http', targetIp=ip, targetPort=port)
+
+
+def test_service_ref_writes_router_only(client):
+    _make_owner(client)
+    r = post_form(client, "/save", serviceName='app2', subdomain='app2',
+                  protocol='http', scheme='http', targetIp='', targetPort='',
+                  middlewares='mid2', serviceRef='app1-service')
+    assert r.status_code < 400, r.data[:200]
+    cfg = read_config()
+    router = cfg['http']['routers']['app2']
+    assert router['service'] == 'app1-service'
+    assert router['middlewares'] == ['mid2']
+    assert 'app2-service' not in cfg['http']['services']
+    assert 'app2-transport' not in cfg.get('http', {}).get('serversTransports', {})
+
+
+def test_service_ref_rejects_missing_service(client):
+    r = post_form(client, "/save", serviceName='app2', subdomain='app2',
+                  protocol='http', scheme='http', targetIp='', targetPort='',
+                  serviceRef='nope-service')
+    assert r.status_code == 400
+    assert b'does not exist' in r.data
+    assert 'app2' not in read_config().get('http', {}).get('routers', {})
+
+
+def test_service_ref_edit_keeps_reference(client):
+    _make_owner(client)
+    post_form(client, "/save", serviceName='app2', subdomain='app2', protocol='http',
+              scheme='http', targetIp='', targetPort='', serviceRef='app1-service')
+    r = post_form(client, "/save", serviceName='app2', subdomain='app2', protocol='http',
+                  scheme='http', targetIp='', targetPort='', middlewares='mid1,mid2',
+                  serviceRef='app1-service', isEdit='true', originalId='app2')
+    assert r.status_code < 400, r.data[:200]
+    cfg = read_config()
+    assert cfg['http']['routers']['app2']['service'] == 'app1-service'
+    assert cfg['http']['routers']['app2']['middlewares'] == ['mid1', 'mid2']
+    assert 'app2-service' not in cfg['http']['services']
+
+
+def test_legacy_edit_of_referenced_route_preserves_reference(client):
+    """A mobile app or old cached page editing a referenced route posts only
+    targetIp with no serviceRef. That must not convert the reference into an
+    owned service, and must not write the posted target into the shared one."""
+    _make_owner(client)
+    post_form(client, "/save", serviceName='app2', subdomain='app2', protocol='http',
+              scheme='http', targetIp='', targetPort='', serviceRef='app1-service')
+    r = post_form(client, "/save", serviceName='app2', subdomain='app2', protocol='http',
+                  scheme='http', targetIp='10.9.9.9', targetPort='99',
+                  isEdit='true', originalId='app2')
+    assert r.status_code < 400, r.data[:200]
+    cfg = read_config()
+    assert cfg['http']['routers']['app2']['service'] == 'app1-service'
+    assert 'app2-service' not in cfg['http']['services']
+    servers = cfg['http']['services']['app1-service']['loadBalancer']['servers']
+    assert servers == [{'url': 'http://10.0.0.50:80'}], 'legacy edit wrote into the shared service'
+
+
+def test_deleting_referencing_route_keeps_service(client):
+    _make_owner(client)
+    post_form(client, "/save", serviceName='app2', subdomain='app2', protocol='http',
+              scheme='http', targetIp='', targetPort='', serviceRef='app1-service')
+    r = post_form(client, "/delete/app2")
+    assert r.status_code < 400
+    cfg = read_config()
+    assert 'app2' not in cfg['http']['routers']
+    assert 'app1' in cfg['http']['routers']
+    assert 'app1-service' in cfg['http']['services']
+
+
+def test_deleting_owner_route_keeps_shared_service(client):
+    """Pins _service_shared into the new path: with a reference alive, deleting
+    the owner removes its router but leaves the shared service behind."""
+    _make_owner(client)
+    post_form(client, "/save", serviceName='app2', subdomain='app2', protocol='http',
+              scheme='http', targetIp='', targetPort='', serviceRef='app1-service')
+    post_form(client, "/delete/app1")
+    cfg = read_config()
+    assert 'app1' not in cfg['http']['routers']
+    assert cfg['http']['routers']['app2']['service'] == 'app1-service'
+    assert 'app1-service' in cfg['http']['services']
+
+
+@pytest.mark.parametrize("proto,sub", [('tcp', 'db'), ('udp', 'dns')])
+def test_service_ref_tcp_udp(client, proto, sub):
+    slot = {'tcp': 1, 'udp': 2}[proto]
+    ips, ports = ['', '', ''], ['', '', '']
+    ips[slot], ports[slot] = '10.0.0.9', '5432'
+    post_form(client, "/save", serviceName='owner', subdomain='owner', protocol=proto,
+              targetIp=ips, targetPort=ports)
+    r = post_form(client, "/save", serviceName=sub, subdomain=sub, protocol=proto,
+                  serviceRef='owner-service')
+    assert r.status_code < 400, r.data[:200]
+    cfg = read_config()
+    assert cfg[proto]['routers'][sub]['service'] == 'owner-service'
+    assert f'{sub}-service' not in cfg[proto]['services']
+
+
+def test_service_ref_provider_qualified_is_written_verbatim(client):
+    """A cross-provider reference like whoami@docker cannot be validated against
+    the file config, so it is written as-is and no service block is created."""
+    r = post_form(client, "/save", serviceName='dash', subdomain='dash',
+                  protocol='http', scheme='http', targetIp='', targetPort='',
+                  serviceRef='whoami@docker')
+    assert r.status_code < 400, r.data[:200]
+    cfg = read_config()
+    assert cfg['http']['routers']['dash']['service'] == 'whoami@docker'
+    assert 'whoami' not in cfg['http'].get('services', {})
+    assert 'dash-service' not in cfg['http'].get('services', {})
+
+
+def test_switching_own_route_to_ref_cleans_up_orphan(client):
+    """Editing a route from its own service to a reference removes the now
+    orphaned <name>-service instead of leaving it behind."""
+    _make_owner(client)
+    _make_owner(client, name='app2', ip='10.0.0.60', port='81')
+    post_form(client, "/save", serviceName='app2', subdomain='app2', protocol='http',
+              scheme='http', targetIp='', targetPort='', serviceRef='app1-service',
+              isEdit='true', originalId='app2')
+    cfg = read_config()
+    assert cfg['http']['routers']['app2']['service'] == 'app1-service'
+    assert 'app2-service' not in cfg['http']['services']
+    assert 'app1-service' in cfg['http']['services']

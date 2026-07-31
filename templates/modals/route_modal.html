@@ -82,13 +82,23 @@
                         <p class="text-xs mt-1" style="color:var(--muted)">Any valid <a href="https://doc.traefik.io/traefik/routing/routers/#rule" target="_blank" style="color:var(--blue)">Traefik router rule</a> expression.</p>
                     </div>
                     <div>
-                        <div class="flex items-center justify-between mb-1">
+                        <div class="flex gap-2 mb-3">
+                            <button type="button" id="httpSvcModeManualBtn" onclick="setServiceRefMode('http', false)" class="proto-btn active-http" style="padding:4px 12px;font-size:11px;border-radius:6px">Manual</button>
+                            <button type="button" id="httpSvcModeRefBtn" onclick="setServiceRefMode('http', true)" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Existing service</button>
+                        </div>
+                        <div id="httpRefBackend" style="display:none">
+                            <label>Backend service</label>
+                            <select id="serviceRefHttp" class="input-field" onchange="_updateRefTarget('http')"></select>
+                            <div id="httpRefTarget" class="text-xs mt-1" style="color:var(--muted);font-family:monospace;display:none"></div>
+                            <p class="text-xs mt-1" style="color:var(--muted)">This route will reference the selected service. Backends, sticky sessions and health checks are managed where the service is defined.</p>
+                        </div>
+                        <div id="httpBackendsHead" class="flex items-center justify-between mb-1">
                             <label style="margin:0">Backends</label>
                             <button type="button" onclick="addBackendRow('http')" class="btn-secondary text-xs" style="height:24px;padding:0 8px">
                                 <i class="ph-bold ph-plus text-xs"></i> Add backend
                             </button>
                         </div>
-                        <div class="grid grid-cols-2 gap-3">
+                        <div id="httpTargetGrid" class="grid grid-cols-2 gap-3">
                             <div>
                                 <input type="text" name="targetIp" id="targetIp" class="input-field" placeholder="10.0.0.10">
                             </div>
@@ -97,7 +107,7 @@
                             </div>
                         </div>
                         <div id="httpBackendRows"></div>
-                        <p class="text-xs mt-1" style="color:var(--muted)">Add more backends to load-balance across several servers.</p>
+                        <p id="httpBackendsHint" class="text-xs mt-1" style="color:var(--muted)">Add more backends to load-balance across several servers.</p>
                     </div>
                     <div id="httpLbAdvanced">
                         <button type="button" onclick="toggleLbAdvanced('http')" class="text-xs flex items-center gap-1" style="background:none;border:none;cursor:pointer;padding:0;color:var(--muted)">
@@ -178,7 +188,7 @@
                         </div>
                         <span class="tm-info-btn" data-tip="Forward the original Host header to the backend. Disable if the backend needs to see its own hostname."><i class="ph-bold ph-info"></i></span>
                     </div>
-                    <div class="flex items-center justify-between">
+                    <div id="httpSkipVerifyRow" class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
                             <input type="checkbox" name="insecureSkipVerify" id="insecureSkipVerify" value="true" class="rounded" style="accent-color:var(--blue)">
                             <span class="text-sm" style="color:var(--text)">Skip TLS Verification</span>
@@ -271,7 +281,17 @@
                         <input type="text" name="tcpRule" id="tcpRule" class="input-field" placeholder="HostSNI(`tcp.example.com`) or HostSNI(`*`)">
                         <p class="text-xs mt-1" style="color:var(--muted)">Use <code class="font-mono">HostSNI(`*`)</code> to match all TLS or leave empty for passthrough</p>
                     </div>
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="flex gap-2 mb-3">
+                        <button type="button" id="tcpSvcModeManualBtn" onclick="setServiceRefMode('tcp', false)" class="proto-btn active-tcp" style="padding:4px 12px;font-size:11px;border-radius:6px">Manual</button>
+                        <button type="button" id="tcpSvcModeRefBtn" onclick="setServiceRefMode('tcp', true)" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Existing service</button>
+                    </div>
+                    <div id="tcpRefBackend" style="display:none">
+                        <label>Backend service</label>
+                        <select id="serviceRefTcp" class="input-field" onchange="_updateRefTarget('tcp')"></select>
+                        <div id="tcpRefTarget" class="text-xs mt-1" style="color:var(--muted);font-family:monospace;display:none"></div>
+                        <p class="text-xs mt-1" style="color:var(--muted)">This route will reference the selected service. Backends, sticky sessions and health checks are managed where the service is defined.</p>
+                    </div>
+                    <div id="tcpTargetGrid" class="grid grid-cols-2 gap-3">
                         <div>
                             <label>Target IP / Host</label>
                             <input type="text" name="targetIp" id="targetIpTcp" class="input-field" placeholder="10.0.0.10">
@@ -282,11 +302,11 @@
                         </div>
                     </div>
                     <div id="tcpBackendRows"></div>
-                    <div class="flex items-center justify-between mt-1">
+                    <div id="tcpBackendsFoot" class="flex items-center justify-between mt-1">
                         <p class="text-xs" style="color:var(--muted)">Add more backends to load-balance across several servers.</p>
                         <button type="button" onclick="addBackendRow('tcp')" class="btn-secondary text-xs" style="height:24px;padding:0 8px"><i class="ph-bold ph-plus text-xs"></i> Add backend</button>
                     </div>
-                    <div class="mt-2">
+                    <div id="tcpPriorityRow" class="mt-2">
                         <label>Router priority <span class="text-xs font-normal" style="color:var(--muted)">(optional)</span></label>
                         <input type="number" id="lbPriorityTcp" class="input-field" min="1" placeholder="leave empty for Traefik's default" style="width:260px">
                     </div>
@@ -327,7 +347,17 @@
                 </div>
 
                 <div id="udpSection" class="protocol-section space-y-4">
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="flex gap-2 mb-3">
+                        <button type="button" id="udpSvcModeManualBtn" onclick="setServiceRefMode('udp', false)" class="proto-btn active-udp" style="padding:4px 12px;font-size:11px;border-radius:6px">Manual</button>
+                        <button type="button" id="udpSvcModeRefBtn" onclick="setServiceRefMode('udp', true)" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Existing service</button>
+                    </div>
+                    <div id="udpRefBackend" style="display:none">
+                        <label>Backend service</label>
+                        <select id="serviceRefUdp" class="input-field" onchange="_updateRefTarget('udp')"></select>
+                        <div id="udpRefTarget" class="text-xs mt-1" style="color:var(--muted);font-family:monospace;display:none"></div>
+                        <p class="text-xs mt-1" style="color:var(--muted)">This route will reference the selected service. Backends, sticky sessions and health checks are managed where the service is defined.</p>
+                    </div>
+                    <div id="udpTargetGrid" class="grid grid-cols-2 gap-3">
                         <div>
                             <label>Target IP / Host</label>
                             <input type="text" name="targetIp" id="targetIpUdp" class="input-field" placeholder="10.0.0.10">
@@ -338,7 +368,7 @@
                         </div>
                     </div>
                     <div id="udpBackendRows"></div>
-                    <div class="flex items-center justify-between mt-1">
+                    <div id="udpBackendsFoot" class="flex items-center justify-between mt-1">
                         <p class="text-xs" style="color:var(--muted)">Add more backends to load-balance across several servers.</p>
                         <button type="button" onclick="addBackendRow('udp')" class="btn-secondary text-xs" style="height:24px;padding:0 8px"><i class="ph-bold ph-plus text-xs"></i> Add backend</button>
                     </div>

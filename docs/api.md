@@ -102,6 +102,7 @@ Create or update a route. Accepts `application/x-www-form-urlencoded`.
 | `serviceName` | string | Route name |
 | `subdomain` | string | Hostname (e.g. `app.example.com`) |
 | `targetIp` | string | Backend host. Ignored when the matching `backendsJson*` field is sent |
+| `serviceRef` | string | Reference an existing service instead of creating `<name>-service`. Writes only the router; all target and load-balancing fields are ignored. A bare name must exist in the file config for that protocol (400 otherwise); a provider-qualified name (`svc@docker`) is written verbatim |
 | `targetPort` | string | Backend port |
 | `backendsJsonHttp` | string (JSON) | HTTP service definition - see [Multiple backends](#multiple-backends) below |
 | `backendsJsonTcp` | string (JSON) | TCP service definition |
@@ -145,6 +146,8 @@ A save that includes `backendsJson*` is authoritative for that service: `servers
 
 ::: tip Editing from a single-backend client
 A save that omits `backendsJson*` on an edit replaces only the **first** backend. Any additional backends, plus `sticky`, `healthCheck`, and `priority`, are preserved. This is what keeps the mobile app and older cached pages from wiping a multi-backend route.
+
+The same protection applies to shared services: an edit that omits `serviceRef` on a route whose router references a shared or cross-provider service keeps the reference and ignores the posted target fields, so an older client cannot convert a reference into an owned service.
 :::
 
 ---

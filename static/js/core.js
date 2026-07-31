@@ -91,8 +91,8 @@ async function _populateConfigFileSelect(which) {
         const show = MULTI_CONFIG || CONFIG_DIR_SET;
         if (wrap) wrap.style.display = show ? '' : 'none';
         _buildConfigSelectOptions(sel, CONFIG_PATHS_LIST.map(cp => cp.label), CONFIG_DIR_SET);
-        const firstFile = [...sel.options].find(o => o.value && o.value !== '__new__');
-        sel.value = firstFile ? firstFile.value : '';
+        const realFiles = [...sel.options].filter(o => o.value && o.value !== '__new__');
+        sel.value = realFiles.length === 1 ? realFiles[0].value : '';
         onChange(sel);
     }
 }

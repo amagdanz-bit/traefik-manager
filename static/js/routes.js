@@ -74,6 +74,83 @@ function filterRoutes() {
 
 let currentProto = 'http';
 
+const _svcRefMode = { http: false, tcp: false, udp: false };
+const _SVC_MANUAL_IDS = {
+    http: ['httpBackendsHead', 'httpTargetGrid', 'httpBackendRows', 'httpBackendsHint', 'httpLbAdvanced', 'httpSkipVerifyRow'],
+    tcp:  ['tcpTargetGrid', 'tcpBackendRows', 'tcpBackendsFoot', 'tcpPriorityRow'],
+    udp:  ['udpTargetGrid', 'udpBackendRows', 'udpBackendsFoot'],
+};
+
+function _svcRefSelect(proto) {
+    return document.getElementById('serviceRef' + proto.charAt(0).toUpperCase() + proto.slice(1));
+}
+
+function setServiceRefMode(proto, on, opts) {
+    _svcRefMode[proto] = !!on;
+    const activeCls = { http: 'active-http', tcp: 'active-tcp', udp: 'active-udp' }[proto];
+    const mBtn = document.getElementById(proto + 'SvcModeManualBtn');
+    const rBtn = document.getElementById(proto + 'SvcModeRefBtn');
+    if (mBtn) { mBtn.classList.toggle(activeCls, !on); mBtn.disabled = !!(opts && opts.lockManual); mBtn.style.opacity = (opts && opts.lockManual) ? '0.5' : ''; }
+    if (rBtn) rBtn.classList.toggle(activeCls, !!on);
+    const refEl = document.getElementById(proto + 'RefBackend');
+    if (refEl) refEl.style.display = on ? '' : 'none';
+    _SVC_MANUAL_IDS[proto].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = on ? 'none' : '';
+    });
+    if (typeof currentProto !== 'undefined' && currentProto === proto) setProtocol(proto);
+}
+
+async function _ensureServicesList() {
+    if (window._tmServices) return window._tmServices;
+    try {
+        const url = _activeAgent ? '/api/agents/' + _activeAgent.id + '/routes' : '/api/routes';
+        const res = await fetch(url, { headers: { 'X-Requested-With': 'fetch' } });
+        const data = await res.json();
+        window._tmServices = data.services || { http: [], tcp: [], udp: [] };
+    } catch (e) {
+        window._tmServices = { http: [], tcp: [], udp: [] };
+    }
+    return window._tmServices;
+}
+
+async function _populateServiceRefSelect(proto, selected) {
+    const sel = _svcRefSelect(proto);
+    if (!sel) return;
+    const svcs = (await _ensureServicesList())[proto] || [];
+    sel.innerHTML = svcs.map(n => `<option value="${_esc(n)}">${_esc(n)}</option>`).join('');
+    if (selected && !svcs.includes(selected)) {
+        sel.insertAdjacentHTML('afterbegin', `<option value="${_esc(selected)}">${_esc(selected)}</option>`);
+    }
+    if (selected) sel.value = selected;
+    _updateRefTarget(proto);
+}
+
+function _updateRefTarget(proto) {
+    const el = document.getElementById(proto + 'RefTarget');
+    const sel = _svcRefSelect(proto);
+    if (!el || !sel) return;
+    const bare = (sel.value || '').split('@')[0];
+    const pool = window._lastRenderedApps || (typeof APP_DATA !== 'undefined' ? APP_DATA : []) || [];
+    const owner = pool.find(a => a.protocol === proto && ((a.service_name || '').split('@')[0]) === bare
+        && a.target && a.target !== 'N/A');
+    if (owner) {
+        el.textContent = '\u2192 ' + owner.target + ((owner.servers || []).length > 1 ? ` (+${owner.servers.length - 1} more)` : '');
+        el.style.display = '';
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+function _detectServiceRef(app, proto, svcList) {
+    const raw = app.service_name || '';
+    const bare = raw.split('@')[0];
+    if (!raw || bare === app.name + '-service') return { refMode: false, raw: '' };
+    const pool = window._lastRenderedApps || (typeof APP_DATA !== 'undefined' ? APP_DATA : []) || [];
+    const refs = pool.filter(a => a.protocol === proto && ((a.service_name || '').split('@')[0]) === bare).length;
+    return { refMode: !svcList.includes(bare) || refs > 1, raw };
+}
+
 function setProtocol(proto) {
     currentProto = proto;
     document.getElementById('protocolHidden').value = proto;
@@ -90,15 +167,15 @@ function setProtocol(proto) {
     document.getElementById(proto + 'Section').classList.add('active');
 
     
-    document.getElementById('targetIp').required = proto === 'http';
-    document.getElementById('targetPort').required = proto === 'http';
+    document.getElementById('targetIp').required = proto === 'http' && !_svcRefMode.http;
+    document.getElementById('targetPort').required = proto === 'http' && !_svcRefMode.http;
     if (document.getElementById('targetIpTcp')) {
-        document.getElementById('targetIpTcp').required = proto === 'tcp';
-        document.getElementById('targetPortTcp').required = proto === 'tcp';
+        document.getElementById('targetIpTcp').required = proto === 'tcp' && !_svcRefMode.tcp;
+        document.getElementById('targetPortTcp').required = proto === 'tcp' && !_svcRefMode.tcp;
     }
     if (document.getElementById('targetIpUdp')) {
-        document.getElementById('targetIpUdp').required = proto === 'udp';
-        document.getElementById('targetPortUdp').required = proto === 'udp';
+        document.getElementById('targetIpUdp').required = proto === 'udp' && !_svcRefMode.udp;
+        document.getElementById('targetPortUdp').required = proto === 'udp' && !_svcRefMode.udp;
     }
 }
 
@@ -320,6 +397,9 @@ async function openModal() {
     const wcChk = document.getElementById('wildcardCheckbox'); if (wcChk) wcChk.checked = false;
     const mainEl = document.getElementById('tlsWildcardMain'); if (mainEl) mainEl.value = '';
     const sansEl = document.getElementById('tlsWildcardSans'); if (sansEl) sansEl.value = '';
+    ['http', 'tcp', 'udp'].forEach(pr => setServiceRefMode(pr, false));
+    await _ensureServicesList();
+    ['http', 'tcp', 'udp'].forEach(pr => _populateServiceRefSelect(pr, ''));
     setProtocol('http');
     _resetHeadersPreset();
     _resetStreamingPreset();
@@ -387,11 +467,22 @@ async function saveRouteAjax(event) {
         fn.value += '.yml';
         document.getElementById('configFile').value = fn.value;
     }
+    const cfWrap = document.getElementById('configFileSelectWrap');
+    const cfSel  = document.getElementById('configFileSelect');
+    if (cfWrap && cfWrap.style.display !== 'none' && cfSel && !cfSel.value
+            && !document.getElementById('configFile').value) {
+        showToast('Select a config file for this route', 'error');
+        return;
+    }
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
         _writeBackendsJson();
         const fd = new FormData(form);
+        if (_svcRefMode[currentProto]) {
+            const _refSel = _svcRefSelect(currentProto);
+            fd.append('serviceRef', _refSel ? _refSel.value : '');
+        }
         if (_activeAgent) fd.append('agent_id', _activeAgent.id);
         const res = await fetch(form.action, { method:'POST', headers:{'X-Requested-With':'fetch'}, body: fd });
         const json = await res.json();
@@ -447,6 +538,7 @@ async function refreshRoutes() {
         }
         if (!res.ok) throw new Error('routes ' + res.status);
         const data = await res.json();
+        if (data.services) window._tmServices = data.services;
         renderRouteGrid(data.apps || []);
         renderMwGrid(data.middlewares || []);
         loadOverviewStats();
@@ -1185,6 +1277,12 @@ async function cloneRoute(btn) {
     }
     const proto = app.protocol || 'http';
     setProtocol(proto);
+    const _cloneSvcList = (await _ensureServicesList())[proto] || [];
+    const _cloneRef = _detectServiceRef(app, proto, _cloneSvcList);
+    if (_cloneRef.refMode) {
+        await _populateServiceRefSelect(proto, _cloneRef.raw);
+        setServiceRefMode(proto, true);
+    }
     if (proto === 'http') {
         _applyHttpRuleToForm(app.rule || '');
         const targetScheme = (app.target || '').startsWith('https://') ? 'https' : 'http';
@@ -1297,6 +1395,12 @@ async function handleEdit(btn) {
     _resetLbAdvanced();
     _populateBackends(proto, app.servers);
     _applyLbAdvanced(app);
+
+    const _svcList = (await _ensureServicesList())[proto] || [];
+    const _ref = _detectServiceRef(app, proto, _svcList);
+    ['http', 'tcp', 'udp'].forEach(pr => { if (pr !== proto) setServiceRefMode(pr, false); });
+    await _populateServiceRefSelect(proto, _ref.refMode ? _ref.raw : '');
+    setServiceRefMode(proto, _ref.refMode, { lockManual: _ref.refMode });
 
     if (proto === 'http') {
         _applyHttpRuleToForm(app.rule || '');

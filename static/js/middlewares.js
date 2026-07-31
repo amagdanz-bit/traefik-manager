@@ -356,6 +356,13 @@ function onMwConfigFileChange(sel) {
 
 async function saveMwAjax(event) {
     event.preventDefault();
+    const _mwCfWrap = document.getElementById('mwConfigFileSelectWrap');
+    const _mwCfSel  = document.getElementById('mwConfigFileSelect');
+    if (_mwCfWrap && _mwCfWrap.style.display !== 'none' && _mwCfSel && !_mwCfSel.value
+            && !document.getElementById('mwConfigFile').value) {
+        showToast('Select a config file for this middleware', 'error');
+        return;
+    }
     const mwMode = document.getElementById('mwCurrentMode')?.value;
     if (mwMode === 'wizard') {
         const tpl = document.getElementById('mwTemplate')?.value || '';

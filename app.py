@@ -3233,19 +3233,31 @@ def _toggle_route(route_id: str, enable: bool):
     )
 
 
+def _collect_file_services(configs):
+    out = {'http': set(), 'tcp': set(), 'udp': set()}
+    for cfg in configs:
+        for sec in out:
+            out[sec].update(k for k in ((cfg.get(sec) or {}).get('services') or {})
+                            if isinstance(k, str) and k)
+    return {sec: sorted(names) for sec, names in out.items()}
+
+
 @app.route('/api/routes')
 @login_required
 def api_routes():
     apps, middlewares = _build_all_apps(include_external=False)
     apps = [a for a in apps if not (a.get('service_name') or '').endswith('@internal')]
-    return jsonify({'apps': apps, 'middlewares': middlewares, 'configErrors': _get_config_parse_errors()})
+    return jsonify({'apps': apps, 'middlewares': middlewares,
+                    'configErrors': _get_config_parse_errors(),
+                    'services': _collect_file_services(load_config(_p) for _p in env.CONFIG_PATHS)})
 
 
 @app.route('/api/routes/all')
 @login_required
 def api_routes_all():
     apps, middlewares = _build_all_apps(include_external=True, include_internal=True)
-    return jsonify({'apps': apps, 'middlewares': middlewares})
+    services = _collect_file_services(load_config(_p) for _p in env.CONFIG_PATHS)
+    return jsonify({'apps': apps, 'middlewares': middlewares, 'services': services})
 
 
 @app.route('/api/configs')
@@ -3623,7 +3635,15 @@ def save_entry():
         _backends_field = {'http': 'backendsJsonHttp', 'tcp': 'backendsJsonTcp',
                            'udp': 'backendsJsonUdp'}[protocol]
         _has_backends_json = bool((_parse_backends_json(request.form.get(_backends_field)) or {}).get('servers'))
-        if not target_ip and not _has_backends_json:
+        service_ref         = request.form.get('serviceRef', '').strip()
+        _service_ref_posted = 'serviceRef' in request.form
+        if _service_ref_posted and not service_ref:
+            _msg = "Select a service to reference, or switch the backend to Manual."
+            if fetch:
+                return jsonify({'ok': False, 'message': _msg}), 400
+            flash(_msg, "error")
+            return redirect(url_for('index'))
+        if not target_ip and not _has_backends_json and not service_ref:
             _msg = (f"A backend host is required for {protocol.upper()} routes. "
                     f"Send targetIp (repeated per protocol, index "
                     f"{ {'http': 0, 'tcp': 1, 'udp': 2}[protocol] }) or {_backends_field}.")
@@ -3632,7 +3652,7 @@ def save_entry():
             flash(_msg, "error")
             return redirect(url_for('index'))
 
-        if protocol in ('tcp', 'udp') and not _has_backends_json and not target_port:
+        if protocol in ('tcp', 'udp') and not _has_backends_json and not target_port and not service_ref:
             _host, _sep, _tail = target_ip.rpartition(':')
             if _sep and _tail.isdigit() and (':' not in _host or _host.endswith(']')):
                 target_ip, target_port = _host, _tail
@@ -3696,6 +3716,32 @@ def save_entry():
                     service_name = prev_svc
                 break
 
+        if not service_ref and is_edit and plain_original_id:
+            for sec in ('http', 'tcp', 'udp'):
+                prev_router = _prev_src.get(sec, {}).get('routers', {}).get(plain_original_id)
+                if not isinstance(prev_router, dict):
+                    continue
+                _prev_ref = (prev_router.get('service') or '').strip()
+                if _prev_ref and _prev_ref != f"{plain_original_id}-service":
+                    _ref_in_svcs = _svc_key(_prev_ref) in (_prev_src.get(sec, {}).get('services') or {})
+                    if not _ref_in_svcs or _service_shared(_prev_src, _prev_ref, plain_original_id):
+                        service_ref = _prev_ref
+                break
+
+        if service_ref:
+            if _service_ref_posted and '@' not in service_ref:
+                if agent:
+                    _ref_cfgs = list(_agent_load_configs(agent).values())
+                else:
+                    _ref_cfgs = [load_config(_p) for _p in env.CONFIG_PATHS]
+                if not any(service_ref in ((_c.get(protocol) or {}).get('services') or {}) for _c in _ref_cfgs):
+                    _msg = f"Service '{service_ref}' does not exist for {protocol.upper()} routes."
+                    if fetch:
+                        return jsonify({'ok': False, 'message': _msg}), 400
+                    flash(_msg, "error")
+                    return redirect(url_for('index'))
+            service_name = service_ref
+
         if is_edit and plain_original_id and orig_cfg_file != cfg_filename:
             if agent:
                 old_all_cfgs = _agent_load_configs(agent)
@@ -3709,7 +3755,9 @@ def save_entry():
                 old_svc = (old_routers.get(plain_original_id, {}).get('service') or '').strip()
                 if plain_original_id in old_routers:
                     del old_routers[plain_original_id]
-                if old_svc and 'services' in s and old_svc in s['services']:
+                if (old_svc and 'services' in s and old_svc in s['services']
+                        and not service_ref
+                        and not _service_shared(old_config, old_svc, plain_original_id)):
                     del s['services'][old_svc]
             old_transport_name = f"{plain_original_id}-transport"
             http_sec = old_config.get('http', {})
@@ -3739,7 +3787,8 @@ def save_entry():
                 old_svc = (old_routers.get(plain_original_id, {}).get('service') or '').strip()
                 if plain_original_id != router_name and plain_original_id in old_routers:
                     del old_routers[plain_original_id]
-                if old_svc and old_svc != service_name and 'services' in s and old_svc in s['services']:
+                if (old_svc and old_svc != service_name and 'services' in s and old_svc in s['services']
+                        and not _service_shared(config, old_svc, plain_original_id)):
                     del s['services'][old_svc]
             if hdr_preset_present and plain_original_id != router_name:
                 rn_hdr_name = f"{plain_original_id}-headers"
@@ -3807,54 +3856,64 @@ def save_entry():
                 if tls_opts_profile:
                     tls_entry['options'] = tls_opts_profile
                 r['tls'] = tls_entry
-            _be = _parse_backends_json(request.form.get('backendsJsonHttp'))
-            _managed_backends = False
-            if _be is not None:
-                _servers = _backend_servers(_be.get('servers'), 'url', scheme)
-                if _servers:
-                    _managed_backends = True
-                    lb = {'servers': _servers}
+            if service_ref:
+                _merge_router(config['http']['routers'], router_name, r,
+                              ('rule', 'entryPoints', 'service', 'middlewares', 'tls'))
+                _orphan_tp = f"{svc_name}-transport"
+                _transports = config.get('http', {}).get('serversTransports', {})
+                if _orphan_tp in _transports:
+                    del _transports[_orphan_tp]
+                    if not _transports:
+                        del config['http']['serversTransports']
+            else:
+                _be = _parse_backends_json(request.form.get('backendsJsonHttp'))
+                _managed_backends = False
+                if _be is not None:
+                    _servers = _backend_servers(_be.get('servers'), 'url', scheme)
+                    if _servers:
+                        _managed_backends = True
+                        lb = {'servers': _servers}
+                    else:
+                        lb = {'servers': [{'url': target_url}]}
                 else:
                     lb = {'servers': [{'url': target_url}]}
-            else:
-                lb = {'servers': [{'url': target_url}]}
-            if not pass_host and not stream_preset_on:
-                lb['passHostHeader'] = False
-            if _managed_backends:
-                _sticky = _sticky_block(_be.get('sticky'))
-                if _sticky:
-                    lb['sticky'] = _sticky
-                _hc = _healthcheck_block(_be.get('healthCheck'))
-                if _hc:
-                    lb['healthCheck'] = _hc
-                _prio = _clean_priority(_be.get('priority'))
-                if _prio:
-                    r['priority'] = _prio
-            transport_name = f"{svc_name}-transport"
-            existing_transports = config.get('http', {}).get('serversTransports', {})
-            tp = existing_transports.get(transport_name)
-            tp = tp if isinstance(tp, dict) else {}
-            if insecure:
-                tp['insecureSkipVerify'] = True
-            else:
-                tp.pop('insecureSkipVerify', None)
-            if stream_preset_present:
-                if stream_preset_on:
-                    tp['forwardingTimeouts'] = _streaming_forwarding_timeouts()
+                if not pass_host and not stream_preset_on:
+                    lb['passHostHeader'] = False
+                if _managed_backends:
+                    _sticky = _sticky_block(_be.get('sticky'))
+                    if _sticky:
+                        lb['sticky'] = _sticky
+                    _hc = _healthcheck_block(_be.get('healthCheck'))
+                    if _hc:
+                        lb['healthCheck'] = _hc
+                    _prio = _clean_priority(_be.get('priority'))
+                    if _prio:
+                        r['priority'] = _prio
+                transport_name = f"{svc_name}-transport"
+                existing_transports = config.get('http', {}).get('serversTransports', {})
+                tp = existing_transports.get(transport_name)
+                tp = tp if isinstance(tp, dict) else {}
+                if insecure:
+                    tp['insecureSkipVerify'] = True
                 else:
-                    tp.pop('forwardingTimeouts', None)
-            if tp:
-                config['http'].setdefault('serversTransports', {})[transport_name] = tp
-                lb['serversTransport'] = transport_name
-            elif transport_name in existing_transports:
-                del existing_transports[transport_name]
-                if not existing_transports and 'serversTransports' in config['http']:
-                    del config['http']['serversTransports']
-            _http_managed = ('rule', 'entryPoints', 'service', 'middlewares', 'tls', 'priority') \
-                if _managed_backends else ('rule', 'entryPoints', 'service', 'middlewares', 'tls')
-            _merge_router(config['http']['routers'], router_name, r, _http_managed)
-            _merge_service(config['http']['services'], service_name, lb, 'url', transport_name,
-                           managed_backends=_managed_backends)
+                    tp.pop('insecureSkipVerify', None)
+                if stream_preset_present:
+                    if stream_preset_on:
+                        tp['forwardingTimeouts'] = _streaming_forwarding_timeouts()
+                    else:
+                        tp.pop('forwardingTimeouts', None)
+                if tp:
+                    config['http'].setdefault('serversTransports', {})[transport_name] = tp
+                    lb['serversTransport'] = transport_name
+                elif transport_name in existing_transports:
+                    del existing_transports[transport_name]
+                    if not existing_transports and 'serversTransports' in config['http']:
+                        del config['http']['serversTransports']
+                _http_managed = ('rule', 'entryPoints', 'service', 'middlewares', 'tls', 'priority') \
+                    if _managed_backends else ('rule', 'entryPoints', 'service', 'middlewares', 'tls')
+                _merge_router(config['http']['routers'], router_name, r, _http_managed)
+                _merge_service(config['http']['services'], service_name, lb, 'url', transport_name,
+                               managed_backends=_managed_backends)
 
         elif protocol == 'tcp':
             if tcp_rule:
@@ -3879,22 +3938,26 @@ def save_entry():
                 router_entry['tls'] = {'passthrough': True}
             elif use_tls_tcp:
                 router_entry['tls'] = {'certResolver': tcp_cert_resolver} if tcp_cert_resolver else {}
-            _be_tcp = _parse_backends_json(request.form.get('backendsJsonTcp'))
-            _tcp_managed = False
-            _tcp_lb = {'servers': [{'address': f"{target_ip}:{target_port}"}]}
-            if _be_tcp is not None:
-                _tcp_servers = _backend_servers(_be_tcp.get('servers'), 'address')
-                if _tcp_servers:
-                    _tcp_managed = True
-                    _tcp_lb = {'servers': _tcp_servers}
-                    _tcp_prio = _clean_priority(_be_tcp.get('priority'))
-                    if _tcp_prio:
-                        router_entry['priority'] = _tcp_prio
-            _tcp_keys = ('rule', 'entryPoints', 'service', 'middlewares', 'tls', 'priority') \
-                if _tcp_managed else ('rule', 'entryPoints', 'service', 'middlewares', 'tls')
-            _merge_router(config['tcp']['routers'], router_name, router_entry, _tcp_keys)
-            _merge_service(config['tcp']['services'], service_name, _tcp_lb, 'address', '',
-                           managed_backends=_tcp_managed)
+            if service_ref:
+                _merge_router(config['tcp']['routers'], router_name, router_entry,
+                              ('rule', 'entryPoints', 'service', 'middlewares', 'tls'))
+            else:
+                _be_tcp = _parse_backends_json(request.form.get('backendsJsonTcp'))
+                _tcp_managed = False
+                _tcp_lb = {'servers': [{'address': f"{target_ip}:{target_port}"}]}
+                if _be_tcp is not None:
+                    _tcp_servers = _backend_servers(_be_tcp.get('servers'), 'address')
+                    if _tcp_servers:
+                        _tcp_managed = True
+                        _tcp_lb = {'servers': _tcp_servers}
+                        _tcp_prio = _clean_priority(_be_tcp.get('priority'))
+                        if _tcp_prio:
+                            router_entry['priority'] = _tcp_prio
+                _tcp_keys = ('rule', 'entryPoints', 'service', 'middlewares', 'tls', 'priority') \
+                    if _tcp_managed else ('rule', 'entryPoints', 'service', 'middlewares', 'tls')
+                _merge_router(config['tcp']['routers'], router_name, router_entry, _tcp_keys)
+                _merge_service(config['tcp']['services'], service_name, _tcp_lb, 'address', '',
+                               managed_backends=_tcp_managed)
 
         elif protocol == 'udp':
             udp_ep = request.form.get('udpEntryPoint', '').strip()
@@ -3903,16 +3966,17 @@ def save_entry():
             _merge_router(config['udp']['routers'], router_name,
                           {'entryPoints': [udp_ep] if udp_ep else [], 'service': service_name},
                           ('entryPoints', 'service'))
-            _be_udp = _parse_backends_json(request.form.get('backendsJsonUdp'))
-            _udp_managed = False
-            _udp_lb = {'servers': [{'address': f"{target_ip}:{target_port}"}]}
-            if _be_udp is not None:
-                _udp_servers = _backend_servers(_be_udp.get('servers'), 'address')
-                if _udp_servers:
-                    _udp_managed = True
-                    _udp_lb = {'servers': _udp_servers}
-            _merge_service(config['udp']['services'], service_name, _udp_lb, 'address', '',
-                           managed_backends=_udp_managed)
+            if not service_ref:
+                _be_udp = _parse_backends_json(request.form.get('backendsJsonUdp'))
+                _udp_managed = False
+                _udp_lb = {'servers': [{'address': f"{target_ip}:{target_port}"}]}
+                if _be_udp is not None:
+                    _udp_servers = _backend_servers(_be_udp.get('servers'), 'address')
+                    if _udp_servers:
+                        _udp_managed = True
+                        _udp_lb = {'servers': _udp_servers}
+                _merge_service(config['udp']['services'], service_name, _udp_lb, 'address', '',
+                               managed_backends=_udp_managed)
 
         if _ledger_changed:
             save_settings(
@@ -4561,7 +4625,8 @@ def api_agent_routes(agent_id):
                 'toggles': decoded if decoded is not None else _headers_preset_defaults(),
             }
 
-        return jsonify({'apps': apps, 'middlewares': middlewares, 'configErrors': config_errors})
+        return jsonify({'apps': apps, 'middlewares': middlewares, 'configErrors': config_errors,
+                        'services': _collect_file_services(all_configs.values())})
     except requests.exceptions.ConnectionError:
         return jsonify({'error': 'Cannot reach agent'}), 502
     except Exception as e:
