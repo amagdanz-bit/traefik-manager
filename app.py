@@ -2396,9 +2396,11 @@ def api_notifications_add():
 @csrf_protect
 @login_required
 def api_notifications_update():
-    version = (request.get_json(silent=True) or {}).get('version', '')
+    data    = request.get_json(silent=True) or {}
+    version = data.get('version', '')
+    product = 'Traefik Manager' if data.get('product') == 'manager' else 'Traefik'
     if version:
-        add_notification('info', f"Traefik Manager v{version} is available - update now")
+        add_notification('info', f"{product} v{version} is available - update now")
     return jsonify({'ok': True})
 
 @app.route('/api/tls-options')

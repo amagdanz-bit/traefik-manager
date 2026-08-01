@@ -226,7 +226,7 @@ async function checkForUpdate(currentVersion) {
             if (notice && text) { text.textContent = `v${latestTag} available`; notice.classList.remove('hidden'); }
             if (!sessionStorage.getItem('tm-update-notified-' + latestTag)) {
                 sessionStorage.setItem('tm-update-notified-' + latestTag, '1');
-                fetch('/api/notifications/update', { method: 'POST', headers: { ..._csrfHeaders(), 'X-Requested-With': 'fetch', 'Content-Type': 'application/json' }, body: JSON.stringify({ version: latestTag }) }).catch(() => {});
+                fetch('/api/notifications/update', { method: 'POST', headers: { ..._csrfHeaders(), 'X-Requested-With': 'fetch', 'Content-Type': 'application/json' }, body: JSON.stringify({ version: latestTag, product: 'traefik' }) }).catch(() => {});
             }
         }
     } catch(e) {}
