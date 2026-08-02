@@ -69,3 +69,25 @@ def test_no_duplicate_rules(app_module):
                 'duplicate route: %s %s registered by both %s and %s'
                 % (method, r.rule, seen[key], r.endpoint))
             seen[key] = r.endpoint
+
+
+def test_dashboard_override_url_scheme_is_validated(client):
+    """A stored card override URL becomes an href on the dashboard, so anything
+    but http(s) must never survive the save."""
+    payload = {'custom_groups': [], 'route_overrides': {
+        'good':   {'url': 'https://app.example.com/admin', 'display_name': 'Good'},
+        'evil':   {'url': 'javascript:alert(1)', 'display_name': 'Evil'},
+        'data':   {'url': 'data:text/html,x'},
+        'blank':  {'url': '   '},
+    }}
+    r = client.post('/api/dashboard/config', json=payload,
+                    headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+
+    cfg = client.get('/api/dashboard/config').get_json()
+    ov = cfg['route_overrides']
+    assert ov['good']['url'] == 'https://app.example.com/admin'
+    assert 'url' not in ov['evil']
+    assert 'url' not in ov['data']
+    assert 'url' not in ov['blank']
+    assert ov['evil']['display_name'] == 'Evil'

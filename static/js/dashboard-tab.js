@@ -102,6 +102,8 @@ window.rmOpenEditModal = function(routeId) {
     const ov = (_rmConfig.route_overrides || {})[routeId] || {};
 
     document.getElementById('rmEditDisplayName').value = ov.display_name || '';
+    document.getElementById('rmEditUrl').value = ov.url || '';
+    document.getElementById('rmEditLinkDisabled').checked = !!ov.link_disabled;
 
     _rmEditIconType = ov.icon_type || 'auto';
     document.getElementById('rmEditIconSlug').value = ov.icon_slug || '';
@@ -175,6 +177,9 @@ window.rmSaveRouteEdit = async function() {
     if (_rmEditIconType === 'url')  ov.icon_url  = document.getElementById('rmEditIconUrl').value.trim();
     const grp = document.getElementById('rmEditGroup').value;
     if (grp) ov.group = grp;
+    const linkUrl = document.getElementById('rmEditUrl').value.trim();
+    if (linkUrl) ov.url = linkUrl;
+    if (document.getElementById('rmEditLinkDisabled').checked) ov.link_disabled = true;
     _rmConfig.route_overrides[_rmEditRouteId] = ov;
     await rmSaveConfig();
     rmCloseEditModal();
@@ -414,58 +419,81 @@ function dashBuildPod(meta, routes) {
     return pod;
 }
 
-function dashBuildRouteRow(r) {
-    const row  = document.createElement('div');
-    row.className = 'rm-route-row';
+function _dashLaunchUrl(r, ov) {
+    if (ov.link_disabled) return null;
+    if (ov.url) return ov.url;
+    if ((r.protocol || 'http') !== 'http') return null;
+    const rule = r.rule || '';
+    const host = (rule.match(/Host\(`([^`]+)`\)/) || [])[1];
+    if (!host || host.includes('*')) return null;
+    const path = (rule.match(/PathPrefix\(`([^`]+)`\)/) || [])[1] || '';
+    return (r.tls ? 'https' : 'http') + '://' + host + path;
+}
 
-    const ov         = (_rmConfig.route_overrides || {})[r.id] || {};
-    const sec        = rmGetSecurity(r);
-    const mws        = r.middlewares || [];
-    const infraMws   = mws.filter(rmIsInfraMw);
-    const complexMws = mws.filter(m => !rmIsInfraMw(m));
-    const proto      = (r.protocol || 'http').toUpperCase();
-    const target     = r.target || r.service_name || '';
+window.rmOpenRouteInfo = function(routeId) {
+    const r = _rmAllRoutes.find(x => x.id === routeId);
+    if (r) openRouteDetail(r.name, r.protocol, r);
+};
+
+function dashBuildRouteRow(r) {
+    const ov  = (_rmConfig.route_overrides || {})[r.id] || {};
+    const url = _dashLaunchUrl(r, ov);
+    const row = document.createElement(url ? 'a' : 'div');
+    row.className = 'rm-route-row' + (url ? ' rm-route-link' : '');
+
+    const sec         = rmGetSecurity(r);
+    const mws         = r.middlewares || [];
+    const proto       = (r.protocol || 'http').toUpperCase();
+    const target      = r.target || r.service_name || '';
     const displayName = ov.display_name || r.name;
     const iconUrl     = rmGetIconUrl(r);
     const iconSlug    = rmIconSlug(r);
 
-    let badgeHtml = '';
-    if (sec === 'secure') {
-        badgeHtml = `<span class="rm-badge rm-badge-secure"><i class="ph-bold ph-lock" style="font-size:8px"></i> Secure</span>`;
-    } else if (sec === 'public') {
-        badgeHtml = `<span class="rm-badge rm-badge-public"><i class="ph-bold ph-globe" style="font-size:8px"></i> Public</span>`;
-    } else {
-        badgeHtml = `<span class="rm-badge rm-badge-internal"><i class="ph-bold ph-house" style="font-size:8px"></i> Internal</span>`;
+    let tip = url ? `${url} \u2192 ${target}` : target;
+    if (mws.length) tip += ' \u2022 ' + mws.map(m => m.split('@')[0]).join(', ');
+    row.title = tip;
+    if (url) {
+        row.href   = url;
+        row.target = '_blank';
+        row.rel    = 'noopener noreferrer';
     }
+
+    const st        = _rmRouterStatus[r.name] || null;
+    const presCls   = st ? (st.err || !st.up ? 'rm-presence-down' : 'rm-presence-up') : 'rm-presence-unknown';
+    const presTitle = st ? (st.err ? 'Router error' : (st.up ? 'Up' : 'Down')) : 'Status unknown';
 
     const protoBadge = proto !== 'HTTP'
         ? `<span class="rm-proto-pill rm-proto-${proto.toLowerCase()}">${proto}</span>`
         : '';
 
-    const mwPills = complexMws.map(m =>
-        `<span class="rm-mw-pill" title="${_esc(m)}">${_esc(m.split('@')[0])}</span>`
-    ).join('');
-
-    const shieldPill = infraMws.length
-        ? `<span class="rm-shield-pill" title="${_esc(infraMws.map(m=>m.split('@')[0]).join(', '))}"><i class="ph-bold ph-shield-check" style="font-size:8px"></i> ${infraMws.length}</span>`
-        : '';
-
-    const pillsRow = (mwPills || shieldPill)
-        ? `<div class="rm-mw-pills mt-1">${mwPills}${shieldPill}</div>`
-        : '';
+    let sub;
+    if (url) {
+        let glyph = '';
+        if (sec === 'public') {
+            glyph = `<i class="ph-bold ph-lock-simple-open rm-sec-glyph rm-sec-public" title="Public - no TLS"></i>`;
+        } else if (sec === 'internal') {
+            glyph = `<i class="ph-bold ph-house-line rm-sec-glyph rm-sec-internal" title="Internal only"></i>`;
+        }
+        sub = `<div class="rm-route-sub rm-sub-link">${glyph}<span class="rm-sub-text">${_esc(url.replace(/^https?:\/\//, ''))}</span></div>`;
+    } else {
+        sub = `<div class="rm-route-sub"><span class="rm-sub-text">${_esc(target)}</span></div>`;
+    }
 
     row.innerHTML = `
-        <img class="rm-route-icon" src="${_esc(iconUrl)}" onerror="window.rmIconFallback(this)" data-slug="${_esc(iconSlug)}" alt="">
+        <span class="rm-route-ic">
+            <img class="rm-route-icon" src="${_esc(iconUrl)}" onerror="window.rmIconFallback(this)" data-slug="${_esc(iconSlug)}" alt="">
+            <span class="rm-presence ${presCls}" title="${presTitle}"></span>
+        </span>
         <div class="rm-route-info">
             <div class="rm-route-name">${protoBadge}${_esc(displayName)}</div>
-            <div class="rm-route-target">${_esc(target)}</div>
-            ${pillsRow}
+            ${sub}
         </div>
-        <div class="rm-route-badges">${badgeHtml}</div>
-        <button class="rm-row-edit-btn btn-icon" onclick="event.stopPropagation();window.rmOpenEditModal('${_esc(r.id)}')" title="Edit icon / display name"><i class="ph-bold ph-pencil-simple" style="font-size:11px"></i></button>
+        <span class="rm-row-rail">
+            ${url ? '<i class="ph-bold ph-arrow-up-right rm-launch-hint"></i>' : ''}
+            <span class="rm-row-btn" role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();window.rmOpenRouteInfo('${_esc(r.id)}')" title="Details"><i class="ph-bold ph-info"></i></span>
+            <span class="rm-row-btn" role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();window.rmOpenEditModal('${_esc(r.id)}')" title="Edit"><i class="ph-bold ph-pencil-simple"></i></span>
+        </span>
     `;
-    row.style.cursor = 'pointer';
-    row.addEventListener('click', () => openRouteDetail(r.name, r.protocol, r));
     return row;
 }
 

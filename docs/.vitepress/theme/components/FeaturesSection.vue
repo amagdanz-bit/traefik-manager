@@ -21,7 +21,7 @@ const features = [
     iconDark: '/images/icons/chart-dark.svg',
     title: 'Live Dashboard',
     desc: 'Real-time stats, health pinging with latency, and access log analytics with a world map.',
-    tags: ['Route Map', 'Access logs', 'Geolocation', 'Docker', 'Kubernetes', 'Swarm', 'Nomad', 'ECS'],
+    tags: ['App launcher', 'Route Map', 'Access logs', 'Geolocation', 'Docker', 'Kubernetes', 'Swarm', 'Nomad', 'ECS'],
   },
   {
     iconLight: '/images/icons/agent-light.svg',

@@ -92,6 +92,13 @@
                 <div class="text-xs font-semibold mb-1.5" style="color:var(--muted)">GROUP</div>
                 <select id="rmEditGroup" class="input-field"></select>
             </div>
+            <div>
+                <label>Link URL</label>
+                <input type="text" id="rmEditUrl" class="input-field" placeholder="Leave blank to use the route's URL">
+            </div>
+            <label class="flex items-center gap-2 text-xs" style="color:var(--text);cursor:pointer">
+                <input type="checkbox" id="rmEditLinkDisabled"> Disable link for this card
+            </label>
             <div class="flex justify-end gap-2" style="padding-top:4px;border-top:1px solid var(--border)">
                 <button onclick="rmCloseEditModal()" class="nav-btn text-xs" style="height:32px;padding:0 14px;background:transparent">Cancel</button>
                 <button onclick="rmSaveRouteEdit()" class="nav-btn text-xs" style="height:32px;padding:0 14px">Save</button>

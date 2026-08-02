@@ -1,6 +1,6 @@
 # Dashboard Tab
 
-The **Dashboard** tab shows all your Traefik routes grouped by category, with app icons, per-card editing, and custom group management.
+The **Dashboard** tab shows all your Traefik routes grouped by category, with app icons, per-card editing, and custom group management. Cards are clickable, so the Dashboard doubles as a homepage-style launcher for your services.
 
 ## Enabling the tab
 
@@ -16,12 +16,23 @@ Routes are automatically grouped into categories by name - Media, Monitoring, In
 
 Each route row shows:
 
-- **App icon** - fetched from the selfh.st icon CDN and cached locally in `/config/cache/`
-- **Name** - display name (customisable) or route name, with a TCP/UDP badge when not HTTP
-- **Target** - backend host:port
-- **Security badge** - Secure (TLS), Public (plain HTTP entry point), or Internal
-- **Complex middleware pills** - auth, rate limiting, or custom header middlewares shown as purple pills
-- **Security shield pill** - infrastructure middlewares (redirect-to-https, HSTS, compression) collapsed into a single green pill with a count
+- **App icon with a status dot** - the icon comes from the selfh.st icon CDN, cached locally in `/config/cache/`; the small dot on its corner is live router state from the Traefik API: green up, red down or router error, hollow when the API is unavailable
+- **Name** - display name (customisable) or route name, with a TCP/UDP chip when not HTTP
+- **Domain** - the URL the card opens, in blue monospace, when the card is clickable; otherwise the backend target
+- **Security glyph** - only when something is worth flagging: an amber open lock for a public route without TLS, a muted house for internal-only. Secure routes show nothing, like a browser address bar
+- **Launch arrow** - a faint arrow at the row's end marks clickable cards
+
+The backend target, full URL, and middleware list live in the row's tooltip; full detail stays in the route panel.
+
+### Launching apps
+
+Clicking a card opens the service in a new tab. The URL is derived from the route itself: the first `Host` in the rule, `https` when the router has TLS enabled and `http` otherwise, with a `PathPrefix` from the same rule appended.
+
+Hovering a card reveals two buttons: an info button that opens the route detail panel, and the pencil that opens the card editor.
+
+Cards for routes with nothing to open stay unlinked: TCP and UDP routes, `HostSNI` and regex rules, rules without a `Host`, wildcard hosts, and cards with the link disabled. Everything else on those cards works the same.
+
+Middle-click and ctrl-click open in a background tab, since cards are real links.
 
 ### Expand / collapse
 
@@ -54,6 +65,10 @@ These per-route icon overrides are also used by the [Routes tab](tab-routes.md#a
 ### Group assignment
 
 Override which group the route belongs to. Select **Auto-detect** to let the keyword matching decide, or pick any built-in or custom group.
+
+### Link URL
+
+Override the URL the card opens, for cards where the route's URL is not the right landing page - for example a route that serves an API while the UI lives elsewhere. Only `http://` and `https://` URLs are accepted. The **Disable link for this card** checkbox turns the card back into a plain informational row.
 
 ---
 

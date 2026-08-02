@@ -3288,12 +3288,27 @@ def _read_groups_config():
         logger.exception("Failed to read dashboard config")
         return {'custom_groups': [], 'route_overrides': {}}
 
+def _sanitize_route_overrides(overrides):
+    out = {}
+    for rid, ov in (overrides or {}).items():
+        if not isinstance(ov, dict):
+            continue
+        ov = dict(ov)
+        url = str(ov.get('url') or '').strip()
+        if not url or not url.lower().startswith(('http://', 'https://')):
+            ov.pop('url', None)
+        else:
+            ov['url'] = url
+        out[rid] = ov
+    return out
+
+
 def _write_groups_config(data):
     _y = SafeYAML(typ='safe')
     with open(GROUPS_CONFIG_FILE, 'w') as f:
         _y.dump({
             'custom_groups':   list(data.get('custom_groups', []) or []),
-            'route_overrides': dict(data.get('route_overrides', {}) or {}),
+            'route_overrides': _sanitize_route_overrides(data.get('route_overrides', {})),
         }, f)
 
 @app.route('/api/dashboard/config', methods=['GET'])

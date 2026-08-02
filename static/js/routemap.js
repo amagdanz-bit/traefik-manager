@@ -3,6 +3,7 @@ const RM_ICON_CDN = 'https://cdn.jsdelivr.net/gh/selfhst/icons/png';
 
 let _rmConfig    = { custom_groups: [], route_overrides: {} };
 let _rmAllRoutes = [];
+let _rmRouterStatus = {};
 let _rmAllEps    = {};
 let _rmDataLoaded = false;
 let _rmLoadedAt   = 0;
@@ -37,10 +38,11 @@ window.rmEnsureData = async function(force) {
         const routeUrl = _activeAgent
             ? '/api/agents/' + _activeAgent.id + '/routes'
             : '/api/routes/all';
-        const [routeRes, epRes, cfgRes] = await Promise.all([
+        const [routeRes, epRes, cfgRes, rtrRes] = await Promise.all([
             fetch(routeUrl, { headers: { 'X-Requested-With': 'fetch' } }),
             agentFetch('/api/traefik/entrypoints'),
-            fetch('/api/dashboard/config')
+            fetch('/api/dashboard/config'),
+            agentFetch('/api/traefik/routers').catch(() => null)
         ]);
         if (!routeRes.ok) throw new Error('routes ' + routeRes.status);
         const routeData = await routeRes.json();
@@ -55,6 +57,19 @@ window.rmEnsureData = async function(force) {
                 : (epData || {});
         } catch(_) { _rmAllEps = {}; }
         try { _rmConfig = await cfgRes.json() || { custom_groups: [], route_overrides: {} }; } catch(_) {}
+        _rmRouterStatus = {};
+        try {
+            if (rtrRes && rtrRes.ok) {
+                const rd = await rtrRes.json();
+                [...(rd.http || []), ...(rd.tcp || []), ...(rd.udp || [])].forEach(rt => {
+                    if (!rt || !rt.name) return;
+                    _rmRouterStatus[rt.name.split('@')[0]] = {
+                        up:  rt.status === 'enabled' && !(rt.error && rt.error.length),
+                        err: !!(rt.error && rt.error.length),
+                    };
+                });
+            }
+        } catch(_) {}
     } catch(e) {
         _rmAllRoutes = [];
         _rmAllEps    = {};

@@ -350,12 +350,13 @@ Save dashboard configuration. Replaces the full config in `dashboard.yml`.
 {
   "custom_groups": [{ "name": "Media" }],
   "route_overrides": {
-    "plex": { "display_name": "Plex", "icon_type": "slug", "icon_slug": "plex", "group": "Media" }
+    "plex": { "display_name": "Plex", "icon_type": "slug", "icon_slug": "plex", "group": "Media",
+              "url": "https://plex.example.com", "link_disabled": false }
   }
 }
 ```
 
-`icon_type` is `auto`, `slug`, or `url`.
+`icon_type` is `auto`, `slug`, or `url`. `url` overrides the URL the dashboard card opens and must start with `http://` or `https://` - anything else is dropped on save. `link_disabled: true` makes the card non-clickable.
 
 ---
 
