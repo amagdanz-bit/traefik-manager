@@ -39,7 +39,7 @@ document.addEventListener('keydown', e => {
             case 'N': e.preventDefault(); openModal(); break;
             case 'M': e.preventDefault(); openMwModal(); break;
             case 'F': {
-                const el = document.querySelector('.tab-content.active input[type="text"]');
+                const el = document.querySelector('.tab-content.active input[type="search"], .tab-content.active input[type="text"]');
                 if (el) { e.preventDefault(); el.focus(); }
                 break;
             }
@@ -49,6 +49,19 @@ document.addEventListener('keydown', e => {
             case 'L': e.preventDefault(); switchTab('logs'); break;
             case 'X': e.preventDefault(); openStaticYamlPopoutFromShortcut(); break;
             case 'P': e.preventDefault(); openSettingsModal(); break;
+            case 'D': {
+                const b = document.getElementById('btn-dashboard');
+                if (b && b.offsetParent !== null) { e.preventDefault(); switchTab('dashboard'); }
+                break;
+            }
+            case 'A': {
+                if (!_agentList.length) break;
+                e.preventDefault();
+                const order = [null, ..._agentList.map(a => a.id)];
+                const cur   = _activeAgent ? order.indexOf(_activeAgent.id) : 0;
+                switchServer(order[(cur + 1) % order.length]);
+                break;
+            }
             case '?': e.preventDefault(); toggleShortcutsPanel(); break;
         }
     }
