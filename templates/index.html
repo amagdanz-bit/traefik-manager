@@ -37,11 +37,14 @@
             if (!pref('showApiLink', false))     d.add('tm-hide-api');
             if (!pref('showShortcutsBtn', true)) d.add('tm-hide-shortcuts');
             if (!pref('showIpDiagBtn', true))    d.add('tm-hide-ipdiag');
+            if (pref('statBarScope', 'all') === 'dashboard') d.add('tm-scope-dash');
         })();
     </script>
     <style>
         html.tm-hide-stats #overviewSection { display: none !important; }
         html.tm-hide-entrypoints #entrypointsBar { display: none !important; }
+        html.tm-scope-dash:not(.tm-tab-dashboard) #overviewSection { display: none !important; }
+        html.tm-scope-dash:not(.tm-tab-dashboard) #entrypointsBar { display: none !important; }
         html.tm-hide-docs .nav-docs-link { display: none !important; }
         html.tm-hide-api .nav-api-link { display: none !important; }
         html.tm-hide-shortcuts .shortcuts-btn-wrap { display: none !important; }

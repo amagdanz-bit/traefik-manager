@@ -18,7 +18,8 @@ UI_PREF_BOOLS = (
     'showTraefikBadge', 'showTmBadge', 'showRouteIcons',
 )
 UI_PREF_VIEWS = ('routeViewMode', 'mwViewMode', 'svcViewMode')
-UI_PREF_KEYS = UI_PREF_BOOLS + UI_PREF_VIEWS
+UI_PREF_SCOPES = ('statBarScope',)
+UI_PREF_KEYS = UI_PREF_BOOLS + UI_PREF_VIEWS + UI_PREF_SCOPES
 
 
 def sanitize_ui_prefs(prefs) -> dict:
@@ -32,6 +33,11 @@ def sanitize_ui_prefs(prefs) -> dict:
         if k in prefs:
             v = str(prefs[k]).strip().lower()
             if v in ('grid', 'list'):
+                out[k] = v
+    for k in UI_PREF_SCOPES:
+        if k in prefs:
+            v = str(prefs[k]).strip().lower()
+            if v in ('all', 'dashboard'):
                 out[k] = v
     return out
 

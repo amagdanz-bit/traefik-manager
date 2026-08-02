@@ -142,6 +142,7 @@ default_theme: "dark"
 #   showTraefikBadge: true
 #   showTmBadge: true
 #   showRouteIcons: false
+#   statBarScope: all      # all | dashboard
 #   routeViewMode: grid    # grid | list
 #   mwViewMode: grid
 #   svcViewMode: grid

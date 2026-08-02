@@ -97,5 +97,18 @@ def test_sanitiser_accepts_every_documented_key():
     stops persisting."""
     payload = {k: True for k in settings_mod.UI_PREF_BOOLS}
     payload.update({k: 'list' for k in settings_mod.UI_PREF_VIEWS})
+    payload.update({k: 'dashboard' for k in settings_mod.UI_PREF_SCOPES})
     cleaned = settings_mod.sanitize_ui_prefs(payload)
     assert set(cleaned) == set(settings_mod.UI_PREF_KEYS)
+
+
+def test_stat_bar_scope_round_trips_and_validates(client):
+    r = client.post('/api/settings/ui', json={'ui_prefs': {'statBarScope': 'dashboard'}},
+                    headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+    assert r.get_json()['ui_prefs']['statBarScope'] == 'dashboard'
+
+    r = client.post('/api/settings/ui', json={'ui_prefs': {'statBarScope': 'bogus'}},
+                    headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+    assert r.get_json()['ui_prefs'].get('statBarScope') == 'dashboard'

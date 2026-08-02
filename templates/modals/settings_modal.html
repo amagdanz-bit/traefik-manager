@@ -813,12 +813,22 @@
                                 </div>
                                 <div class="toggle-switch" id="toggle-ui-compact-stats" onclick="toggleUiPref('compactStatCards')"><div class="toggle-knob"></div></div>
                             </div>
-                            <div class="flex items-center justify-between" style="padding:10px 12px;">
+                            <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
                                 <div>
                                     <div class="text-xs font-medium" style="color:var(--text)">Show entry points bar</div>
                                     <div class="text-xs" style="color:var(--muted)">Traefik entry point badges below the stat cards</div>
                                 </div>
                                 <div class="toggle-switch" id="toggle-ui-entrypoints" onclick="toggleUiPref('showEntrypoints')"><div class="toggle-knob"></div></div>
+                            </div>
+                            <div class="flex items-center justify-between" style="padding:10px 12px;">
+                                <div>
+                                    <div class="text-xs font-medium" style="color:var(--text)">Show on</div>
+                                    <div class="text-xs" style="color:var(--muted)">Where the stat cards and entry points appear</div>
+                                </div>
+                                <div class="flex gap-1">
+                                    <button type="button" id="scope-stats-all" onclick="setStatBarScope('all')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">All tabs</button>
+                                    <button type="button" id="scope-stats-dash" onclick="setStatBarScope('dashboard')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Dashboard</button>
+                                </div>
                             </div>
                         </div>
                     </div>

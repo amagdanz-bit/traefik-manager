@@ -462,7 +462,7 @@ Update one or more preferences. Keys not sent keep their current value.
 { "ui_prefs": { "showDocsLink": false, "mwViewMode": "list" } }
 ```
 
-Accepted keys are the booleans `showStatCards`, `compactStatCards`, `showEntrypoints`, `showDocsLink`, `showApiLink`, `showShortcutsBtn`, `showIpDiagBtn`, `showTraefikBadge`, `showTmBadge`, `showRouteIcons`, and the view modes `routeViewMode`, `mwViewMode`, `svcViewMode`, each `grid` or `list`.
+Accepted keys are the booleans `showStatCards`, `compactStatCards`, `showEntrypoints`, `showDocsLink`, `showApiLink`, `showShortcutsBtn`, `showIpDiagBtn`, `showTraefikBadge`, `showTmBadge`, `showRouteIcons`, the view modes `routeViewMode`, `mwViewMode`, `svcViewMode`, each `grid` or `list`, and `statBarScope`, `all` or `dashboard`.
 
 Anything else is dropped rather than stored - this endpoint writes into `manager.yml`, so it only ever accepts the keys above. Returns `400` if `ui_prefs` is not an object.
 

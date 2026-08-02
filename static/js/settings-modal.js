@@ -1105,6 +1105,8 @@ function applyUiPrefs() {
     html.classList.toggle('tm-hide-stats', !showStats);
     html.classList.toggle('tm-compact-stats', compact);
     html.classList.toggle('tm-hide-entrypoints', !_uiPref('showEntrypoints'));
+    html.classList.toggle('tm-scope-dash', tmPref('statBarScope') === 'dashboard');
+    placeStatCards();
     const overviewSection = document.getElementById('overviewSection');
     if (overviewSection) overviewSection.classList.toggle('hidden', !showStats);
     _applyEntrypointsVisibility();
@@ -1113,6 +1115,11 @@ function applyUiPrefs() {
 }
 
 function loadUiTogglesIntoModal() {
+    const scope = tmPref('statBarScope') === 'dashboard' ? 'dashboard' : 'all';
+    const bAll  = document.getElementById('scope-stats-all');
+    const bDash = document.getElementById('scope-stats-dash');
+    if (bAll)  bAll.className  = 'proto-btn' + (scope === 'all' ? ' active-http' : '');
+    if (bDash) bDash.className = 'proto-btn' + (scope === 'dashboard' ? ' active-http' : '');
     const sc = document.getElementById('toggle-ui-statcards');
     const ep = document.getElementById('toggle-ui-entrypoints');
     const cs = document.getElementById('toggle-ui-compact-stats');
@@ -1130,6 +1137,12 @@ function loadUiTogglesIntoModal() {
 
 function toggleUiPref(key) {
     tmSetPref(key, !tmPref(key));
+    applyUiPrefs();
+    loadUiTogglesIntoModal();
+}
+
+function setStatBarScope(v) {
+    tmSetPref('statBarScope', v);
     applyUiPrefs();
     loadUiTogglesIntoModal();
 }

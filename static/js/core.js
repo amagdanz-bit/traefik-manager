@@ -27,7 +27,23 @@ function applyTabVisibility(map) {
     }
 }
 
+let _statsHomeMarker = null;
+function placeStatCards() {
+    const ov = document.getElementById('overviewSection');
+    if (!ov) return;
+    if (!_statsHomeMarker) {
+        _statsHomeMarker = document.createElement('div');
+        _statsHomeMarker.style.display = 'none';
+        ov.parentElement.insertBefore(_statsHomeMarker, ov);
+    }
+    const anchor = document.getElementById('dashFilterBar');
+    const scoped = typeof tmPref === 'function' && tmPref('statBarScope') === 'dashboard';
+    if (scoped && anchor) anchor.insertAdjacentElement('afterend', ov);
+    else _statsHomeMarker.insertAdjacentElement('afterend', ov);
+}
+
 function switchTab(tab) {
+    document.documentElement.classList.toggle('tm-tab-dashboard', tab === 'dashboard');
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('tab-' + tab).classList.add('active');
@@ -182,6 +198,7 @@ const TM_PREF_DEFAULTS = {
     showIpDiagBtn: true, showTraefikBadge: true, showTmBadge: true,
     showRouteIcons: false,
     routeViewMode: 'grid', mwViewMode: 'grid', svcViewMode: 'grid',
+    statBarScope: 'all',
 };
 
 let _prefSaveTimer = null;

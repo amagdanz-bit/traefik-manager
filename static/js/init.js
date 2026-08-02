@@ -166,3 +166,5 @@ if (document.getElementById('toastContainer') && document.getElementById('toastC
     setTimeout(loadOverviewStats, 2000);
     setTimeout(loadOverviewStats, 5000);
 }
+
+placeStatCards();
