@@ -115,16 +115,21 @@ function renderLogStats(entries) {
 
     const parseDur = d => {
         if (!d || d === '-') return null;
-        const ms = parseFloat(d);
-        if (isNaN(ms)) return null;
-        if (d.includes('ms')) return ms;
-        if (d.endsWith('s')) return ms * 1000;
-        return ms;
+        const v = parseFloat(d);
+        if (isNaN(v)) return null;
+        if (d.includes('\u00b5s') || d.includes('us')) return v / 1000;
+        if (d.includes('ns')) return v / 1e6;
+        if (d.includes('ms')) return v;
+        if (d.endsWith('s')) return v * 1000;
+        return v;
     };
     const durs = parsed.map(e => parseDur(e.duration)).filter(v => v !== null);
     const avgDur = durs.length ? durs.reduce((a,b)=>a+b,0)/durs.length : null;
     const maxDur = durs.length ? Math.max(...durs) : null;
-    const fmtDur = v => v === null ? '-' : v >= 1000 ? (v/1000).toFixed(2)+'s' : Math.round(v)+'ms';
+    const fmtDur = v => v === null ? '-'
+        : v >= 1000 ? (v/1000).toFixed(2)+'s'
+        : v >= 1 ? Math.round(v)+'ms'
+        : Math.round(v*1000)+'\u00b5s';
     const fast = durs.filter(d=>d<100).length;
     const mid  = durs.filter(d=>d>=100&&d<500).length;
     const slow = durs.filter(d=>d>=500).length;
