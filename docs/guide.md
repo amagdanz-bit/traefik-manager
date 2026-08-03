@@ -342,5 +342,5 @@ Authenticates via the API key from **Settings → Authentication**.
 | Editor | Monaco Editor 0.52 (VS Code engine) |
 | Route Map | dagre 0.8 (graph layout) |
 | Geolocation | maxminddb · DB-IP Lite (local lookups, no external calls) |
-| Tests | pytest · pyflakes · `go test` - run on every pull request |
+| Tests | pytest · ruff · `go test` - run on every pull request |
 | Container | Docker · Alpine Linux · all JS/CSS bundled at build time (no CDN at runtime) |

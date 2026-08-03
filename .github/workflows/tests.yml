@@ -26,11 +26,16 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Lint (pyflakes)
-        run: python -m pyflakes app.py core tests
+      - name: Lint (ruff)
+        run: ruff check app.py core tests
 
-      - name: Run tests
-        run: pytest -q
+      - name: Run tests with coverage
+        run: |
+          pytest -q --cov=core --cov=app --cov-report=term | tee pytest.out
+          echo '## Coverage' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          sed -n '/^---------/,$p' pytest.out | head -40 >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   go:
     runs-on: ubuntu-latest

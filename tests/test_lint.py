@@ -5,9 +5,9 @@ still referenced it. Python only raises on a missing global when the line
 actually runs, so the app imported fine, every route registered, the whole test
 suite passed - and the Logs tab failed for every Host user.
 
-pyflakes finds that class of defect statically. Undefined names are a hard
-failure; everything else it reports is treated as a failure too, because the
-tree is clean today and keeping it clean is cheap.
+ruff's F rules (the pyflakes rule set) find that class of defect statically.
+Undefined names are a hard failure; everything else reported is treated as a
+failure too, because the tree is clean today and keeping it clean is cheap.
 """
 import os
 import subprocess
@@ -17,44 +17,43 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 TARGETS = ['app.py', 'core', 'tests']
 
-# pyflakes messages that are never acceptable - these are real bugs, not style
-FATAL_SUBSTRINGS = (
-    'undefined name',
-    'local variable',           # referenced before assignment
-    'redefinition of unused',   # a second def silently shadowing the first
-    'is assigned to but never used',
+# rule codes that are never acceptable - these are real bugs, not style
+FATAL_CODES = (
+    'F821',  # undefined name
+    'F823',  # local variable referenced before assignment
+    'F811',  # redefinition of unused - a second def silently shadowing the first
+    'F841',  # local variable assigned but never used
 )
 
 
-def _run_pyflakes():
-    paths = [os.path.join(ROOT, t) for t in TARGETS]
+def _run_ruff():
     proc = subprocess.run(
-        [sys.executable, '-m', 'pyflakes', *paths],
+        [sys.executable, '-m', 'ruff', 'check', '--output-format', 'concise', *TARGETS],
         capture_output=True, text=True, cwd=ROOT)
-    lines = [l for l in (proc.stdout + proc.stderr).splitlines() if l.strip()]
+    lines = [l for l in (proc.stdout + proc.stderr).splitlines()
+             if l.strip() and 'All checks passed' not in l]
     return [l.replace(ROOT + os.sep, '') for l in lines]
 
 
 def test_no_undefined_names():
     """The specific bug class that shipped: a name used but never defined."""
-    findings = _run_pyflakes()
-    fatal = [f for f in findings
-             if any(s in f.lower() for s in FATAL_SUBSTRINGS)]
+    findings = _run_ruff()
+    fatal = [f for f in findings if any(c in f for c in FATAL_CODES)]
     assert not fatal, (
-        'pyflakes found name errors that Python will only raise at runtime:\n  '
+        'ruff found name errors that Python will only raise at runtime:\n  '
         + '\n  '.join(fatal))
 
 
-def test_pyflakes_is_clean():
+def test_lint_is_clean():
     """Keep the tree free of dead imports so the check above stays trustworthy.
 
     If this fails on something deliberate, fix the code rather than loosening
     the test - noise here is what let a real undefined name hide in the first
     place.
     """
-    findings = _run_pyflakes()
+    findings = _run_ruff()
     assert not findings, (
-        'pyflakes reported %d issue(s):\n  ' % len(findings) + '\n  '.join(findings))
+        'ruff reported %d issue(s):\n  ' % len(findings) + '\n  '.join(findings))
 
 
 def test_every_core_alias_resolves():

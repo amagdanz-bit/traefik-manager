@@ -116,7 +116,7 @@ docker run -p 5000:5000 \
 pip install -r requirements-dev.txt
 
 pytest                                # Python suite
-python -m pyflakes app.py core tests  # lint - undefined names are a hard failure
+make lint                             # ruff - undefined names are a hard failure
 cd agent && go test ./...             # agent suite
 ```
 
@@ -151,7 +151,7 @@ docs/                         # VitePress documentation site
 .github/
     workflows/
         docker.yml            # Builds and pushes Docker images on tag/branch push
-        tests.yml             # pytest + pyflakes, and the Go agent build/vet/test
+        tests.yml             # pytest + coverage + ruff, and the Go agent build/vet/test
         docs.yml              # Deploys VitePress docs
         pr-base-check.yml     # Fails a PR opened against main instead of dev
         release-binaries.yml  # Builds agent binaries on a published release

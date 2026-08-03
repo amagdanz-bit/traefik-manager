@@ -78,11 +78,12 @@ The UI is at `http://localhost:5000`. See [CONTRIBUTING.md](https://github.com/c
 ```bash
 pip install -r requirements-dev.txt
 pytest                    # Python suite
-python -m pyflakes app.py core tests    # lint
+make lint                 # ruff, undefined names are a hard failure
+make coverage             # pytest with a coverage report
 cd agent && go test ./... # agent suite
 ```
 
-The suite runs against a temporary config directory and never touches a real Traefik or your own config. It runs on every pull request, along with pyflakes and a build, vet and test of the Go agent.
+The suite runs against a temporary config directory and never touches a real Traefik or your own config. It runs on every pull request, along with ruff and a build, vet and test of the Go agent; the coverage table lands in the workflow's job summary.
 
 ### What is covered
 
@@ -120,7 +121,7 @@ The suite runs against a temporary config directory and never touches a real Tra
 - **HTML/JS** - stay within the existing Tailwind and vanilla-JS patterns. No new frameworks.
 - **CSS** - add rules to `static/css/app.css`. No inline styles unless the value is dynamic.
 - **No comments.** Use clear names instead; the codebase follows this throughout.
-- **No dead code.** pyflakes runs in CI and fails on unused imports.
+- **No dead code.** ruff runs in CI (`ruff.toml`, pyflakes rule set) and fails on unused imports.
 
 ## Releasing
 
