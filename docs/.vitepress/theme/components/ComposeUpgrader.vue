@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import yaml from 'js-yaml'
+import * as yaml from 'js-yaml'
 
 const input = ref('')
 const output = ref('')
