@@ -63,6 +63,7 @@ def parse_agent_dict(a: dict) -> dict:
         'tma_port':                     str(a.get('tma_port', '')).strip(),
         'tma_rate_limit':               str(a.get('tma_rate_limit', '')).strip(),
         'domains':                      [str(d).strip() for d in (a.get('domains') or []) if str(d).strip()],
+        'visible_tabs':                 {str(k): bool(v) for k, v in a['visible_tabs'].items()} if isinstance(a.get('visible_tabs'), dict) else {},
     }
 
 def load_agents() -> list:

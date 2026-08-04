@@ -524,6 +524,7 @@ function _updateServerSwitcherList(agents) {
     agents.forEach(a => _agentRegistry[a.id] = a);
     _agentList = agents;
     _renderServerSwitcherList(true);
+    if (typeof checkAgentTraefikUpdates === 'function') checkAgentTraefikUpdates();
 }
 
 function switchServer(agentId) {
@@ -542,7 +543,17 @@ function switchServer(agentId) {
     if (typeof window.rmInvalidateData === 'function') window.rmInvalidateData();
     if (agent) {
         const stored = JSON.parse(localStorage.getItem('tm_tabs_agent_' + agent.id) || '{}');
-        applyTabVisibility(stored);
+        const hub = agent.visible_tabs || {};
+        if (Object.keys(hub).length) {
+            applyTabVisibility(hub);
+            localStorage.setItem('tm_tabs_agent_' + agent.id, JSON.stringify(hub));
+        } else {
+            applyTabVisibility(stored);
+            if (Object.keys(stored).length) {
+                agent.visible_tabs = stored;
+                fetch('/api/agents/' + agent.id, { method: 'PUT', headers: { 'Content-Type': 'application/json', ..._csrfHeaders() }, body: JSON.stringify({ visible_tabs: stored }) }).catch(() => {});
+            }
+        }
     } else {
         applyTabVisibility(_localTabsCache);
     }
@@ -556,6 +567,7 @@ function switchServer(agentId) {
     _refreshStaticAvailability();
     loadOverviewStats();
     refreshCurrentTab();
+    loadOverviewStats();
 }
 
 async function _refreshStaticAvailability() {

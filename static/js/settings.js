@@ -52,6 +52,10 @@ async function toggleTabVisibility(tab) {
         const stored = JSON.parse(localStorage.getItem(key) || '{}');
         stored[tab] = newVal;
         localStorage.setItem(key, JSON.stringify(stored));
+        const reg = _agentRegistry[_activeAgent.id];
+        const merged = { ...((reg && reg.visible_tabs) || {}), [tab]: newVal };
+        if (reg) reg.visible_tabs = merged;
+        fetch('/api/agents/' + _activeAgent.id, { method: 'PUT', headers: { 'Content-Type': 'application/json', ..._csrfHeaders() }, body: JSON.stringify({ visible_tabs: merged }) }).catch(() => {});
     } else {
         _localTabsCache[tab] = newVal;
         try {
@@ -196,6 +200,25 @@ async function deleteSelfRoute() {
     await saveSelfRoute();
 }
 
+async function checkAgentTraefikUpdates() {
+    const latest = window._latestTraefikTag;
+    if (!latest || typeof _agentList === 'undefined' || !_agentList.length) return;
+    for (const a of _agentList) {
+        const key = 'tm-agent-traefik-' + a.id + '-' + latest;
+        if (sessionStorage.getItem(key)) continue;
+        try {
+            const res = await fetch('/api/agents/proxy/' + a.id + '/traefik/version', { headers: _csrfHeaders() });
+            if (!res.ok) continue;
+            const cur = ((await res.json()).Version || '').replace(/^v/, '');
+            if (!cur) continue;
+            sessionStorage.setItem(key, '1');
+            if (compareVersions(latest, cur) > 0) {
+                fetch('/api/notifications/add', { method: 'POST', headers: { ..._csrfHeaders(), 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' }, body: JSON.stringify({ type: 'info', message: `Traefik v${latest} is available on ${a.name} (running v${cur})` }) }).catch(() => {});
+            }
+        } catch (e) {}
+    }
+}
+
 async function checkForUpdate(currentVersion) {
     try {
         const res = await fetch('https://api.github.com/repos/traefik/traefik/releases/latest', {
@@ -205,6 +228,8 @@ async function checkForUpdate(currentVersion) {
         const data = await res.json();
         const latestTag = (data.tag_name || '').replace(/^v/, '');
         const current   = currentVersion.replace(/^v/, '');
+        window._latestTraefikTag = latestTag;
+        checkAgentTraefikUpdates();
 
         const curEl    = document.getElementById('updateCurrentVer');
         const latEl    = document.getElementById('updateLatestVer');
