@@ -608,10 +608,11 @@ function openMwDetail(btn) {
     content.innerHTML = renderMwDetailPanel(mw);
     panel.classList.add('open');
     backdrop.classList.add('open');
-    document.body.style.overflow = 'hidden';
+    if (!setDetailDockOpen(true)) document.body.style.overflow = 'hidden';
 }
 
 function closeMwDetail() {
+    setDetailDockOpen(false);
     document.getElementById('mwDetailPanel').classList.remove('open');
     document.getElementById('mwDetailBackdrop').classList.remove('open');
     document.body.style.overflow = '';
@@ -949,10 +950,11 @@ function openPluginDetail(idx) {
 
     document.getElementById('pluginDetailPanel').classList.add('open');
     document.getElementById('pluginDetailBackdrop').classList.add('open');
-    document.body.style.overflow = 'hidden';
+    if (!setDetailDockOpen(true)) document.body.style.overflow = 'hidden';
 }
 
 function closePluginDetail() {
+    setDetailDockOpen(false);
     document.getElementById('pluginDetailPanel').classList.remove('open');
     document.getElementById('pluginDetailBackdrop').classList.remove('open');
     document.body.style.overflow = '';

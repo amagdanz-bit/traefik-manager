@@ -197,11 +197,13 @@ function openTlsOptDetail(o) {
     const yamlHtml = o.yaml ? `<div class="mt-5"><button onclick="const b=this.nextElementSibling;const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('i').className='ph-bold '+(open?'ph-caret-right':'ph-caret-down')+' text-xs mr-1'" class="flex items-center text-xs mb-2" style="color:var(--muted);background:none;border:none;cursor:pointer;padding:0"><i class="ph-bold ph-caret-right text-xs mr-1"></i><span class="font-semibold uppercase tracking-wider">Raw YAML</span></button><div style="display:none"><div class="rounded-lg p-4 overflow-x-auto" style="background:var(--input-bg);border:1px solid var(--border)"><pre class="text-xs font-mono leading-relaxed" style="color:var(--green)">${_esc(o.yaml)}</pre></div></div></div>` : '';
     document.getElementById('tlsOptDetailContent').innerHTML = `<div>${rows}</div>${usedByHtml}${yamlHtml}`;
     document.getElementById('tlsOptDetailPanel').classList.add('open');
+    setDetailDockOpen(true);
     document.getElementById('tlsOptDetailBackdrop').classList.add('open');
     document.body.style.overflow = 'hidden';
 }
 
 function closeTlsOptDetail() {
+    setDetailDockOpen(false);
     document.getElementById('tlsOptDetailPanel').classList.remove('open');
     document.getElementById('tlsOptDetailBackdrop').classList.remove('open');
     document.body.style.overflow = '';

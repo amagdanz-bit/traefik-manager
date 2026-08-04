@@ -302,11 +302,13 @@ function openLogDetail(e) {
     ).join('');
     document.getElementById('ldRaw').textContent = e.raw;
     document.getElementById('logDetailPanel').classList.add('open');
+    setDetailDockOpen(true);
     const bd = document.getElementById('logDetailBackdrop');
     if (bd) { bd.style.opacity = '1'; bd.style.pointerEvents = 'auto'; }
 }
 
 function closeLogDetail() {
+    setDetailDockOpen(false);
     document.getElementById('logDetailPanel').classList.remove('open');
     const bd = document.getElementById('logDetailBackdrop');
     if (bd) { bd.style.opacity = ''; bd.style.pointerEvents = ''; }

@@ -905,7 +905,13 @@ a.rm-route-row { text-decoration: none; color: inherit; }
     html.tm-modern #tabBar { display: none; }
     html.tm-modern nav.sticky { position: sticky !important; top: 0; z-index: 45; }
     html.tm-modern .max-w-7xl { max-width: none; }
-    html.tm-modern main { margin-left: var(--side-nav-w, 232px); transition: margin-left 0.15s ease; }
+    html.tm-modern main { margin-left: var(--side-nav-w, 232px); transition: margin-left 0.15s ease, margin-right 0.3s cubic-bezier(0.4,0,0.2,1); }
+    @media (min-width: 1440px) {
+        html.tm-modern .detail-panel { top: var(--tm-nav-h, 54px); max-width: 560px; }
+        html.tm-modern .detail-panel.open { box-shadow: none; }
+        html.tm-modern .detail-backdrop { display: none !important; }
+        html.tm-modern.tm-detail-open main { margin-right: 560px; }
+    }
     html.tm-modern { --side-nav-w: 232px; }
     html.tm-modern.tm-nav-collapsed { --side-nav-w: 60px; }
 

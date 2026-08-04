@@ -351,9 +351,11 @@ function openSvcDetail(idx) {
 
     backdrop.classList.add('open');
     panel.classList.add('open');
+    setDetailDockOpen(true);
 }
 
 function closeSvcDetail() {
+    setDetailDockOpen(false);
     document.getElementById('svcDetailPanel').classList.remove('open');
     document.getElementById('svcDetailBackdrop').classList.remove('open');
 }

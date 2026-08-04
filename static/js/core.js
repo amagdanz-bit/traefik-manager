@@ -56,6 +56,17 @@ function buildSideNav() {
     }
 }
 
+function _detailDockActive() {
+    return document.documentElement.classList.contains('tm-modern')
+        && window.matchMedia('(min-width: 1440px)').matches;
+}
+
+function setDetailDockOpen(on) {
+    const active = _detailDockActive();
+    document.documentElement.classList.toggle('tm-detail-open', on && active);
+    return active;
+}
+
 let _sideNavSyncTimer = null;
 function watchTabBarForSideNav() {
     const bar = document.getElementById('tabBar');

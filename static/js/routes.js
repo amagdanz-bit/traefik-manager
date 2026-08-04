@@ -1604,7 +1604,7 @@ async function openRouteDetail(name, protocol, appData) {
     
     panel.classList.add('open');
     backdrop.classList.add('open');
-    document.body.style.overflow = 'hidden';
+    if (!setDetailDockOpen(true)) document.body.style.overflow = 'hidden';
 
     content.innerHTML = `<div class="text-center py-12" style="color:var(--muted)">
         <i class="ph-light ph-spinner-gap text-3xl animate-spin block mb-2 opacity-50"></i>
@@ -1652,6 +1652,7 @@ async function openRouteDetail(name, protocol, appData) {
 }
 
 function closeRouteDetail() {
+    setDetailDockOpen(false);
     document.getElementById('detailPanel').classList.remove('open');
     document.getElementById('detailBackdrop').classList.remove('open');
     document.getElementById('detailEditBtn').style.display = '';

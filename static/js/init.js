@@ -171,3 +171,8 @@ placeStatCards();
 
 watchTabBarForSideNav();
 buildSideNav();
+
+(() => {
+    const nav = document.querySelector('nav');
+    if (nav) document.documentElement.style.setProperty('--tm-nav-h', nav.offsetHeight + 'px');
+})();
