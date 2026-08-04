@@ -1,10 +1,3 @@
-"""Server-stored display preferences.
-
-These used to live only in localStorage, so every browser and every private
-window started from scratch. They are now kept in manager.yml and injected into
-the page, which means the endpoint accepts input from the browser and writes it
-to the settings file - so the sanitiser matters as much as the round trip.
-"""
 import json
 import re
 
@@ -36,7 +29,6 @@ def test_round_trip(client, app_module):
 
 
 def test_unknown_keys_are_dropped(client, app_module):
-    """The endpoint writes into manager.yml, so it must not accept arbitrary keys."""
     _reset(app_module)
     r = post_json(client, '/api/settings/ui', {'ui_prefs': {
         'showDocsLink': True,
@@ -68,8 +60,6 @@ def test_partial_update_merges(client, app_module):
 
 
 def test_prefs_are_injected_into_the_page(client, app_module):
-    """The no-flash boot script runs before any fetch, so prefs must be rendered
-    into the HTML rather than loaded afterwards."""
     _reset(app_module)
     post_json(client, '/api/settings/ui', {'ui_prefs': {'showStatCards': False}})
     html = client.get('/').data.decode()
@@ -93,11 +83,10 @@ def test_non_object_payload_is_rejected(client, app_module):
 
 
 def test_sanitiser_accepts_every_documented_key():
-    """Each key the UI writes must survive the sanitiser, or a toggle silently
-    stops persisting."""
     payload = {k: True for k in settings_mod.UI_PREF_BOOLS}
     payload.update({k: 'list' for k in settings_mod.UI_PREF_VIEWS})
     payload.update({k: 'dashboard' for k in settings_mod.UI_PREF_SCOPES})
+    payload.update({k: 'modern' for k in settings_mod.UI_PREF_LAYOUTS})
     cleaned = settings_mod.sanitize_ui_prefs(payload)
     assert set(cleaned) == set(settings_mod.UI_PREF_KEYS)
 
@@ -112,3 +101,14 @@ def test_stat_bar_scope_round_trips_and_validates(client):
                     headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
     assert r.status_code == 200
     assert r.get_json()['ui_prefs'].get('statBarScope') == 'dashboard'
+
+
+def test_layout_mode_round_trips_and_rejects_junk(client):
+    r = client.post('/api/settings/ui', json={'ui_prefs': {'layoutMode': 'modern'}},
+                    headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+    assert client.get('/api/settings/ui').get_json()['ui_prefs']['layoutMode'] == 'modern'
+
+    client.post('/api/settings/ui', json={'ui_prefs': {'layoutMode': 'yolo'}},
+                headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    assert client.get('/api/settings/ui').get_json()['ui_prefs']['layoutMode'] == 'modern'

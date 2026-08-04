@@ -1,9 +1,3 @@
-"""Tests for core.routes_build.
-
-These builders turn a parsed config into the route objects the UI and the mobile
-app render, and the merge helpers write them back. The same code serves the Host
-and remote agents, so a regression here shows up everywhere at once.
-"""
 from core import routes_build as rb
 
 
@@ -76,7 +70,6 @@ def test_build_middlewares_lists_file_middlewares():
 
 
 def test_merge_router_only_touches_managed_keys():
-    """Hand-written keys on a router must survive a save."""
     existing = {'rule': 'Host(`old`)', 'service': 'svc', 'customKey': 'keep me',
                 'tls': {'certResolver': 'old'}}
     routers = {'r': existing}
@@ -87,7 +80,6 @@ def test_merge_router_only_touches_managed_keys():
 
 
 def test_merge_service_preserves_extra_backends_for_legacy_clients():
-    """A client that does not manage backends updates only the first server."""
     services = {'s': {'loadBalancer': {
         'servers': [{'url': 'http://1.1.1.1:80'}, {'url': 'http://2.2.2.2:80'}],
         'sticky': {'cookie': {'name': 'keep'}},

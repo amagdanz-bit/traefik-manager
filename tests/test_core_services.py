@@ -1,4 +1,3 @@
-"""Tests for core.backups, core.notifications, core.traefik and core.agents_http."""
 import os
 
 from core import agents_http, backups, env, notifications, traefik
@@ -12,7 +11,6 @@ def test_app_aliases_point_at_core(app_module):
 
 
 def test_notification_state_is_shared_not_copied(app_module):
-    """app.py must reference the same deque, not a snapshot of it."""
     assert app_module._notifications is notifications._notifications
     assert app_module._notif_lock is notifications._notif_lock
 
@@ -41,7 +39,6 @@ def test_backup_of_missing_file_is_harmless():
 
 
 def test_traefik_api_get_returns_none_when_unreachable():
-    """The test env points at an unroutable host; callers rely on None, not an exception."""
     assert traefik.traefik_api_get('/api/http/routers') is None
 
 

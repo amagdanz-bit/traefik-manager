@@ -37,6 +37,8 @@
             if (!pref('showApiLink', false))     d.add('tm-hide-api');
             if (!pref('showShortcutsBtn', true)) d.add('tm-hide-shortcuts');
             if (!pref('showIpDiagBtn', true))    d.add('tm-hide-ipdiag');
+            if (pref('layoutMode', 'classic') === 'modern') d.add('tm-modern');
+            if (localStorage.getItem('tm-nav-collapsed') === '1') d.add('tm-nav-collapsed');
             if (pref('statBarScope', 'all') === 'dashboard') d.add('tm-scope-dash');
         })();
     </script>
@@ -212,6 +214,15 @@
         </div>
     </div>
 </div>
+
+<aside id="sideNav">
+    <nav id="sideNavItems"></nav>
+    <div class="side-nav-foot">
+        <button onclick="toggleSideNavCollapse()" id="sideNavCollapseBtn" title="Collapse navigation">
+            <i class="ph-bold ph-caret-double-left" id="sideNavCollapseIcon"></i><span class="side-nav-toggle-label">Collapse</span>
+        </button>
+    </div>
+</aside>
 
 <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
 
@@ -543,6 +554,7 @@ function switchServer(agentId) {
     _renderServerSwitcherList(false);
     if (typeof _staticSettingsLoaded !== 'undefined') _staticSettingsLoaded = false;
     _refreshStaticAvailability();
+    loadOverviewStats();
     refreshCurrentTab();
 }
 

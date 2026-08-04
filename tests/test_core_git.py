@@ -1,10 +1,3 @@
-"""Tests for core.git.
-
-This module pushes to users' own backup repositories, so the tests cover both
-that it works and that the hardening around it is still in place. A regression
-here either loses someone's backups or hands a remote URL the ability to run
-commands via git's ext:: transport.
-"""
 import inspect
 import shutil
 import subprocess
@@ -31,7 +24,6 @@ def bare_remote(tmp_path):
     return remote
 
 
-# ---- hardening -------------------------------------------------------------
 
 def test_only_expected_schemes_are_accepted():
     assert git._valid_git_url('https://github.com/o/r.git')
@@ -42,7 +34,6 @@ def test_only_expected_schemes_are_accepted():
 
 
 def test_protocol_hardening_flags_are_applied():
-    """git's ext/file/fd transports can execute commands; they stay disabled."""
     assert '-c' in git._GIT_PROTO_HARDENING
     joined = ' '.join(git._GIT_PROTO_HARDENING)
     assert 'protocol.ext.allow=never' in joined
@@ -59,14 +50,11 @@ def test_branch_names_are_sanitised():
 
 
 def test_git_lock_is_a_context_manager():
-    """It is decorated with @contextlib.contextmanager; losing that decorator
-    makes `with _git_lock():` raise TypeError at push time."""
     assert hasattr(git._git_lock(), '__enter__'), '_git_lock is not usable as a context manager'
     with git._git_lock():
         pass
 
 
-# ---- behaviour -------------------------------------------------------------
 
 def _enable_backup(repo, branch='main'):
     s = settings_mod.load_settings()
@@ -120,7 +108,6 @@ def test_push_refuses_a_disallowed_scheme(config_path):
 
 
 def test_credentials_are_not_embedded_in_the_remote_url():
-    """Tokens go through an askpass shim, never into the URL (which git logs)."""
     src = inspect.getsource(git)
     assert 'askpass' in src.lower(), 'the askpass credential path is gone'
     for pattern in ('https://{user}:{token}@', '://%s:%s@'):

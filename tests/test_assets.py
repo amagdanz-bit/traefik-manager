@@ -1,12 +1,3 @@
-"""Guards for the asset pipeline.
-
-Tailwind is rebuilt during the Docker build and purges any class it cannot find
-by scanning the `content` globs in tailwind.config.js. Moving class-bearing
-markup into a path those globs miss silently drops CSS rules: the markup still
-renders, it just loses its styling. That shipped once during the v1.9.0 split
-(36 classes, including opacity-50 and sm:grid-cols-3) and is invisible to every
-JS-level check, so it gets its own test.
-"""
 import os
 import re
 from fnmatch import fnmatch
@@ -17,8 +8,6 @@ CONFIG = os.path.join(ROOT, 'tailwind.config.js')
 SKIP_DIRS = {'.git', 'node_modules', 'vendor', 'docs', 'tests', 'agent',
              '.github', 'unraid', 'images', '__pycache__', '.pytest_cache'}
 
-# Utility classes are the ones Tailwind generates; a file using any of these
-# must be visible to the scanner.
 TAILWIND_MARKERS = re.compile(
     r'\bclass\s*=\s*["\'`][^"\'`]*\b('
     r'flex|grid|hidden|block|truncate|opacity-\d+|gap-\d|p[xytblr]?-\d|m[xytblr]?-\d'
@@ -41,8 +30,6 @@ def _covered(rel_path, globs):
         for c in candidates:
             if fnmatch(c, g):
                 return True
-        # fnmatch does not treat ** as spanning directories, so also try a
-        # regex built from the glob
         rx = re.escape(g).replace(r'\*\*/', '(?:.*/)?').replace(r'\*\*', '.*').replace(r'\*', '[^/]*')
         rx = rx.replace(r'\./', '')
         if re.fullmatch(rx, rel_path):
@@ -81,7 +68,6 @@ def test_tailwind_content_globs_cover_every_markup_source():
 
 
 def test_static_js_is_scanned():
-    """The v1.9.0 split moved markup-generating code here; pin that it stays covered."""
     globs = _content_globs()
     assert _covered('static/js/routes.js', globs), (
         'static/js is not in the tailwind content globs - classes used only in '
@@ -89,11 +75,6 @@ def test_static_js_is_scanned():
 
 
 def test_known_js_only_classes_are_still_referenced():
-    """Canaries from the regression: classes that live only in JS.
-
-    If one of these disappears from the JS entirely the test is stale and can be
-    updated, but it should never be removed to make a failure go away.
-    """
     js_dir = os.path.join(ROOT, 'static', 'js')
     blob = ''
     for fn in os.listdir(js_dir):
@@ -105,19 +86,11 @@ def test_known_js_only_classes_are_still_referenced():
             'this canary list.' % cls)
 
 
-# attribute values may contain ">", so skip over quoted strings rather than
-# stopping at the first ">" - otherwise a long data-tip hides a broken button
 ICON_BUTTON = re.compile(
     r'class="tm-info-btn"(?:[^>"]|"[^"]*")*>(.*?)</span>', re.S)
 
 
 def test_info_buttons_use_the_icon_not_a_bare_letter():
-    """`tm-info-btn` is styled as a circular icon button.
-
-    Putting a bare "i" inside renders a plain letter next to properly drawn
-    icons, which is what shipped in the Load Balancing section of the route
-    modal. The content must be a Phosphor icon element.
-    """
     bad = []
     for dirpath, dirnames, filenames in os.walk(os.path.join(ROOT, 'templates')):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]

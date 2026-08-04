@@ -28,7 +28,6 @@ def test_headers_preset_is_recorded_in_the_ledger(client, app_module):
 
 
 def test_preset_refuses_to_overwrite_a_hand_written_middleware(client):
-    """The safety rule: a same-named middleware not in the ledger is never clobbered."""
     write_config(
         "http:\n"
         "  routers: {}\n"
@@ -80,7 +79,6 @@ def test_streaming_preset_sets_transport_and_pass_host(client):
 
 
 def test_streaming_preset_composes_with_skip_tls_verify(client):
-    """The transport must merge non-destructively, not replace."""
     r = post_form(client, "/save", serviceName="emby", subdomain="emby.example.com",
                   protocol="http", scheme="https", targetIp="10.0.0.3", targetPort="8920",
                   certResolver="letsencrypt", insecureSkipVerify="true",

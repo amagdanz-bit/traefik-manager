@@ -1,9 +1,3 @@
-"""Multiple acme storage files (#121).
-
-Traefik writes one storage file per cert resolver, so a setup with several
-resolvers has several files. ACME_JSON_PATH accepts a comma-separated list, and
-any entry that is a directory contributes its .json files.
-"""
 import json
 import os
 
@@ -59,7 +53,6 @@ def test_directory_and_file_can_be_mixed(monkeypatch, tmp_path):
 
 
 def test_certs_endpoint_merges_multiple_files(client, monkeypatch, tmp_path):
-    """Certificates from every configured file appear, tagged with their source."""
     d = tmp_path / 'acme'
     d.mkdir()
 
@@ -81,11 +74,6 @@ def test_certs_endpoint_merges_multiple_files(client, monkeypatch, tmp_path):
 
 
 def test_certs_endpoint_with_a_single_file(client, monkeypatch, tmp_path):
-    """The common case, and the one most existing installs use.
-
-    Multi-file support reworked this code path, so the single-file behaviour is
-    pinned explicitly rather than assumed to fall out of the list handling.
-    """
     acme = tmp_path / 'acme.json'
     acme.write_text(json.dumps({
         'letsencrypt': {'Certificates': [
@@ -116,7 +104,6 @@ def test_missing_single_file_reports_a_useful_error(client, monkeypatch, tmp_pat
 
 
 def test_empty_acme_file_is_not_an_error(client, monkeypatch, tmp_path):
-    """Traefik writes an empty file before the first certificate is issued."""
     acme = tmp_path / 'acme.json'
     acme.write_text('')
     monkeypatch.setenv('ACME_JSON_PATH', str(acme))

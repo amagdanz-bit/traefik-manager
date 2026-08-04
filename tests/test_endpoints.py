@@ -1,13 +1,3 @@
-"""Every url_for() target must resolve to a registered endpoint.
-
-Blueprints namespace endpoints ('login' becomes 'auth.login'), so moving a route
-into a blueprint silently breaks every url_for that still uses the bare name.
-Those are plain strings: pyflakes cannot see them, and the failure only appears
-when a user hits that particular redirect.
-
-This test extracts every url_for target from the Python and the templates and
-checks it against the real url_map.
-"""
 import os
 import re
 
@@ -51,7 +41,6 @@ def test_every_url_for_target_is_registered(app_module):
 
 
 def test_core_route_set_is_present(app_module):
-    """Pin the endpoints users and the mobile app depend on."""
     rules = {r.rule for r in app_module.app.url_map.iter_rules()}
     for rule in ('/', '/login', '/logout', '/save', '/save-middleware',
                  '/api/routes', '/api/routes/all', '/api/configs', '/api/health',
@@ -60,7 +49,6 @@ def test_core_route_set_is_present(app_module):
 
 
 def test_no_duplicate_rules(app_module):
-    """Two blueprints registering the same path silently shadow each other."""
     seen = {}
     for r in app_module.app.url_map.iter_rules():
         for method in (r.methods or set()) - {'HEAD', 'OPTIONS'}:
@@ -72,8 +60,6 @@ def test_no_duplicate_rules(app_module):
 
 
 def test_dashboard_override_url_scheme_is_validated(client):
-    """A stored card override URL becomes an href on the dashboard, so anything
-    but http(s) must never survive the save."""
     payload = {'custom_groups': [], 'route_overrides': {
         'good':   {'url': 'https://app.example.com/admin', 'display_name': 'Good'},
         'evil':   {'url': 'javascript:alert(1)', 'display_name': 'Evil'},

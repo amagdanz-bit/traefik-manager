@@ -33,7 +33,7 @@ os.environ["CONFIG_PATHS"] = str(DYNAMIC_PATH)
 os.environ["BACKUP_DIR"] = str(BACKUP_DIR)
 os.environ["TRAEFIK_API_URL"] = "http://traefik.invalid:8080"
 
-import app as tm  # noqa: E402
+import app as tm
 
 EMPTY_CONFIG = "http:\n  routers: {}\n  services: {}\n"
 

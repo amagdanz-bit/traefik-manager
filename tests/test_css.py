@@ -11,7 +11,6 @@ def _strip_comments(text: str) -> str:
 
 
 def _rules(text: str):
-    """Yield (selector, body, media) for every rule, tracking @media nesting."""
     text = _strip_comments(text)
     stack, i, n = [], 0, len(text)
     while i < n:
@@ -41,7 +40,6 @@ def _declarations(body: str, prop: str):
 
 
 def _hard_px_floor(value: str):
-    """A floor that cannot shrink: a bare px length, not wrapped in min()/clamp()."""
     if 'min(' in value or 'clamp(' in value:
         return None
     m = re.fullmatch(r'(\d+(?:\.\d+)?)px(?:\s*!important)?', value)
@@ -49,12 +47,10 @@ def _hard_px_floor(value: str):
 
 
 def _shrinks_on_small_screens(media: str) -> bool:
-    """A floor is safe if the rule only applies above a breakpoint."""
     return bool(re.search(r'min-width\s*:\s*(\d+)px', media))
 
 
 def _released_selectors(css: str, prop: str):
-    """Selectors that drop the floor again inside a small-screen media query."""
     out = set()
     for selector, body, media in _rules(css):
         if not re.search(r'max-width\s*:\s*\d+px', media):
@@ -87,9 +83,6 @@ def _floor_offenders(css: str, prop: str):
 
 
 def test_no_unshrinkable_width_floors():
-    """A fixed min-width wins over max-width in CSS, so a hard px floor survives
-    every responsive override and forces the element wider than a phone. Clamp it
-    with min(Npx, Nvw) or scope the rule to a min-width media query instead."""
     with open(CSS_PATH, encoding='utf-8') as fh:
         css = fh.read()
 
@@ -101,7 +94,6 @@ def test_no_unshrinkable_width_floors():
 
 
 def test_no_unshrinkable_height_floors():
-    """Same trap vertically: a hard min-height outgrows a landscape phone."""
     with open(CSS_PATH, encoding='utf-8') as fh:
         css = fh.read()
 
@@ -112,8 +104,6 @@ def test_no_unshrinkable_height_floors():
 
 
 def test_resizable_elements_declare_a_scroll_context():
-    """CSS resize is ignored when overflow is visible. A resize handle that does
-    nothing looks like a broken control, so pair the two."""
     with open(CSS_PATH, encoding='utf-8') as fh:
         css = fh.read()
 

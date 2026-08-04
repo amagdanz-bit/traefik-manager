@@ -13,6 +13,32 @@ const OPTIONAL_TABS = ['dashboard', 'routemap', 'docker', 'kubernetes', 'swarm',
 let _visibleTabsCache = {};
 let _localTabsCache   = {};
 
+function buildSideNav() {
+    const nav = document.getElementById('sideNavItems');
+    const bar = document.getElementById('tabBar');
+    if (!nav || !bar) return;
+    nav.innerHTML = '';
+    bar.querySelectorAll('.tab-btn').forEach(btn => {
+        if (btn.style.display === 'none') return;
+        const tab   = btn.id.replace(/^btn-/, '');
+        const icon  = btn.querySelector('i');
+        const badge = btn.querySelector('.tab-count');
+        const label = (btn.textContent || '').trim().replace(/\s*\d+$/, '');
+        const item  = document.createElement('button');
+        item.className = 'side-nav-item' + (btn.classList.contains('active') ? ' active' : '');
+        item.id = 'sbtn-' + tab;
+        item.title = label;
+        item.onclick = () => switchTab(tab);
+        item.innerHTML = `${icon ? `<i class="${icon.className}"></i>` : ''}<span class="side-nav-label">${_esc(label)}</span>${badge ? `<span class="side-nav-count">${_esc(badge.textContent)}</span>` : ''}`;
+        nav.appendChild(item);
+    });
+}
+
+function toggleSideNavCollapse() {
+    const on = document.documentElement.classList.toggle('tm-nav-collapsed');
+    localStorage.setItem('tm-nav-collapsed', on ? '1' : '0');
+}
+
 function applyTabVisibility(map) {
     if (map) _visibleTabsCache = map;
     OPTIONAL_TABS.forEach(tab => {
@@ -25,6 +51,7 @@ function applyTabVisibility(map) {
     if (activeBtn && activeBtn.style.display === 'none') {
         switchTab('services');
     }
+    buildSideNav();
 }
 
 let _statsHomeMarker = null;
@@ -45,6 +72,8 @@ function placeStatCards() {
 function switchTab(tab) {
     document.documentElement.classList.toggle('tm-tab-dashboard', tab === 'dashboard');
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.side-nav-item').forEach(i => i.classList.remove('active'));
+    document.getElementById('sbtn-' + tab)?.classList.add('active');
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('tab-' + tab).classList.add('active');
     document.getElementById('btn-' + tab).classList.add('active');
@@ -199,6 +228,7 @@ const TM_PREF_DEFAULTS = {
     showRouteIcons: false,
     routeViewMode: 'grid', mwViewMode: 'grid', svcViewMode: 'grid',
     statBarScope: 'all',
+    layoutMode: 'classic',
 };
 
 let _prefSaveTimer = null;

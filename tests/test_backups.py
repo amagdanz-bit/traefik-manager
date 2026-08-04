@@ -25,11 +25,6 @@ def test_manual_backup_create(client):
 
 
 def test_backup_captures_the_pre_save_state(client, app_module):
-    """The backup is taken before the write, so it holds the previous content.
-
-    Asserted by content, not by file count: backup names are second-granular
-    (`%Y%m%d_%H%M%S`), so two saves inside the same second reuse one filename.
-    """
     import glob
     import os
 

@@ -35,7 +35,6 @@ def test_save_http_route_writes_yaml(client):
 
 
 def test_save_tcp_route(client):
-    """TCP reads targetIp/targetPort positionally: index 1 of the repeated field."""
     r = post_form(client, "/save", serviceName="db", subdomain="db", protocol="tcp",
                   targetIp=["", "10.0.0.9", ""], targetPort=["", "5432", ""])
     assert r.status_code < 400
@@ -45,7 +44,6 @@ def test_save_tcp_route(client):
 
 
 def test_save_udp_route(client):
-    """UDP reads targetIp/targetPort positionally: index 2 of the repeated field."""
     r = post_form(client, "/save", serviceName="dns", subdomain="dns", protocol="udp",
                   targetIp=["", "", "10.0.0.53"], targetPort=["", "", "53"])
     assert r.status_code < 400
@@ -65,8 +63,6 @@ def test_multiple_backends_and_load_balancing(client):
 
 
 def test_legacy_client_edit_preserves_backends_and_lb(client):
-    """A mobile-style save posts only targetIp/targetPort. It must update the
-    first backend without wiping backends 2-3, sticky, healthCheck or priority."""
     _save_http(client, backendsJsonHttp=BACKENDS)
 
     r = _save_http(client, targetIp="10.9.9.9", targetPort="9999",
@@ -137,11 +133,8 @@ def test_comments_survive_a_save(client):
     assert "existing" in read_config()["http"]["routers"]
 
 
-# ---- #122: backend validation ------------------------------------------------
 
 def test_tcp_save_without_a_backend_is_rejected(client):
-    """A single targetIp lands at index 0, which TCP does not read, so the old
-    code wrote `address: ':'` and returned 200."""
     r = post_form(client, "/save", serviceName="badtcp", subdomain="badtcp",
                   protocol="tcp", targetIp="10.0.0.9", targetPort="5432")
     assert r.status_code == 400, "a TCP save with no reachable backend should be refused"
@@ -164,7 +157,6 @@ def test_http_save_without_a_backend_is_rejected(client):
 
 
 def test_no_route_ever_gets_an_empty_address(client):
-    """Whatever a client sends, `address: ':'` must never reach the config."""
     for proto, port in (("tcp", "5432"), ("udp", "53")):
         post_form(client, "/save", serviceName=f"x{proto}", subdomain=f"x{proto}",
                   protocol=proto, targetIp="", targetPort=port)
@@ -173,7 +165,6 @@ def test_no_route_ever_gets_an_empty_address(client):
 
 
 def test_backends_json_alone_is_enough(client):
-    """A client that sends only backendsJson must still be accepted."""
     r = post_form(client, "/save", serviceName="jsononly", subdomain="jsononly",
                   protocol="tcp",
                   backendsJsonTcp=json.dumps({"servers": [{"host": "10.0.0.7", "port": "6379"}]}))
@@ -182,10 +173,8 @@ def test_backends_json_alone_is_enough(client):
     assert lb["servers"][0]["address"] == "10.0.0.7:6379"
 
 
-# ---- #123: subdomain handling -------------------------------------------------
 
 def test_tcp_does_not_double_append_the_domain(client):
-    """A fully qualified subdomain must be used as-is, matching HTTP."""
     r = post_form(client, "/save", serviceName="fqdn", subdomain="db.other.tld",
                   protocol="tcp", targetIp=["", "10.0.0.9", ""],
                   targetPort=["", "5432", ""])
@@ -204,7 +193,6 @@ def test_tcp_still_appends_the_domain_to_a_bare_label(client):
 
 
 def test_http_and_tcp_treat_subdomains_the_same(client):
-    """The inconsistency in #123: same input, same host, whichever protocol."""
     post_form(client, "/save", serviceName="hsame", subdomain="svc.other.tld",
               protocol="http", scheme="http", targetIp="10.0.0.1", targetPort="80")
     post_form(client, "/save", serviceName="tsame", subdomain="svc.other.tld",
@@ -215,11 +203,8 @@ def test_http_and_tcp_treat_subdomains_the_same(client):
     assert "other.tld.example.com" not in str(cfg)
 
 
-# ---- mobile client contract --------------------------------------------------
 
 def _mobile_save(client, proto, ip, port, **extra):
-    """Exactly how the mobile app posts /save: targetIp/targetPort as a repeated
-    field with the value in the slot for that protocol."""
     slot = {'http': 0, 'tcp': 1, 'udp': 2}[proto]
     ips, ports = ['', '', ''], ['', '', '']
     ips[slot], ports[slot] = ip, port
@@ -241,8 +226,6 @@ def test_mobile_shaped_save_works_for_every_protocol(client):
 
 
 def test_mobile_edit_preserves_load_balancing(client):
-    """The mobile app sends no backendsJson, so a save from it must leave extra
-    backends, sticky and priority alone."""
     post_form(client, "/save", serviceName='multi', subdomain='multi.example.com',
               protocol='http', scheme='http', targetIp='10.0.0.1', targetPort='80',
               backendsJsonHttp=json.dumps({
@@ -264,10 +247,6 @@ def test_mobile_edit_preserves_load_balancing(client):
 
 
 def test_mobile_backend_edit_round_trips_through_the_api(client):
-    """The app now sends backendsJson when it edits backends, which puts the save
-    in managed-backends mode - there the server replaces the service block, so
-    anything the app fails to echo back is deleted. Read the route the way the
-    app does, rebuild the payload the way it does, and assert nothing is lost."""
     post_form(client, "/save", serviceName='lb', subdomain='lb.example.com',
               protocol='http', scheme='http', targetIp='10.0.0.1', targetPort='80',
               backendsJsonHttp=json.dumps({
@@ -280,7 +259,6 @@ def test_mobile_backend_edit_round_trips_through_the_api(client):
     route = next(a for a in client.get("/api/routes/all").get_json()['apps']
                  if a['id'] == 'lb')
 
-    # src/api/routes.ts buildForm(), fed by app/route/[id].tsx populateForm()
     servers = [{'scheme': s.split(':')[0], 'host': s.split('//')[1].split(':')[0],
                 'port': s.split(':')[-1]} for s in route['servers']]
     payload = {'servers': servers + [{'scheme': 'http', 'host': '10.0.0.3', 'port': '80'}]}
@@ -319,9 +297,6 @@ def test_mobile_backend_edit_round_trips_through_the_api(client):
     ('tcp', '10.0.0.9',       '5432', '10.0.0.9:5432'),
 ])
 def test_tcp_udp_save_recovers_a_combined_host_port(client, proto, ip, port, expected):
-    """Mobile v1.5.0 and earlier parsed a TCP/UDP target with new URL(), which
-    left the whole host:port in targetIp and no port. That used to be written
-    out as 'host:port:'. The combined form is now split back apart."""
     r = _mobile_save(client, proto, ip, port, serviceName='sv', subdomain='sv')
     assert r.status_code < 400, r.data[:200]
     lb = read_config()[proto]['services']['sv-service']['loadBalancer']
@@ -330,15 +305,12 @@ def test_tcp_udp_save_recovers_a_combined_host_port(client, proto, ip, port, exp
 
 @pytest.mark.parametrize("proto,ip", [('tcp', '10.0.0.9'), ('udp', '10.0.0.53'), ('tcp', '::1')])
 def test_tcp_udp_save_refuses_a_missing_port(client, proto, ip):
-    """A TCP/UDP address with no port is never valid - refuse it rather than
-    writing 'host:' and reporting success."""
     r = _mobile_save(client, proto, ip, '', serviceName='sv', subdomain='sv')
     assert r.status_code == 400
     assert b'port is required' in r.data
     assert 'sv-service' not in read_config().get(proto, {}).get('services', {})
 
 
-# ---- shared services (serviceRef, #125) --------------------------------------
 
 def _make_owner(client, name='app1', ip='10.0.0.50', port='80'):
     post_form(client, "/save", serviceName=name, subdomain=name, protocol='http',
@@ -383,9 +355,6 @@ def test_service_ref_edit_keeps_reference(client):
 
 
 def test_legacy_edit_of_referenced_route_preserves_reference(client):
-    """A mobile app or old cached page editing a referenced route posts only
-    targetIp with no serviceRef. That must not convert the reference into an
-    owned service, and must not write the posted target into the shared one."""
     _make_owner(client)
     post_form(client, "/save", serviceName='app2', subdomain='app2', protocol='http',
               scheme='http', targetIp='', targetPort='', serviceRef='app1-service')
@@ -413,8 +382,6 @@ def test_deleting_referencing_route_keeps_service(client):
 
 
 def test_deleting_owner_route_keeps_shared_service(client):
-    """Pins _service_shared into the new path: with a reference alive, deleting
-    the owner removes its router but leaves the shared service behind."""
     _make_owner(client)
     post_form(client, "/save", serviceName='app2', subdomain='app2', protocol='http',
               scheme='http', targetIp='', targetPort='', serviceRef='app1-service')
@@ -441,8 +408,6 @@ def test_service_ref_tcp_udp(client, proto, sub):
 
 
 def test_service_ref_provider_qualified_is_written_verbatim(client):
-    """A cross-provider reference like whoami@docker cannot be validated against
-    the file config, so it is written as-is and no service block is created."""
     r = post_form(client, "/save", serviceName='dash', subdomain='dash',
                   protocol='http', scheme='http', targetIp='', targetPort='',
                   serviceRef='whoami@docker')
@@ -454,8 +419,6 @@ def test_service_ref_provider_qualified_is_written_verbatim(client):
 
 
 def test_switching_own_route_to_ref_cleans_up_orphan(client):
-    """Editing a route from its own service to a reference removes the now
-    orphaned <name>-service instead of leaving it behind."""
     _make_owner(client)
     _make_owner(client, name='app2', ip='10.0.0.60', port='81')
     post_form(client, "/save", serviceName='app2', subdomain='app2', protocol='http',

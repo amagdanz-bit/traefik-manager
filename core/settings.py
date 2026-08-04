@@ -19,7 +19,8 @@ UI_PREF_BOOLS = (
 )
 UI_PREF_VIEWS = ('routeViewMode', 'mwViewMode', 'svcViewMode')
 UI_PREF_SCOPES = ('statBarScope',)
-UI_PREF_KEYS = UI_PREF_BOOLS + UI_PREF_VIEWS + UI_PREF_SCOPES
+UI_PREF_LAYOUTS = ('layoutMode',)
+UI_PREF_KEYS = UI_PREF_BOOLS + UI_PREF_VIEWS + UI_PREF_SCOPES + UI_PREF_LAYOUTS
 
 
 def sanitize_ui_prefs(prefs) -> dict:
@@ -38,6 +39,11 @@ def sanitize_ui_prefs(prefs) -> dict:
         if k in prefs:
             v = str(prefs[k]).strip().lower()
             if v in ('all', 'dashboard'):
+                out[k] = v
+    for k in UI_PREF_LAYOUTS:
+        if k in prefs:
+            v = str(prefs[k]).strip().lower()
+            if v in ('classic', 'modern'):
                 out[k] = v
     return out
 

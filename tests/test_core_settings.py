@@ -1,9 +1,3 @@
-"""Tests for core.settings and core.agents_store.
-
-Agent credentials are encrypted at rest, so the round trip is tested against the
-file on disk rather than just the return value - a broken encrypt path would
-otherwise look fine in memory while writing plaintext secrets to agents.yml.
-"""
 import os
 
 from core import agents_store, env, settings
@@ -94,7 +88,6 @@ def test_agents_without_required_fields_are_dropped():
         agents_store.save_agents_file([
             {'id': 'ok', 'name': 'Good', 'url': 'http://a:1'},
         ])
-        # write a malformed entry directly and make sure load skips it
         raw = open(env.AGENTS_PATH).read()
         open(env.AGENTS_PATH, 'w').write(raw + "  - id: broken\n    name: NoUrl\n")
         loaded = agents_store.load_agents()

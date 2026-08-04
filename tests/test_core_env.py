@@ -1,11 +1,3 @@
-"""Guards for core.env, whose constants are shared across modules.
-
-CONFIG_PATHS / CONFIG_PATH / MULTI_CONFIG are rebound at runtime when a route or
-middleware is saved into a newly created config file. Any module that does
-`from core.env import CONFIG_PATHS` captures a snapshot and stops seeing files
-created after startup, which is invisible until someone adds a config file and
-it never appears. These tests pin the module-attribute access pattern.
-"""
 import os
 
 from core import env
@@ -30,7 +22,6 @@ def test_registering_a_new_config_path_is_visible_through_the_module():
 
 
 def test_app_sees_registered_paths_through_core_env(app_module, client):
-    """app.py must read env.CONFIG_PATHS, not a snapshot of it."""
     before = list(env.CONFIG_PATHS)
     new_path = os.path.join(os.path.dirname(before[0]), 'zz-visible-test.yml')
     open(new_path, 'w').write('http:\n  routers: {}\n  services: {}\n')
@@ -66,12 +57,6 @@ def test_app_crypto_aliases_point_at_core(app_module):
 
 
 def test_host_log_and_file_paths_resolve(app_module, client, tmp_path):
-    """The host reads files directly through the allow-prefix check.
-
-    A missing ALLOWED_FILE_PREFIXES raises NameError inside _readable_config_path,
-    which surfaced as "failed to load logs" on the Host while agents (which fetch
-    logs over HTTP) were unaffected.
-    """
     log = os.path.join(os.path.dirname(env.SETTINGS_PATH), 'access.log')
     open(log, 'w').write('{"ClientAddr":"1.2.3.4:1","RequestHost":"a.example.com"}\n')
     try:

@@ -1,8 +1,3 @@
-"""Tests for core.config - the YAML read/write path.
-
-This is the module that touches users' live Traefik config, so it is tested
-directly rather than only through the /save endpoint.
-"""
 import os
 
 import pytest
@@ -41,7 +36,6 @@ def test_round_trip_preserves_comments_and_formatting(config_path):
 
 
 def test_go_templates_survive_a_round_trip(config_path):
-    """Traefik rules and plugin configs contain {{ }} that YAML must not eat."""
     original = (
         "http:\n"
         "  middlewares:\n"

@@ -44,6 +44,7 @@ async function toggleTabVisibility(tab) {
     if (btn) {
         btn.style.display = newVal ? 'block' : 'none';
         if (!newVal && btn.classList.contains('active')) switchTab('services');
+        buildSideNav();
     }
 
     if (_activeAgent) {
