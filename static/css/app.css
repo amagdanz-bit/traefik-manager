@@ -276,14 +276,14 @@ select.input-field:disabled { opacity: 0.6; cursor: not-allowed; }
     resize: horizontal;
     border-bottom-right-radius: 4px;
 }
-.modal-box-route      { width: 560px; min-width: min(560px, 95vw); }
-.modal-box-tls        { width: 560px; min-width: min(560px, 95vw); }
-.modal-box-ipdiag     { width: 560px; min-width: min(560px, 95vw); }
-.modal-box-mw         { width: 620px; min-width: min(620px, 95vw); }
-.modal-box-trusted-ips{ width: 600px; min-width: min(600px, 95vw); }
-.modal-box-rm-groups  { width: 460px; min-width: min(460px, 95vw); overflow: hidden; display: flex; flex-direction: column; }
-.modal-box-rm-edit    { width: 440px; min-width: min(440px, 95vw); overflow: hidden; display: flex; flex-direction: column; }
-.modal-box-settings   { width: 680px; min-width: min(680px, 95vw); height: 88vh; max-height: 88vh; display: flex; flex-direction: column; }
+.modal-box-route      { width: 680px; min-width: min(680px, 95vw); }
+.modal-box-tls        { width: 640px; min-width: min(640px, 95vw); }
+.modal-box-ipdiag     { width: 640px; min-width: min(640px, 95vw); }
+.modal-box-mw         { width: 720px; min-width: min(720px, 95vw); }
+.modal-box-trusted-ips{ width: 680px; min-width: min(680px, 95vw); }
+.modal-box-rm-groups  { width: 520px; min-width: min(520px, 95vw); overflow: hidden; display: flex; flex-direction: column; }
+.modal-box-rm-edit    { width: 500px; min-width: min(500px, 95vw); overflow: hidden; display: flex; flex-direction: column; }
+.modal-box-settings   { width: 840px; min-width: min(840px, 95vw); height: 88vh; max-height: 88vh; display: flex; flex-direction: column; }
 
 
 .modal-inner { display: flex; flex: 1; overflow: hidden; min-height: 380px; }
@@ -903,6 +903,7 @@ a.rm-route-row { text-decoration: none; color: inherit; }
 
 @media (min-width: 1024px) {
     html.tm-modern #tabBar { display: none; }
+    html.tm-modern nav.sticky { position: sticky !important; top: 0; z-index: 45; }
     html.tm-modern .max-w-7xl { max-width: none; }
     html.tm-modern main { margin-left: var(--side-nav-w, 232px); transition: margin-left 0.15s ease; }
     html.tm-modern { --side-nav-w: 232px; }
@@ -927,6 +928,8 @@ a.rm-route-row { text-decoration: none; color: inherit; }
     .side-nav-count { font-size: 10.5px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--muted); background: var(--input-bg); border: 1px solid var(--border); border-radius: 9999px; padding: 1px 7px; flex-shrink: 0; }
     .side-nav-item.active .side-nav-count { background: var(--side-active-bg); border-color: transparent; color: var(--text); }
     html.tm-nav-collapsed .side-nav-label, html.tm-nav-collapsed .side-nav-count { display: none; }
+    .side-nav-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; padding: 12px 10px 4px; white-space: nowrap; }
+    html.tm-nav-collapsed .side-nav-section { height: 1px; padding: 0; margin: 8px 6px; background: var(--border); overflow: hidden; color: transparent; }
     html.tm-nav-collapsed .side-nav-item { justify-content: center; padding: 8px 0; }
 
     html.tm-modern #routeGrid.grid, html.tm-modern #mwGrid.grid, html.tm-modern .svc-card-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }

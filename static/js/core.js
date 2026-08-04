@@ -13,11 +13,17 @@ const OPTIONAL_TABS = ['dashboard', 'routemap', 'docker', 'kubernetes', 'swarm',
 let _visibleTabsCache = {};
 let _localTabsCache   = {};
 
+const SIDE_NAV_GROUPS = {
+    providers: { label: 'Providers', tabs: ['docker', 'kubernetes', 'swarm', 'nomad', 'ecs', 'consulcatalog', 'redis', 'etcd', 'consul', 'zookeeper', 'http_provider', 'file_external'] },
+    system:    { label: 'System',    tabs: ['certs', 'tls', 'crowdsec', 'plugins', 'logs', 'static'] },
+};
+
 function buildSideNav() {
     const nav = document.getElementById('sideNavItems');
     const bar = document.getElementById('tabBar');
     if (!nav || !bar) return;
     nav.innerHTML = '';
+    const buckets = { core: [], providers: [], system: [] };
     bar.querySelectorAll('.tab-btn').forEach(btn => {
         const optional = btn.classList.contains('tab-optional');
         if (optional && btn.style.display !== 'block') return;
@@ -35,8 +41,19 @@ function buildSideNav() {
         item.title = document.documentElement.classList.contains('tm-nav-collapsed') ? label : '';
         item.onclick = () => switchTab(tab);
         item.innerHTML = `${icon ? `<i class="${icon.className}"></i>` : ''}<span class="side-nav-label">${_esc(label)}</span>${count && count !== '-' ? `<span class="side-nav-count">${_esc(count)}</span>` : ''}`;
-        nav.appendChild(item);
+        const group = SIDE_NAV_GROUPS.providers.tabs.includes(tab) ? 'providers'
+                    : SIDE_NAV_GROUPS.system.tabs.includes(tab) ? 'system' : 'core';
+        buckets[group].push(item);
     });
+    buckets.core.forEach(i => nav.appendChild(i));
+    for (const key of ['providers', 'system']) {
+        if (!buckets[key].length) continue;
+        const head = document.createElement('div');
+        head.className = 'side-nav-section';
+        head.textContent = SIDE_NAV_GROUPS[key].label;
+        nav.appendChild(head);
+        buckets[key].forEach(i => nav.appendChild(i));
+    }
 }
 
 let _sideNavSyncTimer = null;

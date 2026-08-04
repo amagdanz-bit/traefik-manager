@@ -17,8 +17,8 @@ async function capture(theme) {
     await page.goto(BASE, { waitUntil: 'networkidle2', timeout: 60000 });
     await sleep(4500);
     await js(`document.querySelectorAll('body > div[style*="--red"]').forEach(b => b.remove())`);
-    await js(`fetch('/api/settings/ui', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch', ..._csrfHeaders() }, body: JSON.stringify({ ui_prefs: { layoutMode: 'modern' } }) })`);
-    await js(`tmSetPref('layoutMode', 'modern'); applyUiPrefs();`);
+    await js(`fetch('/api/settings/ui', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch', ..._csrfHeaders() }, body: JSON.stringify({ ui_prefs: { layoutMode: 'modern', statBarScope: 'dashboard' } }) })`);
+    await js(`tmSetPref('layoutMode', 'modern'); tmSetPref('statBarScope', 'dashboard'); applyUiPrefs();`);
     await sleep(1200);
 
     await tab('services');
