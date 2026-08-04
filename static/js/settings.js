@@ -268,6 +268,23 @@ function compareVersions(a, b) {
 }
 
 let _managerVersion = null;
+
+async function updateTmVersionBadge() {
+    let v = _managerVersion;
+    if (typeof _activeAgent !== 'undefined' && _activeAgent) {
+        try {
+            const d = await fetch('/api/agents/' + _activeAgent.id + '/health').then(r => r.json());
+            v = (d.version || '').replace(/^v/, '') || v;
+        } catch (e) {}
+    }
+    if (!v) return;
+    const el  = document.getElementById('tmVersionText');
+    const elM = document.getElementById('tmVersionTextMobile');
+    const ft  = document.getElementById('footerManagerVer');
+    if (el)  el.textContent  = 'v' + v;
+    if (elM) elM.textContent = 'v' + v;
+    if (ft)  { ft.textContent = 'v' + v; ft.title = 'Traefik Manager v' + v; }
+}
 async function checkManagerVersion() {
     try {
         const res = await fetch('/api/manager/version');
@@ -284,9 +301,7 @@ async function checkManagerVersion() {
         }
 
         if (current) {
-            document.getElementById('tmVersionText').textContent = 'v' + current;
-            const vtmm = document.getElementById('tmVersionTextMobile');
-            if (vtmm) vtmm.textContent = 'v' + current;
+            updateTmVersionBadge();
             _applyTmBadgeVisibility();
         }
 

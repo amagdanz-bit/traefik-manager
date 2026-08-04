@@ -381,12 +381,36 @@ function _updateSettingsSidebarForAgent(active) {
     }
 }
 
+async function _loadAboutAgentInfo() {
+    const row = document.getElementById('sm-agent-version-row');
+    if (!row) return;
+    if (!_activeAgent) { row.classList.add('hidden'); return; }
+    document.getElementById('agentVersionName').textContent = _activeAgent.name;
+    document.getElementById('agentVersionCurrent').textContent = '-';
+    document.getElementById('agentVersionHint').classList.add('hidden');
+    row.classList.remove('hidden');
+    row.style.display = 'flex';
+    try {
+        const d = await fetch('/api/agents/' + _activeAgent.id + '/health').then(r => r.json());
+        const cur = (d.version || '').replace(/^v/, '');
+        if (!cur) return;
+        document.getElementById('agentVersionCurrent').textContent = 'v' + cur;
+        const latest = (document.getElementById('mgrUpdateLatestVer').textContent || '').replace(/^v/, '');
+        if (latest && latest !== '-' && compareVersions(latest, cur) > 0) {
+            const hint = document.getElementById('agentVersionHint');
+            hint.textContent = 'v' + latest + ' available';
+            hint.classList.remove('hidden');
+        }
+    } catch (e) {}
+}
+
 function switchSettingsPanel(id, btn) {
     document.querySelectorAll('.modal-sidebar-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.modal-panel').forEach(p => p.classList.remove('active'));
     const activeBtn = btn || document.getElementById('msb-' + id);
     if (activeBtn) activeBtn.classList.add('active');
     document.getElementById('mpanel-' + id).classList.add('active');
+    if (id === 'about') _loadAboutAgentInfo();
     if (window.innerWidth < 640) {
         const titles = {connection:'Connection',routes:'Route Monitoring',system:'System Monitoring',auth:'Authentication',backups:'Backups',static:'Static Config',ui:'Interface',notifications:'Notifications',about:'About','agent-keys':'API Keys'};
         document.getElementById('settingsModalTitle').textContent = titles[id] || 'Settings';
