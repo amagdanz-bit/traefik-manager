@@ -173,6 +173,42 @@ function renderServicesTable() {
                 ${usedBy.length > 3 ? `<span class="svc-used-chip">+${usedBy.length - 3}</span>` : ''}
             </div>` : '';
 
+        if (_tmModern() && _svcViewMode !== 'list') {
+            const anyDown = serverEntries.length > 0 && activeCount < serverEntries.length;
+            const dotCls = st === 'error' || (anyDown && activeCount === 0) ? 'status-offline'
+                         : anyDown || st !== 'success' ? 'status-checking' : 'status-online';
+            const dotTitle = anyDown ? `${activeCount} of ${serverEntries.length} servers up` : stLabel;
+            const lb = s.loadBalancer || {};
+            const composite = (s.weighted?.services || []).map(x => `${x.name}${x.weight != null ? ` (${x.weight})` : ''}`)
+                .concat(s.mirroring?.service ? [s.mirroring.service] : [])
+                .concat((s.mirroring?.mirrors || []).map(m => `${m.name} mirror`))
+                .concat(s.failover?.service ? [s.failover.service] : [])
+                .concat(s.failover?.fallback ? [`${s.failover.fallback} fallback`] : []);
+            const servers = (lb.servers || []).map(x => x.url || x.address).filter(Boolean)
+                .concat(composite);
+            const rows = servers.slice(0, 2).map(u =>
+                `<div class="tm-val tm-val-target"><i class="ph-bold ph-arrow-elbow-down-right"></i><span class="tm-v">${_esc(u)}</span>${_tmCopy(u)}</div>`).join('')
+                + (servers.length > 2 ? `<div class="tm-val"><i class="ph-bold ph-dot" style="opacity:0"></i><span class="tm-more" title="${_esc(servers.join(', '))}">+${servers.length - 2} more</span></div>` : '');
+            const meta = [
+                composite.length ? '' : (servers.length ? `${servers.length} server${servers.length > 1 ? 's' : ''}` : ''),
+                serverSummary ? `<span style="color:${srvColor}">${serverSummary}</span>` : '',
+                lb.sticky ? 'sticky' : '',
+                (lb.healthCheck ? 'health check' : ''),
+            ].filter(Boolean).join(' \u00b7 ');
+            const usedTxt = usedBy.length ? `used by ${usedBy.length} route${usedBy.length > 1 ? 's' : ''}` : '';
+            return `<div class="tm-card" data-health="${st === 'error' ? 'down' : 'up'}" style="--tm-accent:${stColor}" onclick="openSvcDetail(${globalIdx})">
+                <div class="tm-head">
+                    <span class="tm-ic tm-ic-tile"><i class="ph-bold ${composite.length ? 'ph-share-network' : 'ph-hard-drives'}"></i><span class="status-dot ${dotCls}" title="${_esc(dotTitle)}"></span></span>
+                    <div class="tm-head-txt">
+                        <div class="tm-title">${proto !== 'HTTP' ? `<span class="rm-proto-pill rm-proto-${proto.toLowerCase()}">${proto}</span>` : ''}<span class="tm-name">${_esc(name)}</span></div>
+                        <div class="tm-sub">${_esc(type || 'service')} \u00b7 ${_esc(provider)}</div>
+                    </div>
+                    <span class="tm-rail tm-rail-sm" onclick="event.stopPropagation()"><button type="button" class="tm-btn" title="Details" onclick="event.stopPropagation();openSvcDetail(${globalIdx})"><i class="ph-bold ph-info"></i></button></span>
+                </div>
+                ${rows ? `<div class="tm-vals">${rows}</div>` : ''}
+                <div class="tm-foot"><span class="tm-meta">${meta}</span>${usedTxt ? `<span class="tm-cf">${_esc(usedTxt)}</span>` : ''}</div>
+            </div>`;
+        }
         return `
         <div class="card svc-card" onclick="openSvcDetail(${globalIdx})">
             <div class="svc-card-header">
@@ -248,7 +284,8 @@ function renderServicesTable() {
         </div>`;
         document.getElementById('liveContent').innerHTML = `<div class="svc-list">${header}${rows}${empty}</div>`;
     } else {
-        document.getElementById('liveContent').innerHTML = `<div class="svc-card-grid">${cards}${empty}</div>`;
+        const cls = _tmModern() ? 'tm-card-grid' : 'svc-card-grid';
+        document.getElementById('liveContent').innerHTML = `<div class="${cls}">${cards}${empty}</div>`;
     }
 
     document.getElementById('svcTabCount').textContent = _allServices.filter(s => s._proto === 'HTTP').length;

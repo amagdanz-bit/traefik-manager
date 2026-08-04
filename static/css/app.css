@@ -1,6 +1,5 @@
 
 :root {
-    --accent: #24a1de;
     color-scheme: dark;
     --bg: #0d1117;
     --card: #161b22;
@@ -30,7 +29,6 @@
     --border: #d0d7de;
     --muted: #656d76;
     --text: #1f2328;
-    --accent: #0969da;
     --text-secondary: #36414c;
     --blue: #0969da;
     --green: #1a7f37;
@@ -439,7 +437,8 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); 
 .rm-pod-count { font-size: 10px; padding: 1px 7px; border-radius: 15px; background: var(--border); color: var(--muted); }
 .rm-pod-body { display: flex; flex-direction: column; }
 .rm-route-row { display: flex; align-items: center; gap: 13px; padding: 10px 16px; min-height: 54px; border-bottom: 1px solid var(--border); transition: background 0.12s, opacity 0.15s, box-shadow 0.12s; }
-.rm-route-row:hover { background: var(--btn-secondary-bg); box-shadow: inset 3px 0 0 var(--accent); }
+.rm-route-row:hover { background: var(--btn-secondary-bg); }
+html.tm-modern .rm-route-row:hover { box-shadow: inset 3px 0 0 var(--blue); }
 a.rm-route-row { text-decoration: none; color: inherit; }
 .rm-route-link { cursor: pointer; }
 .rm-route-ic { position: relative; width: 32px; height: 32px; flex-shrink: 0; }
@@ -953,7 +952,6 @@ a.rm-route-row { text-decoration: none; color: inherit; }
     html.tm-nav-collapsed .side-nav-section { height: 1px; padding: 0; margin: 8px 6px; background: var(--border); overflow: hidden; color: transparent; }
     html.tm-nav-collapsed .side-nav-item { justify-content: center; padding: 8px 0; }
 
-    html.tm-modern #routeGrid.grid, html.tm-modern #mwGrid.grid, html.tm-modern .svc-card-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
     html.tm-modern .rm-pods-grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
 }
 
@@ -1014,3 +1012,4 @@ html.tm-modern .tm-card.tm-sel .tm-rail { display: none; }
     html.tm-modern .tm-hint { display: none; }
     html.tm-modern .tm-copy { opacity: .5; }
 }
+html.tm-modern .tm-card-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr)); }

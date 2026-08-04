@@ -1175,6 +1175,21 @@ function setLayoutMode(v) {
     tmSetPref('layoutMode', v);
     loadUiTogglesIntoModal();
     applyUiPrefs();
+    _rerenderCardGrids();
+}
+
+function _rerenderCardGrids() {
+    if (typeof renderRouteGrid === 'function' && window._lastRenderedApps) {
+        renderRouteGrid(window._lastRenderedApps);
+        if (typeof filterRoutes === 'function') filterRoutes();
+    }
+    if (typeof renderMwGrid === 'function' && typeof _allMiddlewares !== 'undefined' && _allMiddlewares) {
+        renderMwGrid(_allMiddlewares);
+        if (typeof filterMw === 'function') filterMw();
+    }
+    if (typeof renderServicesTable === 'function' && typeof _allServices !== 'undefined' && _allServices.length) {
+        renderServicesTable();
+    }
 }
 
 function setStatBarScope(v) {

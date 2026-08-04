@@ -647,8 +647,6 @@ function _tmModern() {
 }
 
 function _tmFolderMode(apps) {
-    const on = (typeof MULTI_CONFIG !== 'undefined' && MULTI_CONFIG) || (typeof CONFIG_DIR_SET !== 'undefined' && CONFIG_DIR_SET);
-    if (!on) return false;
     const d = new Set((apps || []).filter(a => !a.provider || a.provider === 'file')
                                   .map(a => a.configFile).filter(Boolean));
     return d.size > 1;
@@ -669,9 +667,10 @@ function _tmRouteCard(app, i, opts) {
     const enabled    = app.enabled !== false;
     const isFile     = !app.provider || app.provider === 'file';
     const appJson    = JSON.stringify(app).replace(/'/g, '&#39;');
+    const simpleHost = /^Host\(`[^`]+`\)(\s*\|\|\s*Host\(`[^`]+`\))*$/.test((app.rule || '').trim());
     const allDomains = [...(app.rule || '').matchAll(/Host\(`([^`]+)`\)/g)].map(m => m[1]);
     const domain0    = allDomains[0] || '';
-    const openUrl    = (proto === 'http' && domain0 && !domain0.includes('{') && !domain0.includes('*') && !domain0.includes('HostRegexp')) ? 'https://' + domain0 : '';
+    const openUrl    = (proto === 'http' && simpleHost && domain0 && !domain0.includes('{') && !domain0.includes('*') && !domain0.includes('HostRegexp')) ? 'https://' + domain0 : '';
     const bulkSel    = _bulkMode && _bulkSelected.has(app.id);
 
     const glyphs = [
@@ -691,7 +690,7 @@ function _tmRouteCard(app, i, opts) {
         : `<span class="tm-ic-bare"><span class="status-dot status-checking" title="Checking..."></span></span>`;
 
     let valRows;
-    if (proto === 'http' && allDomains.length) {
+    if (proto === 'http' && simpleHost && allDomains.length) {
         valRows = allDomains.slice(0, 2).map((d, n) =>
             `<div class="tm-val tm-val-host"><i class="ph-bold ph-globe-simple" ${n ? 'style="opacity:0"' : ''}></i><span class="tm-v">${_esc(d)}</span>` +
             (allDomains.length > 2 && n === 1 ? `<span class="tm-more" title="${_esc(allDomains.join(', '))}">+${allDomains.length - 2}</span>` : '') +
@@ -707,7 +706,10 @@ function _tmRouteCard(app, i, opts) {
         _tmCopy(app.target) + '</div>';
 
     const eps = (app.entryPoints || []).join(' \u00b7 ');
-    const mws = (app.middlewares || []).map(m => _esc(m)).join(' \u00b7 ');
+    const mws = [
+        ...(app.middlewares || []).map(m => _esc(m)),
+        ...(app.entrypointMiddlewares || []).map(m => `<span title="Applied via entrypoint">${_esc(m)} ep</span>`),
+    ].join(' \u00b7 ');
     const meta = [
         eps ? `<span>${_esc(eps)}</span>` : '',
         mws ? `<span class="tm-mw">${mws}</span>` : '',
@@ -827,11 +829,9 @@ function renderRouteGrid(apps) {
         grid.className = '';
         grid.innerHTML = `<div class="svc-list">${header}${grid.innerHTML}</div>`;
     } else if (_tmOn) {
-        grid.className = 'grid gap-3';
-        grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(330px, 1fr))';
+        grid.className = 'tm-card-grid';
     } else {
         grid.className = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4';
-        grid.style.gridTemplateColumns = '';
     }
     _routeCardEls = Array.from(grid.querySelectorAll('.route-card'));
 }
@@ -1600,6 +1600,7 @@ function toggleBulkSelect(id) {
         if (cb) cb.checked = _bulkSelected.has(id);
         card.style.outline = _bulkSelected.has(id) ? '2px solid var(--blue)' : '';
         card.style.outlineOffset = _bulkSelected.has(id) ? '-2px' : '';
+        card.classList.toggle('tm-sel', _bulkSelected.has(id));
     }
 }
 

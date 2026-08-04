@@ -421,13 +421,73 @@ async function deleteMw(name, configFile) {
     } catch(e) { showToast('Error deleting middleware', 'error'); }
 }
 
+function _tmMwIcon(mw) {
+    const y = (mw.yaml || '').toLowerCase();
+    if (y.includes('forwardauth') || y.includes('basicauth') || y.includes('digestauth')) return 'ph-shield-check';
+    if (y.includes('ratelimit'))     return 'ph-gauge';
+    if (y.includes('ipallowlist') || y.includes('ipwhitelist')) return 'ph-funnel';
+    if (y.includes('redirect'))      return 'ph-arrow-u-up-right';
+    if (y.includes('headers'))       return 'ph-brackets-curly';
+    if (y.includes('plugin'))        return 'ph-plug';
+    if (y.includes('compress'))      return 'ph-file-zip';
+    return 'ph-dots-three-circle';
+}
+
+function _tmMwKind(mw) {
+    const m = (mw.yaml || '').match(/^\s*([A-Za-z]+)\s*:/m);
+    return m ? m[1] : 'middleware';
+}
+
+function _tmMwUsage(mw) {
+    const pool = window._lastRenderedApps || (typeof APP_DATA !== 'undefined' ? APP_DATA : []) || [];
+    const bare = String(mw.name).split('@')[0];
+    const hit = x => String(x).split('@')[0] === bare;
+    return pool.filter(a => (a.middlewares || []).some(hit) || (a.entrypointMiddlewares || []).some(hit)).length;
+}
+
+function _tmMwChained(mw) {
+    const bare = String(mw.name).split('@')[0];
+    const esc = bare.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp('(^|[\\s\\[,\'"])' + esc + '(@[\\w.-]+)?([\\s\\],\'"]|$)', 'm');
+    return (_allMiddlewares || []).some(o => o.name !== mw.name && re.test(o.yaml || ''));
+}
+
+function _tmMwCard(mw, showCf) {
+    const mwJson = JSON.stringify(mw).replace(/'/g, '&#39;');
+    const cfArg  = mw.configFile ? `,'${_esc(mw.configFile)}'` : ",''";
+    const typeLower = (mw.type || 'http').toLowerCase();
+    const used = _tmMwUsage(mw);
+    const chained = used ? false : _tmMwChained(mw);
+    const usage = used ? `used by ${used} route${used > 1 ? 's' : ''}`
+                       : chained ? 'used in a chain' : 'unused';
+    const yaml = String(mw.yaml || '').split('\n').slice(0, 4).join('\n');
+    const rail = `<span class="tm-rail tm-rail-sm" onclick="event.stopPropagation()">` +
+        `<button type="button" class="tm-btn" title="Edit" data-mw='${mwJson}' onclick="event.stopPropagation();handleMwEdit(this)"><i class="ph-bold ph-pencil-simple"></i></button>` +
+        `<button type="button" class="tm-btn" title="Delete" onclick="event.stopPropagation();deleteMw('${_esc(mw.name)}'${cfArg})"><i class="ph-bold ph-trash"></i></button>` +
+        '</span>';
+    return `<div class="tm-card mw-card" data-mwname="${_esc(mw.name.toLowerCase())}" data-mwtype="${typeLower}" style="--tm-accent:var(--purple)" data-mw='${mwJson}' onclick="openMwDetail(this)">
+        <div class="tm-head">
+            <span class="tm-ic tm-ic-tile"><i class="ph-bold ${_tmMwIcon(mw)}"></i></span>
+            <div class="tm-head-txt">
+                <div class="tm-title">${typeLower === 'tcp' ? '<span class="rm-proto-pill rm-proto-tcp">TCP</span>' : ''}<span class="tm-name">${_esc(mw.name)}</span></div>
+                <div class="tm-sub">${_esc(_tmMwKind(mw))}</div>
+            </div>${rail}
+        </div>
+        <div class="tm-code">${_esc(yaml)}</div>
+        <div class="tm-foot"><span class="tm-meta ${used || chained ? '' : 'tm-warn'}">${usage}</span>${showCf ? _tmCf(mw.configFile) : ''}</div>
+    </div>`;
+}
+
 function renderMwGrid(middlewares) {
     _allMiddlewares = middlewares;
     const grid = document.getElementById('mwGrid');
     if (!grid) return;
     const staticEmpty = document.getElementById('mwStaticEmpty');
     if (staticEmpty) staticEmpty.style.display = 'none';
+    const _tmOn = _tmModern() && _mwViewMode !== 'list';
+    const _tmCfShow = _tmOn && new Set(middlewares.map(m => m.configFile).filter(Boolean)).size > 1;
     grid.innerHTML = middlewares.map(mw => {
+        if (_tmOn) return _tmMwCard(mw, _tmCfShow);
         const typeLower = (mw.type || 'http').toLowerCase();
         const typeUpper = typeLower === 'tcp' ? 'TCP' : 'HTTP';
         const badgeClass = typeLower === 'tcp' ? 'badge-tcp' : 'badge-http';
@@ -446,6 +506,8 @@ function renderMwGrid(middlewares) {
         const header = `<div class="svc-list-header mw-list-grid"><div>Protocol</div><div>Name</div><div>Config File</div><div></div></div>`;
         grid.className = '';
         grid.innerHTML = `<div class="svc-list">${header}${grid.innerHTML}</div>`;
+    } else if (_tmOn) {
+        grid.className = 'tm-card-grid';
     } else {
         grid.className = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4';
     }

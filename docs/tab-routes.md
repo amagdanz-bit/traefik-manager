@@ -28,6 +28,10 @@ The filter bar above the grid lets you narrow routes by:
 
 Toggle between **grid** (default) and **list** view using the button in the filter bar. List view shows a compact table with Status, Protocol, Name, Domain/Rule, Target, Entry Points, and action buttons.
 
+In the [Modern layout](guide.md), grid view uses the redesigned card. The name sits on the top line with small glyphs for anything worth flagging - a padlock for TLS, an open amber padlock without it, a cube for provider-managed routes, a pause for disabled ones, and a warning shield for `insecureSkipVerify`. Below it are the route's hosts and its backend target, each with a copy button; a route matching several hosts shows the first two and a `+N` you can hover for the rest, and a load-balanced route marks its target with the extra backend count. Entry points, middlewares, and the service name run along the footer. **More**, **Edit**, and an enable/disable toggle appear as a rail in the top right on hover, and clicking anywhere else on the card opens the detail panel.
+
+The config file name appears as a chip in the footer only when your routes are genuinely spread across more than one file - single-file users never see it.
+
 ## App icons
 
 Enable **Settings - Interface - Routes - Show app icons** to display an app icon next to each route name, in both grid and list view. The toggle is **off by default** and is a per-browser preference (it applies to the Host and to remote agents).

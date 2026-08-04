@@ -13,6 +13,8 @@ The **Middlewares** tab manages all middleware definitions stored in `dynamic.ym
 
 Toggle between **grid** (default) and **list** view using the button in the filter bar. List view shows Protocol, Name, Config File, and action buttons in a compact table.
 
+In the [Modern layout](guide.md), grid view uses the redesigned card: a type glyph, the middleware name with its Traefik type below it, the first few lines of its YAML, and a footer showing how many routes reference it (`unused` in amber when nothing does). Edit and delete sit in a hover rail in the card's top right; clicking anywhere else opens the detail panel. The config file name appears as a chip in the footer only when your middlewares are actually spread across more than one file, so single-file users never see it.
+
 ## Creating a middleware 
 
 Click **Add Middleware** in the top bar.

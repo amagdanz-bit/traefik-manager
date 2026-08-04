@@ -12,6 +12,8 @@ The **Services** tab shows all services registered in Traefik across every provi
 
 Toggle between **grid** (default) and **list** view using the button in the filter bar. List view shows a compact table with Status, Protocol, Name, Provider, Servers, and Used By columns.
 
+In the [Modern layout](guide.md), grid view uses the redesigned card: the service name with its type and provider below it, a status dot on the icon, its backend server URLs (each with a copy button), and a footer line with the server count, healthy-server ratio, and sticky or health-check flags. The number of routes using the service sits at the footer's right. Clicking the card opens the service detail panel.
+
 ## Filtering 
 
 - **Search** - filter by service name
