@@ -12,6 +12,8 @@ The **Certs** tab shows TLS certificates managed by Traefik, read from two sourc
 - Expiry date (parsed from the certificate)
 - Source file, so you can tell which storage file or PEM a certificate came from
 
+In the [Modern layout](guide.md), certificates use the redesigned card shared by the rest of the app: the main domain with its resolver below it, the additional SANs each with a copy button, and the expiry date with the days remaining coloured green, amber under 30 days, and red under 7.
+
 Certificates are **read-only** - they are issued and renewed automatically by Traefik. To revoke or force a renewal, do so via your Traefik configuration.
 
 ## Enabling the tab

@@ -1013,3 +1013,8 @@ html.tm-modern .tm-card.tm-sel .tm-rail { display: none; }
     html.tm-modern .tm-copy { opacity: .5; }
 }
 html.tm-modern .tm-card-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr)); }
+html.tm-modern .tm-proto { font: 700 8.5px/1 'JetBrains Mono', monospace; letter-spacing: 0.09em; color: var(--muted); margin-right: 6px; flex-shrink: 0; align-self: center; }
+html.tm-modern .tm-proto-tcp { color: var(--green); }
+html.tm-modern .tm-proto-udp { color: #e2c041; }
+html.tm-modern .tm-card-flat { cursor: default; }
+html.tm-modern .tm-card-flat:hover { border-color: var(--border); box-shadow: none; }

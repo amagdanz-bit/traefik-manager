@@ -200,7 +200,7 @@ function renderServicesTable() {
                 <div class="tm-head">
                     <span class="tm-ic tm-ic-tile"><i class="ph-bold ${composite.length ? 'ph-share-network' : 'ph-hard-drives'}"></i><span class="status-dot ${dotCls}" title="${_esc(dotTitle)}"></span></span>
                     <div class="tm-head-txt">
-                        <div class="tm-title">${proto !== 'HTTP' ? `<span class="rm-proto-pill rm-proto-${proto.toLowerCase()}">${proto}</span>` : ''}<span class="tm-name">${_esc(name)}</span></div>
+                        <div class="tm-title">${proto !== 'HTTP' ? `<span class="tm-proto tm-proto-${proto.toLowerCase()}">${proto}</span>` : ''}<span class="tm-name">${_esc(name)}</span></div>
                         <div class="tm-sub">${_esc(type || 'service')} \u00b7 ${_esc(provider)}</div>
                     </div>
                     <span class="tm-rail tm-rail-sm" onclick="event.stopPropagation()"><button type="button" class="tm-btn" title="Details" onclick="event.stopPropagation();openSvcDetail(${globalIdx})"><i class="ph-bold ph-info"></i></button></span>

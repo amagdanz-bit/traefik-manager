@@ -112,18 +112,16 @@ function renderDockerRoutes() {
     const cards = items.map((r, i) => {
         const globalIdx = _allDockerRoutes.indexOf(r);
         const target = r._svcInfo?.containerAddr || r._svcInfo?.url || null;
-        const containerRow = (r._svcInfo?.containerAddr && r._svcInfo?.url && r._svcInfo.containerAddr !== r._svcInfo.url)
-            ? `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Container</div><div class="text-xs font-mono truncate" style="color:var(--muted)">${r._svcInfo.containerAddr}</div></div>`
-            : '';
+        const showContainer = r._svcInfo?.containerAddr && r._svcInfo?.url && r._svcInfo.containerAddr !== r._svcInfo.url;
         return renderProviderCard(r, {
             onDetailClick: `openDockerRouteDetail(${globalIdx})`,
             target,
-            extraRows: containerRow,
+            rows: showContainer ? [{ label: 'Container', value: r._svcInfo.containerAddr, icon: 'ph-cube' }] : [],
         });
     }).join('');
 
     document.getElementById('dockerContent').innerHTML =
-        `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${cards}</div>`;
+        `<div class="${providerGridClass()}">${cards}</div>`;
 }
 
 async function openDockerRouteDetail(idx) {

@@ -8,6 +8,8 @@ Enable this tab via **Settings - Interface - TABS - TLS Options**.
 
 A card per named TLS options profile defined across all mounted config files. Each card shows the profile name, key settings (min version, SNI strict, cipher count), the raw YAML block, and edit/delete buttons.
 
+In the [Modern layout](guide.md), this tab uses the redesigned card shared by the rest of the app: the actions live in a hover rail in the card's top right, and clicking anywhere else opens the detail panel. The Modern card also reports how many routes reference the profile, and shows the config file name only when your profiles are spread across more than one file.
+
 ## Creating a profile
 
 Click **Add TLS Profile** and fill in:

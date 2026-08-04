@@ -11,6 +11,9 @@ The **HTTP Provider** tab shows all routes sourced from Traefik's HTTP provider 
 - Entry points
 - Full detail view via the info button
 
+
+In the [Modern layout](guide.md), these read-only routes use the redesigned card shared by the rest of the app, with the same host, target and footer layout as the Routes tab.
+
 Routes are **read-only** - edit them at the source HTTP endpoint Traefik is polling.
 
 ## Enabling the tab

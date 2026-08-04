@@ -732,7 +732,7 @@ function _tmRouteCard(app, i, opts) {
     return `<div class="tm-card route-card${bulkSel ? ' tm-sel' : ''}" ${dataAttrs} style="--tm-accent:var(--blue)" onclick="openRouteDetailFromCard(this)">
         <div class="tm-head">${bulkCheckbox}${head}
             <div class="tm-head-txt">
-                <div class="tm-title">${proto !== 'http' ? `<span class="rm-proto-pill rm-proto-${proto}">${proto.toUpperCase()}</span>` : ''}<span class="tm-name">${_esc(app.name)}</span>${glyphs}</div>
+                <div class="tm-title">${proto !== 'http' ? `<span class="tm-proto tm-proto-${proto}">${proto.toUpperCase()}</span>` : ''}<span class="tm-name">${_esc(app.name)}</span>${glyphs}</div>
             </div>${rail}
         </div>
         <div class="tm-vals">${valRows}</div>

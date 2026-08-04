@@ -29,6 +29,23 @@ function renderCertCards() {
         const expiryBadge = daysLeft !== null
             ? `<span class="badge" style="background:${daysLeft<7?'rgba(248,81,73,0.15)':daysLeft<30?'rgba(210,153,34,0.15)':'rgba(63,185,80,0.15)'};color:${expiryColor};border-color:${expiryColor}40">${daysLeft}d left</span>`
             : '';
+        if (_tmModern()) {
+            const extra = sans.filter(d => d !== main);
+            const vals = extra.slice(0, 2).map(d =>
+                `<div class="tm-val tm-val-host"><i class="ph-bold ph-globe-simple"></i><span class="tm-v">${_esc(d)}</span>${_tmCopy(d)}</div>`).join('')
+                + (extra.length > 2 ? `<div class="tm-val"><i class="ph-bold ph-dot" style="opacity:0"></i><span class="tm-more" title="${_esc(extra.join(', '))}">+${extra.length - 2} more</span></div>` : '');
+            return `<div class="tm-card tm-card-flat"${daysLeft !== null && daysLeft < 7 ? ' data-health="down"' : ''} style="--tm-accent:${expiryColor}">
+                <div class="tm-head">
+                    <span class="tm-ic tm-ic-tile"><i class="ph-bold ph-certificate"></i></span>
+                    <div class="tm-head-txt">
+                        <div class="tm-title"><span class="tm-name">${_esc(main)}</span></div>
+                        <div class="tm-sub">${_esc(resolver)}</div>
+                    </div>
+                </div>
+                ${vals ? `<div class="tm-vals">${vals}</div>` : ''}
+                <div class="tm-foot"><span class="tm-meta">expires ${_esc(expiryStr)}${extra.length ? ` · ${extra.length + 1} domains` : ''}</span>${daysLeft !== null ? `<span class="tm-cf" style="color:${expiryColor}">${daysLeft}d left</span>` : ''}</div>
+            </div>`;
+        }
         return `<div class="card p-4">
             <div class="flex items-start justify-between mb-3">
                 <div class="flex items-center gap-2 min-w-0">
@@ -45,7 +62,7 @@ function renderCertCards() {
         </div>`;
     }).join('');
     document.getElementById('certsContent').innerHTML =
-        `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${cards}</div>`;
+        `<div class="${_tmModern() ? 'tm-card-grid' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'}">${cards}</div>`;
 }
 
 async function refreshCertsTab() {
@@ -108,6 +125,52 @@ function filterTlsOptions() {
     renderTlsOptions(_tlsOptions.filter(o => o.name.toLowerCase().includes(q)));
 }
 
+function _tlsVer(v) {
+    return String(v).replace(/^VersionTLS(\d)(\d)$/, 'TLS $1.$2');
+}
+
+function _tmTlsOptCard(o, i, cfShow) {
+    const mtls = o.clientAuthType && o.clientAuthType !== 'NoClientCert';
+    const sub = [
+        o.minVersion ? _tlsVer(o.minVersion) + '+' : '',
+        o.maxVersion ? 'max ' + _tlsVer(o.maxVersion) : '',
+        o.sniStrict ? 'SNI strict' : '',
+        mtls ? 'mTLS' : '',
+    ].filter(Boolean).join(' \u00b7 ') || 'defaults';
+
+    const val = (icon, text, title) => `<div class="tm-val"><i class="ph-bold ${icon}"></i><span class="tm-v" title="${_esc(title || text)}">${_esc(text)}</span></div>`;
+    const vals = [
+        o.cipherSuites?.length ? val('ph-list-numbers', `${o.cipherSuites.length} cipher suite${o.cipherSuites.length > 1 ? 's' : ''}`, o.cipherSuites.join('\n')) : '',
+        o.curvePreferences?.length ? val('ph-circle-notch', o.curvePreferences.join(', ')) : '',
+        o.alpnProtocols?.length ? val('ph-swap', o.alpnProtocols.join(', ')) : '',
+        mtls ? val('ph-identification-card', o.clientAuthType) : '',
+    ].filter(Boolean).join('');
+
+    const rail = `<span class="tm-rail" onclick="event.stopPropagation()">` +
+        `<button type="button" class="tm-btn" title="Details" data-idx="${i}" onclick="event.stopPropagation();_tlsOptInfo(this)"><i class="ph-bold ph-info"></i></button>` +
+        `<button type="button" class="tm-btn" title="Edit" data-idx="${i}" onclick="event.stopPropagation();_tlsOptEdit(this)"><i class="ph-bold ph-pencil-simple"></i></button>` +
+        `<button type="button" class="tm-btn" title="Delete" onclick="event.stopPropagation();deleteTlsOption('${_esc(o.name)}','${_esc(o.configFile || '')}')"><i class="ph-bold ph-trash"></i></button>` +
+        '</span>';
+
+    return `<div class="tm-card tls-opt-card" data-name="${_esc(o.name.toLowerCase())}" data-idx="${i}" style="--tm-accent:var(--green)" onclick="openTlsOptDetail(_tlsOptions[${i}])">
+        <div class="tm-head">
+            <span class="tm-ic tm-ic-tile"><i class="ph-bold ph-lock-key"></i></span>
+            <div class="tm-head-txt">
+                <div class="tm-title"><span class="tm-name">${_esc(o.name)}</span></div>
+                <div class="tm-sub">${_esc(sub)}</div>
+            </div>${rail}
+        </div>
+        ${vals ? `<div class="tm-vals">${vals}</div>` : ''}
+        <div class="tm-foot"><span class="tm-meta">${_tmTlsOptUsage(o)}</span>${cfShow ? _tmCf(o.configFile) : ''}</div>
+    </div>`;
+}
+
+function _tmTlsOptUsage(o) {
+    const pool = window._lastRenderedApps || (typeof APP_DATA !== 'undefined' ? APP_DATA : []) || [];
+    const n = pool.filter(r => r.tlsOptionsProfile === o.name).length;
+    return n ? `used by ${n} route${n > 1 ? 's' : ''}` : 'unused';
+}
+
 function renderTlsOptions(opts) {
     const el = document.getElementById('tlsOptsContent');
     if (!el) return;
@@ -115,9 +178,12 @@ function renderTlsOptions(opts) {
         el.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-lock-key text-4xl block mb-3 opacity-30"></i><p class="text-sm">No TLS profiles defined.</p><p class="text-xs mt-1">Click <strong>Add TLS Profile</strong> to create one.</p></div>`;
         return;
     }
-    const cards = opts.map((o, i) => {
+    const cfShow = new Set(opts.map(o => o.configFile).filter(Boolean)).size > 1;
+    const cards = opts.map(o => {
+        const i = _tlsOptions.indexOf(o);
+        if (_tmModern()) return _tmTlsOptCard(o, i, cfShow);
         const cfBadge = o.configFile ? `<span class="badge badge-muted" style="font-size:9px">${_esc(o.configFile)}</span>` : '';
-        const verBadge = o.minVersion ? `<span class="badge badge-green" style="font-size:9px"><i class="ph-bold ph-lock"></i> ${_esc(o.minVersion.replace('VersionTLS','TLS '))}+</span>` : '';
+        const verBadge = o.minVersion ? `<span class="badge badge-green" style="font-size:9px"><i class="ph-bold ph-lock"></i> ${_esc(_tlsVer(o.minVersion))}+</span>` : '';
         const sniBadge = o.sniStrict ? `<span class="badge" style="font-size:9px;background:rgba(36,161,222,0.12);color:var(--blue);border:1px solid rgba(36,161,222,0.35)">SNI Strict</span>` : '';
         const mtlsBadge = (o.clientAuthType && o.clientAuthType !== 'NoClientCert') ? `<span class="badge badge-muted" style="font-size:9px">mTLS</span>` : '';
 
@@ -155,7 +221,7 @@ function renderTlsOptions(opts) {
             </div>
         </div>`;
     }).join('');
-    el.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">${cards}</div>`;
+    el.innerHTML = `<div class="${_tmModern() ? 'tm-card-grid' : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4'}">${cards}</div>`;
 }
 
 function _tlsOptEdit(btn) {

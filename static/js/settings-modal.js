@@ -1190,6 +1190,17 @@ function _rerenderCardGrids() {
     if (typeof renderServicesTable === 'function' && typeof _allServices !== 'undefined' && _allServices.length) {
         renderServicesTable();
     }
+    if (typeof renderCertCards === 'function' && typeof _allCerts !== 'undefined' && _allCerts.length) {
+        renderCertCards();
+    }
+    if (typeof renderTlsOptions === 'function' && typeof _tlsOptions !== 'undefined' && _tlsOptions.length) {
+        renderTlsOptions(_tlsOptions);
+    }
+    if (typeof renderPluginCards === 'function' && typeof _allPlugins !== 'undefined' && _allPlugins.length) {
+        renderPluginCards();
+    }
+    const active = document.querySelector('.tab-content.active');
+    if (active && typeof switchTab === 'function') switchTab(active.id.replace(/^tab-/, ''));
 }
 
 function setStatBarScope(v) {

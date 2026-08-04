@@ -9,6 +9,8 @@ The **Plugins** tab shows Traefik plugins declared in the static `traefik.yml` c
 - Version
 - Settings (if any are configured)
 
+In the [Modern layout](guide.md), this tab uses the redesigned card shared by the rest of the app, with the GitHub link, details, edit and remove actions in a hover rail, and a footer showing how many middlewares reference the plugin.
+
 When the [Static Config tab](static.md) is enabled (i.e. `STATIC_CONFIG_PATH` is set and the file is mounted read-write), the Plugins tab gains **Add**, **Edit**, and **Delete** actions. Without it, plugins are read-only and must be managed by hand in `traefik.yml`.
 
 ## Installing a plugin

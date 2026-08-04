@@ -74,12 +74,11 @@ function renderKubernetesRoutes() {
         return `<span class="badge badge-udp" style="font-size:9px">UDP</span>`;
     };
 
-    const providerBadge = r => {
+    const providerKind = r => {
         const p = r.provider || (r.name || '').split('@')[1] || '';
-        const labels = { kubernetescrd: 'CRD', kubernetes: 'Ingress', kubernetesgateway: 'Gateway' };
-        const label = labels[p] || p;
-        return `<span class="badge badge-muted" style="font-size:9px">${label}</span>`;
+        return { kubernetescrd: 'CRD', kubernetes: 'Ingress', kubernetesgateway: 'Gateway' }[p] || p;
     };
+    const providerBadge = r => `<span class="badge badge-muted" style="font-size:9px">${providerKind(r)}</span>`;
 
     const shortName = r => (r.name || '').split('@')[0];
 
@@ -103,16 +102,16 @@ function renderKubernetesRoutes() {
 
     const cards = items.map(r => {
         const globalIdx = _allKubernetesRoutes.indexOf(r);
-        const nsRow = r.namespace ? `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Namespace</div><div class="text-xs font-mono truncate" style="color:var(--muted)">${r.namespace}</div></div>` : '';
         return renderProviderCard(r, {
             onDetailClick: `openKubernetesRouteDetail(${globalIdx})`,
             extraBadges:   providerBadge(r),
-            extraRows:     nsRow,
+            tag:           providerKind(r),
+            rows:          r.namespace ? [{ label: 'Namespace', value: r.namespace, icon: 'ph-folder-simple' }] : [],
         });
     }).join('');
 
     document.getElementById('kubernetesContent').innerHTML =
-        `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${cards}</div>`;
+        `<div class="${providerGridClass()}">${cards}</div>`;
 }
 
 async function openKubernetesRouteDetail(idx) {
