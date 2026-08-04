@@ -4792,6 +4792,8 @@ def api_agents_update(agent_id):
             for field in updatable:
                 if field in data:
                     agents[i][field] = data[field]
+            if 'visible_tabs' in data:
+                agents[i]['visible_tabs'] = _settings.sanitize_visible_tabs(data['visible_tabs'])
             if 'crowdsec_api_key' in data and data['crowdsec_api_key'] not in ('', '***'):
                 agents[i]['crowdsec_api_key'] = str(data['crowdsec_api_key'])
             if 'crowdsec_machine_password' in data and data['crowdsec_machine_password'] not in ('', '***'):

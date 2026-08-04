@@ -22,6 +22,12 @@ UI_PREF_SCOPES = ('statBarScope',)
 UI_PREF_KEYS = UI_PREF_BOOLS + UI_PREF_VIEWS + UI_PREF_SCOPES
 
 
+def sanitize_visible_tabs(tabs) -> dict:
+    if not isinstance(tabs, dict):
+        return {}
+    return {k: bool(v) for k, v in tabs.items() if k in OPTIONAL_TABS}
+
+
 def sanitize_ui_prefs(prefs) -> dict:
     if not isinstance(prefs, dict):
         return {}

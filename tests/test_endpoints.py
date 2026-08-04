@@ -91,3 +91,21 @@ def test_dashboard_override_url_scheme_is_validated(client):
     assert 'url' not in ov['data']
     assert 'url' not in ov['blank']
     assert ov['evil']['display_name'] == 'Evil'
+
+
+def test_agent_visible_tabs_follow_the_hub(client):
+    from core import agents_store
+    agents_store.save_agents_file([
+        {'id': 'ag1', 'name': 'Test Agent', 'url': 'http://10.0.0.5:8280', 'api_key': 'k'},
+    ])
+    r = client.put('/api/agents/ag1',
+                   json={'visible_tabs': {'logs': True, 'certs': 0, 'bogus': True, 'docker': 'yes'}},
+                   headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+
+    agents = client.get('/api/agents').get_json()['agents']
+    ag = next(a for a in agents if a['id'] == 'ag1')
+    assert ag['visible_tabs'] == {'logs': True, 'certs': False, 'docker': True}
+
+    reloaded = agents_store.load_agents()
+    assert reloaded[0]['visible_tabs'] == {'logs': True, 'certs': False, 'docker': True}
