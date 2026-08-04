@@ -1689,7 +1689,7 @@ async function openRouteDetail(name, protocol, appData) {
     const editBtn = document.getElementById('detailEditBtn');
 
     
-    badge.className = 'badge badge-' + protocol;
+    badge.className = 'd-flat d-proto' + (protocol === 'tcp' ? ' d-on' : protocol === 'udp' ? ' d-warn' : '');
     badge.textContent = protocol.toUpperCase();
     title.textContent = name;
 
@@ -1769,11 +1769,7 @@ function closeRouteDetail() {
 function renderDetailPanel(app, protocol, liveRouter, liveService, entrypoints) {
     const status = liveRouter ? liveRouter.status : null;
     const routerError = liveRouter ? (liveRouter.error || null) : null;
-    const statusBadge = status === 'enabled'
-        ? `<span class="badge badge-green"><i class="ph-fill ph-check-circle text-xs"></i> Enabled</span>`
-        : status === 'disabled' || status === 'error'
-        ? `<span class="badge badge-red"><i class="ph-fill ph-warning-circle text-xs"></i> ${status}</span>`
-        : `<span class="badge badge-muted">Unknown</span>`;
+    const statusBadge = _dState(status === 'enabled' ? 'Enabled' : status);
     const errorBanner = routerError
         ? `<div class="mt-4 p-3 rounded-lg text-xs font-mono leading-relaxed" style="color:var(--red);background:rgba(248,81,73,0.08);border:1px solid rgba(248,81,73,0.25);word-break:break-word"><i class="ph-bold ph-warning-circle" style="margin-right:6px"></i>${_esc(routerError)}</div>`
         : '';
@@ -1795,12 +1791,12 @@ function renderDetailPanel(app, protocol, liveRouter, liveService, entrypoints) 
             <div class="text-xs font-bold uppercase tracking-wider mb-1" style="color:var(--muted)">Entry Point</div>
             <div class="font-bold text-sm" style="color:var(--text)">${epName.toUpperCase()}</div>
             ${addr ? `<div class="font-mono text-xs mt-1" style="color:var(--muted)">${addr}</div>` : ''}
-            ${isHttps ? `<div class="mt-1"><span class="badge badge-green text-xs" style="font-size:9px">TLS</span></div>` : ''}
+            ${isHttps ? '<div class="mt-1 d-flat d-on">TLS</div>' : ''}
         </div>`;
     }).join('') || `<div class="flow-box text-center"><div class="text-xs font-bold uppercase tracking-wider mb-1" style="color:var(--muted)">Entry Point</div><div class="text-sm" style="color:var(--muted)">-</div></div>`;
 
     const hasTls = liveRouter ? !!(liveRouter.tls) : !!(app.entryPoints && app.entryPoints.includes('https'));
-    const tlsInfo = hasTls ? `<div class="mt-1.5"><span class="badge badge-green text-xs" style="font-size:9px"><i class="ph-bold ph-shield-check"></i> TLS</span></div>` : '';
+    const tlsInfo = hasTls ? '<div class="mt-1.5 d-flat d-on"><i class="ph-bold ph-shield-check"></i> TLS</div>' : '';
 
     const serversList = liveService ? (liveService.loadBalancer?.servers || []) : [];
     const serversHtml = serversList.length > 0
@@ -1835,10 +1831,10 @@ function renderDetailPanel(app, protocol, liveRouter, liveService, entrypoints) 
 
     const routerRows = [
         ['Status', statusBadge, true],
-        ['Provider', `<span class="badge badge-muted">${provider}</span>`, true],
+        ['Provider', _dText(provider, 'd-off'), true],
         ['Rule', rule || '-', false],
         ['Name', (liveRouter ? liveRouter.name : app.name) || '-', false],
-        ['Entry Points', routerEPs.map(ep => `<span class="badge badge-muted mr-1">${ep}</span>`).join('') || '-', true],
+        ['Entry Points', _dList(routerEPs), true],
         ['Service', app.service_name || '-', false],
         ['Priority', String(priority), false],
     ];
@@ -1848,10 +1844,10 @@ function renderDetailPanel(app, protocol, liveRouter, liveService, entrypoints) 
     let tlsSection = '';
     if (protocol === 'http' || protocol === 'tcp') {
         const tlsRows = [
-            ['TLS', tlsData ? `<span class="badge badge-green">True</span>` : `<span class="badge badge-red">False</span>`, true],
+            ['TLS', _dBool(!!tlsData, 'Enabled', 'Disabled'), true],
             ['Certificate Resolver', tlsData ? (tlsData.certResolver || '-') : '-', false],
             ['Options', tlsData ? (tlsData.options || 'default') : '-', false],
-            ['Passthrough', (protocol === 'tcp' && tlsData && tlsData.passthrough) ? `<span class="badge badge-green">True</span>` : `<span class="badge badge-red">False</span>`, true],
+            ['Passthrough', _dBool(protocol === 'tcp' && tlsData && !!tlsData.passthrough), true],
         ];
         tlsSection = renderSection('TLS', 'ph-shield', tlsRows);
     }
@@ -1861,12 +1857,12 @@ function renderDetailPanel(app, protocol, liveRouter, liveService, entrypoints) 
     let mwSection = '';
     if (protocol !== 'udp') {
         if (mws.length > 0) {
-            const mwHtml = `<div class="p-4 flex flex-wrap gap-2">${mws.map(m => `<span class="badge" style="background:rgba(163,113,247,0.12);color:var(--purple);border:1px solid rgba(163,113,247,0.3)">${m}</span>`).join('')}</div>`;
+            const mwHtml = `<div class="p-4">${_dList(mws, 'd-mw')}</div>`;
             mwSection = `<div class="detail-section mb-4">
                 <div class="detail-section-header flex items-center gap-2 px-4 py-3" style="background:var(--card);border-bottom:1px solid var(--border)">
                     <i class="ph-bold ph-plugs-connected text-sm" style="color:var(--purple)"></i>
                     <span class="font-bold text-sm" style="color:var(--text)">Middlewares</span>
-                    <span class="badge badge-muted ml-1">${mws.length}</span>
+                    ${_dCount(mws.length)}
                 </div>${mwHtml}</div>`;
         } else {
             mwSection = `<div class="detail-section mb-4">
@@ -1895,9 +1891,7 @@ function renderDetailPanel(app, protocol, liveRouter, liveService, entrypoints) 
     ]);
 
     const svcRows = [
-        ['Status', svcStatus === 'enabled'
-            ? `<span class="badge badge-green">Enabled</span>`
-            : svcStatus !== '-' ? `<span class="badge badge-muted">${svcStatus}</span>` : '-', svcStatus !== '-'],
+        ['Status', svcStatus !== '-' ? _dState(svcStatus === 'enabled' ? 'Enabled' : svcStatus) : '-', svcStatus !== '-'],
         ['Type', 'Load Balancer', false],
         ['Pass Host Header', svcPassHostHeader, false],
         ...(app.containerAddr ? [['Container', app.containerAddr, false]] : []),
@@ -1921,7 +1915,7 @@ function renderDetailPanel(app, protocol, liveRouter, liveService, entrypoints) 
                 <div class="flex items-center gap-2 px-4 py-3" style="background:var(--card);border-bottom:1px solid var(--border)">
                     <i class="ph-bold ph-tag text-sm" style="color:var(--blue)"></i>
                     <span class="font-bold text-sm" style="color:var(--text)">Docker Labels</span>
-                    <span class="badge badge-muted ml-auto" style="font-size:9px">${labelEntries.length}</span>
+                    <span class="d-n ml-auto">${labelEntries.length}</span>
                 </div>
                 <div class="px-4 py-2">${labelRows}</div>
             </div>`;

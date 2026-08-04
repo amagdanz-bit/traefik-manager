@@ -301,18 +301,17 @@ function openSvcDetail(idx) {
 
     
     const proto = s._proto || 'HTTP';
-    document.getElementById('svcDetailProtoBadge').className = `badge badge-${proto.toLowerCase()}`;
+    document.getElementById('svcDetailProtoBadge').className = 'd-flat d-proto' + (proto === 'TCP' ? ' d-on' : proto === 'UDP' ? ' d-warn' : '');
     document.getElementById('svcDetailProtoBadge').textContent = proto;
     document.getElementById('svcDetailTitle').textContent = (s.name || '').split('@')[0];
 
     const provider = (s.name || '').includes('@') ? s.name.split('@').pop() : 'file';
     const type = s.loadBalancer ? 'loadbalancer' : s.mirroring ? 'mirroring' : s.weighted ? 'weighted' : s.failover ? 'failover' : '-';
     const status = s.status || 'unknown';
-    const statusBadge = status === 'enabled'
-        ? `<span class="flex items-center gap-1.5"><span class="inline-block w-2 h-2 rounded-full bg-green-500"></span><span class="text-green-400">Success</span></span>`
-        : status === 'disabled' || status === 'error'
-        ? `<span class="flex items-center gap-1.5"><span class="inline-block w-2 h-2 rounded-full bg-red-500"></span><span class="text-red-400">Error</span></span>`
-        : `<span class="flex items-center gap-1.5"><span class="inline-block w-2 h-2 rounded-full bg-yellow-500"></span><span class="text-yellow-400">Warning</span></span>`;
+    const stKind = status === 'enabled' ? ['status-online', 'd-on', 'Success']
+                 : status === 'disabled' || status === 'error' ? ['status-offline', 'd-bad', 'Error']
+                 : ['status-checking', 'd-warn', 'Warning'];
+    const statusBadge = `<span class="d-state d-flat ${stKind[1]}"><span class="status-dot ${stKind[0]}"></span>${stKind[2]}</span>`;
 
     const lb = s.loadBalancer || {};
     const servers = lb.servers || [];
@@ -341,7 +340,7 @@ function openSvcDetail(idx) {
     
     const usedBy = s.usedBy || [];
     const usedByHtml = usedBy.length > 0
-        ? usedBy.map(r => `<span class="badge badge-muted mr-1 mb-1">${_esc(r)}</span>`).join('')
+        ? _dList(usedBy, 'd-blue')
         : `<span class="text-xs" style="color:var(--muted)">-</span>`;
 
     const kv = (label, val, isHtml = false) => `
@@ -360,9 +359,9 @@ function openSvcDetail(idx) {
             <div class="card p-0 overflow-hidden">
                 <div class="px-4">
                     ${kv('Type', type)}
-                    ${kv('Provider', `<span class="badge badge-muted">${provider}</span>`, true)}
+                    ${kv('Provider', _dText(provider, 'd-off'), true)}
                     ${kv('Status', statusBadge, true)}
-                    ${kv('Pass Host Header', `<span class="badge ${passHostHeader === 'true' ? 'badge-green' : 'badge-red'}">${passHostHeader === 'true' ? 'True' : 'False'}</span>`, true)}
+                    ${kv('Pass Host Header', passHostHeader === '-' ? '-' : _dBool(passHostHeader === 'true'), true)}
                 </div>
             </div>
         </div>
@@ -372,7 +371,7 @@ function openSvcDetail(idx) {
             <div class="flex items-center gap-2 mb-3">
                 <i class="ph-bold ph-globe" style="color:var(--green)"></i>
                 <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--muted)">Servers</span>
-                <span class="badge badge-muted">${servers.length}</span>
+                ${_dCount(servers.length)}
             </div>
             <div class="card p-0 overflow-hidden">${serversHtml}</div>
         </div>

@@ -123,7 +123,7 @@ async function openKubernetesRouteDetail(idx) {
     const provider = r.provider || (r.name || '').split('@')[1] || 'kubernetes';
     const labels = { kubernetescrd: 'CRD', kubernetes: 'Ingress', kubernetesgateway: 'Gateway' };
     const providerLabel = labels[provider] || provider;
-    const k8sBadge = `<span class="badge badge-muted ml-2" style="font-size:10px"><i class="ph-bold ph-circles-three" style="font-size:9px"></i> k8s/${providerLabel}</span>`;
+    const k8sBadge = `<span class="d-flat d-off ml-2"><i class="ph-bold ph-circles-three"></i> k8s/${providerLabel}</span>`;
 
     const svcRaw  = r.service || '';
     const appData = {

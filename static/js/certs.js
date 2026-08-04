@@ -255,9 +255,9 @@ function openTlsOptDetail(o) {
     const usedByHtml = `<div class="mt-5">
         <div class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--muted)">Used By</div>
         ${usedBy.length ? usedBy.map(r => `<div class="flex items-center gap-2 py-2" style="border-bottom:1px solid var(--border)">
-            <span class="badge badge-http" style="font-size:9px">HTTP</span>
+            <span class="d-flat d-off">HTTP</span>
             <span class="text-sm font-mono truncate" style="color:var(--text)">${_esc(r.name)}</span>
-            ${r.configFile ? `<span class="badge badge-muted ml-auto" style="font-size:9px;flex-shrink:0">${_esc(r.configFile)}</span>` : ''}
+            ${r.configFile ? `<span class="d-flat d-off ml-auto" style="flex-shrink:0">${_esc(r.configFile)}</span>` : ''}
         </div>`).join('') : `<div class="text-xs py-2" style="color:var(--muted)">No routes using this profile.</div>`}
     </div>`;
     const yamlHtml = o.yaml ? `<div class="mt-5"><button onclick="const b=this.nextElementSibling;const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('i').className='ph-bold '+(open?'ph-caret-right':'ph-caret-down')+' text-xs mr-1'" class="flex items-center text-xs mb-2" style="color:var(--muted);background:none;border:none;cursor:pointer;padding:0"><i class="ph-bold ph-caret-right text-xs mr-1"></i><span class="font-semibold uppercase tracking-wider">Raw YAML</span></button><div style="display:none"><div class="rounded-lg p-4 overflow-x-auto" style="background:var(--input-bg);border:1px solid var(--border)"><pre class="text-xs font-mono leading-relaxed" style="color:var(--green)">${_esc(o.yaml)}</pre></div></div></div>` : '';

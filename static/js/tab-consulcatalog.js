@@ -103,7 +103,7 @@ async function openConsulCatalogRouteDetail(idx) {
 
     document.getElementById('detailEditBtn').style.display = 'none';
 
-    const badge = `<span class="badge badge-muted ml-2" style="font-size:10px"><i class="ph-bold ph-address-book" style="font-size:9px"></i> consul catalog</span>`;
+    const badge = `<span class="d-flat d-off ml-2"><i class="ph-bold ph-address-book"></i> consul catalog</span>`;
 
     const appData = {
         id:           (r.name || '').split('@')[0],

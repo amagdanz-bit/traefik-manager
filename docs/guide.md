@@ -115,6 +115,8 @@ The whole interface has two layouts, chosen under **Settings - Interface - Layou
 
 Modern also replaces every card in the app with a single redesigned card - routes, middlewares, services, certificates, TLS profiles, plugins, and each provider tab all use it. Coloured badges and pill shapes are gone: what used to be a badge is now either a small glyph on the title line (a padlock for TLS, an open amber padlock without it, a cube for provider-managed routes, a pause for disabled ones) or plain text in the footer. Values such as hosts, backend targets, and module paths each get a copy button on hover, and the actions for a card - **More**, **Edit**, an enable/disable toggle, delete - live in a rail that fades in on hover in the card's top right. Clicking anywhere else on a card opens its detail panel. Classic keeps the card design it has always had.
 
+The detail panels changed in **both** layouts, since they are one shared component: the protocol label, router and service status, TLS and passthrough, entry points, middlewares, provider, and the per-provider tag are all plain coloured text rather than pills, with a status dot wherever live state is reported.
+
 | Tab                           | Description                                                                    |
 | -------------------------------| --------------------------------------------------------------------------------|
 | [Dashboard](tab-dashboard.md) | Routes grouped by category with app icons, custom groups, per-card editing, and one-click app launching |

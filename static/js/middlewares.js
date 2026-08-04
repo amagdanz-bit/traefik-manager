@@ -652,7 +652,7 @@ function openMwDetail(btn) {
     const editBtn = document.getElementById('mwDetailEditBtn');
 
     const typeLower = (mw.type || 'http').toLowerCase();
-    badge.className = 'badge badge-' + (typeLower === 'tcp' ? 'tcp' : 'http');
+    badge.className = 'd-flat d-proto' + (typeLower === 'tcp' ? ' d-on' : '');
     badge.textContent = typeLower === 'tcp' ? 'TCP' : 'HTTP';
     title.textContent = mw.name;
 

@@ -1018,3 +1018,13 @@ html.tm-modern .tm-proto-tcp { color: var(--green); }
 html.tm-modern .tm-proto-udp { color: #e2c041; }
 html.tm-modern .tm-card-flat { cursor: default; }
 html.tm-modern .tm-card-flat:hover { border-color: var(--border); box-shadow: none; }
+.d-flat { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; letter-spacing: -0.01em; }
+.d-on { color: var(--green); }
+.d-off { color: var(--muted); }
+.d-warn { color: var(--yellow); }
+.d-bad { color: var(--red); }
+.d-mw { color: var(--purple); }
+.d-blue { color: var(--blue); }
+.d-state { display: inline-flex; align-items: center; gap: 6px; }
+.d-n { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; margin-left: 5px; }
+.d-proto { font-weight: 700; font-size: 9px; letter-spacing: 0.09em; color: var(--muted); flex-shrink: 0; }

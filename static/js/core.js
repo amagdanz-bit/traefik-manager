@@ -187,6 +187,31 @@ async function _populateConfigFileSelect(which) {
     }
 }
 
+function _dText(v, cls) {
+    return `<span class="d-flat ${cls || ''}">${_esc(String(v))}</span>`;
+}
+
+function _dBool(on, yes, no) {
+    return `<span class="d-flat ${on ? 'd-on' : 'd-off'}">${on ? (yes || 'Yes') : (no || 'No')}</span>`;
+}
+
+function _dList(items, cls) {
+    const list = (items || []).filter(x => x !== undefined && x !== null && x !== '');
+    if (!list.length) return '-';
+    return `<span class="d-flat ${cls || 'd-off'}">${list.map(x => _esc(String(x))).join(' \u00b7 ')}</span>`;
+}
+
+function _dState(state) {
+    const s = String(state || '').toLowerCase();
+    const dot = s === 'enabled' ? 'status-online' : (s === 'disabled' || s === 'error') ? 'status-offline' : 'status-unknown';
+    const cls = s === 'enabled' ? 'd-on' : (s === 'disabled' || s === 'error') ? 'd-bad' : 'd-off';
+    return `<span class="d-state d-flat ${cls}"><span class="status-dot ${dot}"></span>${_esc(state || 'Unknown')}</span>`;
+}
+
+function _dCount(n) {
+    return `<span class="d-n">${n}</span>`;
+}
+
 function _esc(s) {
     return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
