@@ -124,3 +124,27 @@ def test_app_aliases_point_at_core(app_module):
     assert app_module._build_apps is rb._build_apps
     assert app_module._merge_service is rb._merge_service
     assert app_module.HEADERS_PRESET_FEATURES is rb.HEADERS_PRESET_FEATURES
+
+
+def _tls_of(router, proto='http'):
+    cfg = {proto: {'routers': {'r': dict(router, service='r-service')},
+                   'services': {'r-service': {'loadBalancer': {'servers': [
+                       {'url' if proto == 'http' else 'address': 'http://10.0.0.1:80'}]}}}}}
+    return rb._build_apps(cfg, '', {}, {}, {})[0]['tls']
+
+
+def test_http_tls_reflects_key_presence_not_truthiness():
+    rule = {'rule': 'Host(`a.com`)'}
+    assert _tls_of(rule) is False
+    assert _tls_of(dict(rule, tls=False)) is False
+    assert _tls_of(dict(rule, tls={})) is True
+    assert _tls_of(dict(rule, tls=None)) is True
+    assert _tls_of(dict(rule, tls={'certResolver': 'le'})) is True
+
+
+def test_tcp_without_a_tls_key_is_not_reported_as_tls():
+    rule = {'rule': 'HostSNI(`*`)'}
+    assert _tls_of(rule, 'tcp') is None
+    assert _tls_of(dict(rule, tls=False), 'tcp') is None
+    assert _tls_of(dict(rule, tls={}), 'tcp') == {}
+    assert _tls_of(dict(rule, tls={'passthrough': True}), 'tcp') == {'passthrough': True}

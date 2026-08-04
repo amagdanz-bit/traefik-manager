@@ -224,6 +224,7 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
             target_url = api_svc_urls.get(f'http:{svc_key}', 'N/A')
         app_id = f"{config_file}::{rname}" if (env.MULTI_CONFIG and config_file) else rname
         tls_http = rdata.get('tls', {})
+        tls_on   = 'tls' in rdata and rdata.get('tls') is not False
         transport_name = lb.get('serversTransport', '')
         transports_cfg = http_config.get('serversTransports') or {}
         transport_cfg  = cfg_mod.as_dict(transports_cfg.get(transport_name)) if transport_name else {}
@@ -233,7 +234,7 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
                      'service_name': svc_name, 'target': target_url,
                      'middlewares': _to_list(rdata.get('middlewares')),
                      'entryPoints': _to_list(rdata.get('entryPoints')), 'protocol': 'http',
-                     'tls': bool(tls_http), 'enabled': True,
+                     'tls': tls_on, 'enabled': True,
                      'passHostHeader': lb.get('passHostHeader', True),
                      'certResolver': tls_http.get('certResolver', '') if isinstance(tls_http, dict) else '',
                      'tlsDomains': tls_http.get('domains', []) if isinstance(tls_http, dict) else [],
@@ -266,11 +267,11 @@ def _build_apps(config, config_file='', extra_http_svcs=None, extra_tcp_svcs=Non
         if target == 'N/A' and api_svc_urls:
             target = api_svc_urls.get(f'tcp:{svc_key}', 'N/A')
         app_id = f"{config_file}::{rname}" if (env.MULTI_CONFIG and config_file) else rname
-        tls_tcp = rdata.get('tls', {})
+        tls_tcp = None if ('tls' not in rdata or rdata.get('tls') is False) else cfg_mod.as_dict(rdata.get('tls'))
         apps.append({'id': app_id, 'name': rname, 'rule': rdata.get('rule', ''),
                      'service_name': svc_name, 'target': target,
                      'middlewares': _to_list(rdata.get('middlewares')), 'entryPoints': _to_list(rdata.get('entryPoints')),
-                     'protocol': 'tcp', 'tls': tls_tcp if isinstance(tls_tcp, dict) else ({} if tls_tcp else None), 'enabled': True,
+                     'protocol': 'tcp', 'tls': tls_tcp, 'enabled': True,
                      'certResolver': tls_tcp.get('certResolver', '') if isinstance(tls_tcp, dict) else '',
                      'serviceType': _service_type(tcp_svcs.get(svc_key)),
                      'servers': [str(s.get('address', '')) for s in (cfg_mod.as_dict(cfg_mod.as_dict(tcp_svcs.get(svc_key)).get('loadBalancer')).get('servers') or []) if isinstance(s, dict) and s.get('address')],
@@ -462,7 +463,7 @@ def _build_all_apps(include_external=True, include_internal=False):
                              'service_name': svc_name, 'target': target_url,
                              'middlewares': router.get('middlewares', []),
                              'entryPoints': router.get('entryPoints', []),
-                             'protocol': 'http', 'tls': bool(router.get('tls')), 'enabled': False,
+                             'protocol': 'http', 'tls': 'tls' in router and router.get('tls') is not False, 'enabled': False,
                              'passHostHeader': svc.get('loadBalancer', {}).get('passHostHeader', True),
                              'serviceType': _service_type(svc),
                              'configFile': cf, 'provider': 'file', 'entrypointMiddlewares': []})
@@ -472,7 +473,7 @@ def _build_all_apps(include_external=True, include_internal=False):
             all_apps.append({'id': route_id, 'name': rname, 'rule': router.get('rule', ''),
                              'service_name': svc_name, 'target': target,
                              'middlewares': router.get('middlewares', []), 'entryPoints': router.get('entryPoints', []),
-                             'protocol': 'tcp', 'tls': bool(router.get('tls')), 'enabled': False,
+                             'protocol': 'tcp', 'tls': None if ('tls' not in router or router.get('tls') is False) else cfg_mod.as_dict(router.get('tls')), 'enabled': False,
                              'serviceType': _service_type(svc),
                              'configFile': cf, 'provider': 'file'})
         else:
