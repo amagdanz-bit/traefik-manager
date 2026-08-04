@@ -1,0 +1,246 @@
+http:
+  routers:
+    jellyfin:
+      rule: Host(`jellyfin.example.com`)
+      entryPoints: [websecure]
+      middlewares: [compress]
+      service: jellyfin-service
+      tls:
+        certResolver: letsencrypt
+    sonarr:
+      rule: Host(`sonarr.example.com`)
+      entryPoints: [websecure]
+      service: sonarr-service
+      tls:
+        certResolver: letsencrypt
+    radarr:
+      rule: Host(`radarr.example.com`)
+      entryPoints: [websecure]
+      service: radarr-service
+      tls:
+        certResolver: letsencrypt
+    overseerr:
+      rule: Host(`requests.example.com`)
+      entryPoints: [websecure]
+      middlewares: [authelia, security-headers]
+      service: overseerr-service
+      tls:
+        certResolver: letsencrypt
+    immich:
+      rule: Host(`photos.example.com`)
+      entryPoints: [websecure]
+      service: immich-service
+      priority: 20
+      tls:
+        certResolver: letsencrypt
+    grafana:
+      rule: Host(`grafana.example.com`)
+      entryPoints: [websecure]
+      middlewares: [authelia]
+      service: grafana-service
+      tls:
+        certResolver: letsencrypt
+    uptime-kuma:
+      rule: Host(`status.example.com`)
+      entryPoints: [websecure]
+      service: uptime-kuma-service
+      tls:
+        certResolver: letsencrypt
+    myspeed:
+      rule: Host(`speed.example.lan`)
+      entryPoints: [web]
+      service: myspeed-service
+    glances:
+      rule: Host(`glances.example.lan`)
+      entryPoints: [intranet]
+      service: glances-service
+    portainer:
+      rule: Host(`portainer.example.com`)
+      entryPoints: [websecure]
+      service: portainer-service
+      tls:
+        certResolver: letsencrypt
+    vaultwarden:
+      rule: Host(`vault.example.com`)
+      entryPoints: [websecure]
+      middlewares: [security-headers, rate-limit]
+      service: vaultwarden-service
+      tls:
+        certResolver: letsencrypt
+    authelia:
+      rule: Host(`auth.example.com`)
+      entryPoints: [websecure]
+      service: authelia-service
+      tls:
+        certResolver: letsencrypt
+    homeassistant:
+      rule: Host(`home.example.com`)
+      entryPoints: [websecure]
+      service: homeassistant-service
+      tls:
+        certResolver: letsencrypt
+    nextcloud:
+      rule: Host(`cloud.example.com`)
+      entryPoints: [websecure]
+      middlewares: [security-headers]
+      service: nextcloud-service
+      tls:
+        certResolver: letsencrypt
+    nextcloud-office:
+      rule: Host(`office.example.com`)
+      entryPoints: [websecure]
+      middlewares: [authelia]
+      service: nextcloud-service
+      tls:
+        certResolver: letsencrypt
+    paperless:
+      rule: Host(`docs.example.com`)
+      entryPoints: [websecure]
+      service: paperless-service
+      tls:
+        certResolver: letsencrypt
+    pihole:
+      rule: Host(`pihole.example.com`)
+      entryPoints: [websecure]
+      service: pihole-service
+      tls:
+        certResolver: letsencrypt
+    code-server:
+      rule: Host(`code.example.com`)
+      entryPoints: [websecure]
+      middlewares: [authelia]
+      service: code-server-service
+      tls:
+        certResolver: letsencrypt
+  services:
+    jellyfin-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.10.11:8096
+    sonarr-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.10.12:8989
+    radarr-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.10.13:7878
+    overseerr-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.10.14:5055
+    immich-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.10.21:2283
+          - url: http://10.0.10.22:2283
+        sticky:
+          cookie:
+            name: immich_lb
+            secure: true
+        healthCheck:
+          path: /api/server/ping
+          interval: 15s
+          timeout: 3s
+    grafana-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.20.11:3000
+    uptime-kuma-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.20.12:3001
+    myspeed-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.20.13:5216
+    glances-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.20.14:61208
+    portainer-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.30.11:9000
+    vaultwarden-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.40.11:8080
+    authelia-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.40.12:9091
+    homeassistant-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.50.11:8123
+    nextcloud-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.60.11:443
+        passHostHeader: true
+    paperless-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.60.12:8000
+    pihole-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.70.11:80
+    code-server-service:
+      loadBalancer:
+        servers:
+          - url: http://10.0.80.11:8443
+  middlewares:
+    authelia:
+      forwardAuth:
+        address: http://10.0.40.12:9091/api/verify?rd=https://auth.example.com
+        trustForwardHeader: true
+        authResponseHeaders:
+          - Remote-User
+          - Remote-Groups
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        frameDeny: true
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 50
+    compress:
+      compress: {}
+    redirect-to-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+    internal-only:
+      ipAllowList:
+        sourceRange:
+          - 10.0.0.0/8
+          - 192.168.0.0/16
+tcp:
+  routers:
+    postgres:
+      rule: HostSNI(`db.example.com`)
+      entryPoints: [postgres]
+      service: postgres-service
+      tls:
+        passthrough: true
+  services:
+    postgres-service:
+      loadBalancer:
+        servers:
+          - address: 10.0.90.11:5432
+udp:
+  routers:
+    wireguard:
+      entryPoints: [wireguard-udp]
+      service: wireguard-service
+  services:
+    wireguard-service:
+      loadBalancer:
+        servers:
+          - address: 10.0.90.12:51820

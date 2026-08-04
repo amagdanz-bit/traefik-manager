@@ -1,0 +1,20 @@
+domains:
+  - example.com
+  - example.lan
+cert_resolver: letsencrypt
+traefik_api_url: http://tmshot-traefik:8080
+acme_json_path: /config/acme.json
+access_log_path: /config/access.log
+auth_enabled: true
+setup_complete: true
+default_theme: dark
+visible_tabs:
+  dashboard: true
+  routemap: true
+  certs: true
+  tls: true
+  logs: true
+self_route:
+  domain: manager.example.com
+  router_name: traefik-manager
+  entry_point: websecure

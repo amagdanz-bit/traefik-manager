@@ -16,11 +16,17 @@ images/
 docs/
 build.sh
 
-# Tests
+# Tests / tooling
 tests/
 pytest.ini
 requirements-dev.txt
 .pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+ruff.toml
+Makefile
+scripts/
 
 # Docker
 docker-compose.yml

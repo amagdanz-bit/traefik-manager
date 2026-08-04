@@ -1,0 +1,25 @@
+"""Resize captures to the docs standard and install them into docs/public/images.
+
+Run inside a container with pillow: reads /new/{dark,light}/*.png, writes
+/img/{theme}-{name}.png at 1920x1080, and rebuilds the two README carousel
+GIFs from the dashboard, routes, middlewares and route map frames.
+"""
+import os
+
+from PIL import Image
+
+copied = 0
+for theme in ("dark", "light"):
+    for f in sorted(os.listdir(f"/new/{theme}")):
+        im = Image.open(f"/new/{theme}/{f}").convert("RGB")
+        im = im.resize((1920, 1080), Image.LANCZOS)
+        im.save(f"/img/{theme}-{f[:-4]}.png", optimize=True)
+        copied += 1
+
+for theme in ("dark", "light"):
+    frames = [Image.open(f"/img/{theme}-{n}.png").convert("RGB").resize((1280, 720), Image.LANCZOS)
+              for n in ("dashboard", "routes-cards", "middlewares-cards", "route-map")]
+    frames[0].save(f"/img/readme-carousel-{theme}.gif", save_all=True,
+                   append_images=frames[1:], duration=2400, loop=0, optimize=True)
+
+print(f"{copied} screenshots installed, 2 carousel GIFs rebuilt")

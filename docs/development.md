@@ -102,6 +102,14 @@ The suite runs against a temporary config directory and never touches a real Tra
 | `test_lint.py` | No undefined names; every `core` alias in `app.py` resolves |
 | `test_ui_prefs.py` | Interface preferences round-trip through settings; unknown keys are dropped |
 
+### Screenshots
+
+`scripts/screenshots/run.sh` recaptures every desktop screenshot for the docs
+and README from a seeded demo environment - both themes, all tabs and modals,
+installed straight into `docs/public/images/`. Run it against the beta image
+after visual changes and review the git diff. Details in
+[scripts/screenshots/README.md](https://github.com/chr0nzz/traefik-manager/tree/main/scripts/screenshots).
+
 ### Conventions
 
 - **Assert the YAML, not the status code.** A `200` from `/save` proves nothing about what landed on disk. Load the written file and assert its structure - that is where config-corrupting bugs show up.

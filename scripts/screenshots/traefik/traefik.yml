@@ -1,0 +1,19 @@
+api:
+  insecure: true
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+  intranet:
+    address: ":8081"
+  postgres:
+    address: ":5432"
+  wireguard-udp:
+    address: ":51820/udp"
+providers:
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+log:
+  level: WARN
