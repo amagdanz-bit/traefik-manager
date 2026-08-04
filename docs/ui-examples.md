@@ -1,4 +1,4 @@
-# Traefik Manager – UI Examples
+# Traefik Manager - UI Examples
 
 Switch (light / dark toggle in the top-right corner).
 

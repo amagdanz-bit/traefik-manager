@@ -388,7 +388,7 @@ function dashBuildIconTile(r) {
     const st      = _rmRouterStatus[r.name] || null;
     const presCls = st ? (st.err || !st.up ? 'rm-presence-down' : 'rm-presence-up') : 'rm-presence-unknown';
     const name    = ov.display_name || r.name;
-    el.title = url ? `${name} \u2014 ${url.replace(/^https?:\/\//, '')}` : name;
+    el.title = url ? `${name} - ${url.replace(/^https?:\/\//, '')}` : name;
     el.innerHTML = `
         <span class="rm-tile-ic">
             <img class="rm-tile-img" src="${_esc(rmGetIconUrl(r))}" onerror="window.rmIconFallback(this)" data-slug="${_esc(rmIconSlug(r))}" alt="">

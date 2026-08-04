@@ -98,7 +98,7 @@ main { overflow-x: hidden; }
     /* Compact mode: keep 2 columns, stack legend tighter */
     #statsGrid.stats-compact .stat-cmp-header { margin-bottom:6px; }
 }
-/* ── Stat card fold/medium screens (640–900px) ───────────── */
+/* ── Stat card fold/medium screens (640-900px) ───────────── */
 @media (min-width: 640px) and (max-width: 900px) {
     /* Keep 2×2 in expanded mode - donuts need room */
     #statsGrid:not(.stats-compact) { grid-template-columns: repeat(2, 1fr); }
