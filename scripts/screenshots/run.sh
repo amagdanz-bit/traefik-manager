@@ -10,7 +10,7 @@
 # docs/public/images plus the README carousel GIFs. Never touches git.
 set -euo pipefail
 
-IMAGE="${1:-100.77.202.80:9999/traefik-manager:dev}"
+IMAGE="${1:-ghcr.io/chr0nzz/traefik-manager:beta}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 WORK="$(mktemp -d)"

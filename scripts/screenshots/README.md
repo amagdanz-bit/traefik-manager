@@ -4,7 +4,7 @@ Recaptures every desktop screenshot for the docs and README from a seeded
 demo environment, in both themes, at the repo's 1920x1080 standard.
 
 ```bash
-scripts/screenshots/run.sh                 # shoot the :dev image
+scripts/screenshots/run.sh                 # shoot ghcr.io/chr0nzz/traefik-manager:beta
 scripts/screenshots/run.sh ghcr.io/chr0nzz/traefik-manager:latest
 ```
 
