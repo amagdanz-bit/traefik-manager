@@ -568,6 +568,7 @@ function switchServer(agentId) {
     loadOverviewStats();
     refreshCurrentTab();
     loadOverviewStats();
+    if (typeof updateTmVersionBadge === 'function') updateTmVersionBadge();
 }
 
 async function _refreshStaticAvailability() {
