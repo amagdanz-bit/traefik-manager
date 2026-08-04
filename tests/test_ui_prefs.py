@@ -87,6 +87,7 @@ def test_sanitiser_accepts_every_documented_key():
     payload.update({k: 'list' for k in settings_mod.UI_PREF_VIEWS})
     payload.update({k: 'dashboard' for k in settings_mod.UI_PREF_SCOPES})
     payload.update({k: 'modern' for k in settings_mod.UI_PREF_LAYOUTS})
+    payload.update({k: 'icons' for k in settings_mod.UI_PREF_DENSITY})
     cleaned = settings_mod.sanitize_ui_prefs(payload)
     assert set(cleaned) == set(settings_mod.UI_PREF_KEYS)
 
@@ -112,3 +113,14 @@ def test_layout_mode_round_trips_and_rejects_junk(client):
     client.post('/api/settings/ui', json={'ui_prefs': {'layoutMode': 'yolo'}},
                 headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
     assert client.get('/api/settings/ui').get_json()['ui_prefs']['layoutMode'] == 'modern'
+
+
+def test_dash_pod_density_round_trips_and_validates(client):
+    r = client.post('/api/settings/ui', json={'ui_prefs': {'dashPodDensity': 'icons'}},
+                    headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+    assert client.get('/api/settings/ui').get_json()['ui_prefs']['dashPodDensity'] == 'icons'
+
+    client.post('/api/settings/ui', json={'ui_prefs': {'dashPodDensity': 'grid'}},
+                headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    assert client.get('/api/settings/ui').get_json()['ui_prefs']['dashPodDensity'] == 'icons'

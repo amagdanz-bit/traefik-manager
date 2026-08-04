@@ -461,8 +461,7 @@ async function openSettingsModal(panel) {
         const res  = await fetch('/api/settings');
         const data = await res.json();
         document.getElementById('settingsDomains').value          = (data.domains || []).join(', ');
-        const themeSel = document.getElementById('defaultThemeSelect');
-        if (themeSel) themeSel.value = data.default_theme || 'dark';
+        syncThemeButtons(data.default_theme || 'dark');
         document.getElementById('settingsCertResolver').value     = data.cert_resolver || '';
         document.getElementById('settingsApiUrl').value           = data.traefik_api_url || '';
         document.getElementById('settingsApiUser').value          = data.traefik_api_user || '';
@@ -623,11 +622,6 @@ async function testWebhook() {
         const d = await r.json();
         if (res) { res.style.color = d.ok ? 'var(--green)' : 'var(--red)'; res.textContent = d.ok ? 'Delivered.' : (d.error || 'Failed.'); }
     } catch(e) { if (res) { res.style.color='var(--red)'; res.textContent='Request failed.'; } }
-}
-
-function saveDefaultTheme() {
-    const val = document.getElementById('defaultThemeSelect')?.value || 'dark';
-    setTheme(val);
 }
 
 let _geoipEnabledState = false;
@@ -1151,6 +1145,11 @@ function loadUiTogglesIntoModal() {
     const lM = document.getElementById('layout-modern');
     if (lC) lC.className = 'proto-btn' + (layout === 'classic' ? ' active-http' : '');
     if (lM) lM.className = 'proto-btn' + (layout === 'modern' ? ' active-http' : '');
+    const dens = tmPref('dashPodDensity') === 'icons' ? 'icons' : 'list';
+    const dL = document.getElementById('dashdens-list');
+    const dI = document.getElementById('dashdens-icons');
+    if (dL) dL.className = 'proto-btn' + (dens === 'list' ? ' active-http' : '');
+    if (dI) dI.className = 'proto-btn' + (dens === 'icons' ? ' active-http' : '');
     const sc = document.getElementById('toggle-ui-statcards');
     const ep = document.getElementById('toggle-ui-entrypoints');
     const cs = document.getElementById('toggle-ui-compact-stats');
@@ -1182,6 +1181,12 @@ function setStatBarScope(v) {
     tmSetPref('statBarScope', v);
     applyUiPrefs();
     loadUiTogglesIntoModal();
+}
+
+function setDashPodDensity(v) {
+    tmSetPref('dashPodDensity', v);
+    loadUiTogglesIntoModal();
+    if (typeof window.refreshDashboardTab === 'function') window.refreshDashboardTab();
 }
 
 let _otpEnabled = false;

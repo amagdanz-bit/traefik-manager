@@ -24,6 +24,8 @@ Each route row shows:
 
 The backend target, full URL, and middleware list live in the row's tooltip; full detail stays in the route panel.
 
+Under **Settings - Interface** you can switch **Dashboard categories** from **Rows** to **Icons**, which renders each category as a compact five-across grid of app icons with a status dot, showing 25 per category before a *Show more* button. Useful once you have enough routes that the row list gets long.
+
 ### Launching apps
 
 Clicking a card opens the service in a new tab. The URL is derived from the route itself: the first `Host` in the rule, `https` when the router has TLS enabled and `http` otherwise, with a `PathPrefix` from the same rule appended.

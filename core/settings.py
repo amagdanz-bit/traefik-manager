@@ -20,7 +20,8 @@ UI_PREF_BOOLS = (
 UI_PREF_VIEWS = ('routeViewMode', 'mwViewMode', 'svcViewMode')
 UI_PREF_SCOPES = ('statBarScope',)
 UI_PREF_LAYOUTS = ('layoutMode',)
-UI_PREF_KEYS = UI_PREF_BOOLS + UI_PREF_VIEWS + UI_PREF_SCOPES + UI_PREF_LAYOUTS
+UI_PREF_DENSITY = ('dashPodDensity',)
+UI_PREF_KEYS = UI_PREF_BOOLS + UI_PREF_VIEWS + UI_PREF_SCOPES + UI_PREF_DENSITY + UI_PREF_LAYOUTS
 
 
 def sanitize_visible_tabs(tabs) -> dict:
@@ -50,6 +51,11 @@ def sanitize_ui_prefs(prefs) -> dict:
         if k in prefs:
             v = str(prefs[k]).strip().lower()
             if v in ('classic', 'modern'):
+                out[k] = v
+    for k in UI_PREF_DENSITY:
+        if k in prefs:
+            v = str(prefs[k]).strip().lower()
+            if v in ('list', 'icons'):
                 out[k] = v
     return out
 

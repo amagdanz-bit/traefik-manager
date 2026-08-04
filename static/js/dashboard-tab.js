@@ -373,13 +373,40 @@ function dashRenderPods(routes) {
 }
 
 const DASH_POD_LIMIT = 5;
+const DASH_ICON_LIMIT = 25;
+
+function dashPodDensity() {
+    return typeof tmPref === 'function' && tmPref('dashPodDensity') === 'icons' ? 'icons' : 'list';
+}
+
+function dashBuildIconTile(r) {
+    const ov  = (_rmConfig.route_overrides || {})[r.id] || {};
+    const url = _dashLaunchUrl(r, ov);
+    const el  = document.createElement(url ? 'a' : 'div');
+    el.className = 'rm-tile' + (url ? ' rm-tile-link' : '');
+    if (url) { el.href = url; el.target = '_blank'; el.rel = 'noopener noreferrer'; }
+    const st      = _rmRouterStatus[r.name] || null;
+    const presCls = st ? (st.err || !st.up ? 'rm-presence-down' : 'rm-presence-up') : 'rm-presence-unknown';
+    const name    = ov.display_name || r.name;
+    el.title = url ? `${name} \u2014 ${url.replace(/^https?:\/\//, '')}` : name;
+    el.innerHTML = `
+        <span class="rm-tile-ic">
+            <img class="rm-tile-img" src="${_esc(rmGetIconUrl(r))}" onerror="window.rmIconFallback(this)" data-slug="${_esc(rmIconSlug(r))}" alt="">
+            <span class="rm-presence ${presCls}"></span>
+        </span>
+        <span class="rm-tile-name">${_esc(name)}</span>
+    `;
+    return el;
+}
 
 function dashBuildPod(meta, routes) {
     const pod = document.createElement('div');
     pod.className = 'rm-pod';
     pod.style.setProperty('--pod-color', meta.color);
 
-    const overflow = routes.length > DASH_POD_LIMIT;
+    const icons    = dashPodDensity() === 'icons';
+    const limit    = icons ? DASH_ICON_LIMIT : DASH_POD_LIMIT;
+    const overflow = routes.length > limit;
 
     pod.innerHTML = `
         <div class="rm-pod-hdr">
@@ -387,17 +414,17 @@ function dashBuildPod(meta, routes) {
             <span class="rm-pod-name">${_esc(meta.name)}</span>
             <span class="rm-pod-count">${routes.length}</span>
         </div>
-        <div class="rm-pod-body"></div>
+        <div class="rm-pod-body${icons ? ' rm-pod-tiles' : ''}"></div>
         ${overflow ? `<button class="rm-pod-expand" data-expanded="false">
             <i class="ph-bold ph-caret-down" style="font-size:10px"></i>
-            Show ${routes.length - DASH_POD_LIMIT} more
+            Show ${routes.length - limit} more
         </button>` : ''}
     `;
 
     const body = pod.querySelector('.rm-pod-body');
     routes.forEach((r, i) => {
-        const row = dashBuildRouteRow(r);
-        if (overflow && i >= DASH_POD_LIMIT) row.classList.add('rm-pod-overflow', 'rm-pod-hidden');
+        const row = icons ? dashBuildIconTile(r) : dashBuildRouteRow(r);
+        if (overflow && i >= limit) row.classList.add('rm-pod-overflow', 'rm-pod-hidden');
         body.appendChild(row);
     });
 
@@ -406,7 +433,7 @@ function dashBuildPod(meta, routes) {
         btn.addEventListener('click', () => {
             const expanded = btn.dataset.expanded === 'true';
             btn.dataset.expanded = String(!expanded);
-            const hiddenCount = routes.length - DASH_POD_LIMIT;
+            const hiddenCount = routes.length - limit;
             pod.querySelectorAll('.rm-pod-overflow').forEach(el => {
                 el.classList.toggle('rm-pod-hidden', expanded);
             });

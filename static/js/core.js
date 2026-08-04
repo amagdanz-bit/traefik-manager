@@ -273,6 +273,7 @@ const TM_PREF_DEFAULTS = {
     showRouteIcons: false,
     routeViewMode: 'grid', mwViewMode: 'grid', svcViewMode: 'grid',
     statBarScope: 'all',
+    dashPodDensity: 'list',
     layoutMode: 'classic',
 };
 
@@ -288,6 +289,13 @@ function tmPref(key) {
         return typeof dflt === 'boolean' ? local !== 'false' : local;
     }
     return TM_PREF_DEFAULTS[key];
+}
+
+function syncThemeButtons(theme) {
+    ['dark', 'light', 'system'].forEach(t => {
+        const b = document.getElementById('theme-opt-' + t);
+        if (b) b.className = 'proto-btn' + (t === theme ? ' active-http' : '');
+    });
 }
 
 function tmSetPref(key, value) {
@@ -341,8 +349,7 @@ function setTheme(theme) {
     localStorage.setItem('tm-theme', theme);
     applyTheme(theme);
     window.TM_DEFAULT_THEME = theme;
-    const sel = document.getElementById('defaultThemeSelect');
-    if (sel) sel.value = theme;
+    syncThemeButtons(theme);
     fetch('/api/settings/theme', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },

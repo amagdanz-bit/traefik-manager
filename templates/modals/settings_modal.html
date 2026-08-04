@@ -762,23 +762,33 @@
                 <div class="modal-panel active" id="mpanel-ui">
                     <div style="margin-bottom:12px;">
                         <div class="text-xs font-medium mb-2" style="color:var(--muted);display:flex;align-items:center;gap:5px;"><i class="ph-bold ph-paint-brush"></i> APPEARANCE</div>
-                        <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
-                            <div class="flex items-center justify-between" style="padding:10px 12px;">
+                        <div class="settings-group" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                            <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
                                 <div>
                                     <div class="text-xs font-medium" style="color:var(--text)">Default theme</div>
                                     <div class="text-xs" style="color:var(--muted)">Also set by the theme toggle in the nav bar</div>
                                 </div>
-                                <select id="defaultThemeSelect" class="input-field" style="width:auto;min-width:110px" onchange="saveDefaultTheme()">
-                                    <option value="dark">Dark</option>
-                                    <option value="light">Light</option>
-                                    <option value="system">System</option>
-                                </select>
+                                <div class="flex gap-1 flex-shrink-0" style="margin-left:12px">
+                                    <button type="button" id="theme-opt-dark" onclick="setTheme('dark')" class="proto-btn" title="Dark" style="padding:4px 12px;font-size:11px;border-radius:6px"><i class="ph-bold ph-moon"></i></button>
+                                    <button type="button" id="theme-opt-light" onclick="setTheme('light')" class="proto-btn" title="Light" style="padding:4px 12px;font-size:11px;border-radius:6px"><i class="ph-bold ph-sun"></i></button>
+                                    <button type="button" id="theme-opt-system" onclick="setTheme('system')" class="proto-btn" title="System" style="padding:4px 12px;font-size:11px;border-radius:6px"><i class="ph-bold ph-desktop"></i></button>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
+                                <div>
+                                    <div class="text-xs font-medium" style="color:var(--text)">Layout</div>
+                                    <div class="text-xs" style="color:var(--muted)">Collapsible side navigation and full-width content</div>
+                                </div>
+                                <div class="flex gap-1 flex-shrink-0" style="margin-left:12px">
+                                    <button type="button" id="layout-classic" onclick="setLayoutMode('classic')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Classic</button>
+                                    <button type="button" id="layout-modern" onclick="setLayoutMode('modern')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Modern</button>
+                                </div>
                             </div>
                         </div>
                     </div>
                     <div style="margin-bottom:12px;">
                         <div class="text-xs font-medium mb-2" style="color:var(--muted);display:flex;align-items:center;gap:5px;"><i class="ph-bold ph-globe-hemisphere-west"></i> GEOLOCATION</div>
-                        <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                        <div class="settings-group" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
                             <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
                                 <div>
                                     <div class="text-xs font-medium" style="color:var(--text)">IP geolocation</div>
@@ -798,7 +808,7 @@
                     </div>
                     <div style="margin-bottom:12px;">
                         <div class="text-xs font-medium mb-2" style="color:var(--muted);display:flex;align-items:center;gap:5px;"><i class="ph-bold ph-squares-four"></i> DASHBOARD</div>
-                        <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                        <div class="settings-group" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
                             <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
                                 <div>
                                     <div class="text-xs font-medium" style="color:var(--text)">Show stat cards</div>
@@ -820,7 +830,7 @@
                                 </div>
                                 <div class="toggle-switch" id="toggle-ui-entrypoints" onclick="toggleUiPref('showEntrypoints')"><div class="toggle-knob"></div></div>
                             </div>
-                            <div class="flex items-center justify-between" style="padding:10px 12px;">
+                            <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
                                 <div>
                                     <div class="text-xs font-medium" style="color:var(--text)">Show on</div>
                                     <div class="text-xs" style="color:var(--muted)">Where the stat cards and entry points appear</div>
@@ -830,21 +840,21 @@
                                     <button type="button" id="scope-stats-dash" onclick="setStatBarScope('dashboard')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Dashboard</button>
                                 </div>
                             </div>
-                            <div class="flex items-center justify-between" style="padding:10px 12px;">
+                            <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
                                 <div>
-                                    <div class="text-xs font-medium" style="color:var(--text)">Layout</div>
-                                    <div class="text-xs" style="color:var(--muted)">Collapsible side navigation and full-width content</div>
+                                    <div class="text-xs font-medium" style="color:var(--text)">Dashboard categories</div>
+                                    <div class="text-xs" style="color:var(--muted)">Rows with domains, or a compact grid of app icons</div>
                                 </div>
                                 <div class="flex gap-1 flex-shrink-0" style="margin-left:12px">
-                                    <button type="button" id="layout-classic" onclick="setLayoutMode('classic')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Classic</button>
-                                    <button type="button" id="layout-modern" onclick="setLayoutMode('modern')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Modern</button>
+                                    <button type="button" id="dashdens-list" onclick="setDashPodDensity('list')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Rows</button>
+                                    <button type="button" id="dashdens-icons" onclick="setDashPodDensity('icons')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Icons</button>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div style="margin-bottom:12px;">
                         <div class="text-xs font-medium mb-2" style="color:var(--muted);display:flex;align-items:center;gap:5px;"><i class="ph-bold ph-list-bullets"></i> ROUTES</div>
-                        <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                        <div class="settings-group" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
                             <div class="flex items-center justify-between" style="padding:10px 12px;">
                                 <div>
                                     <div class="text-xs font-medium" style="color:var(--text)">Show app icons</div>
@@ -856,7 +866,7 @@
                     </div>
                     <div style="margin-bottom:12px;">
                         <div class="text-xs font-medium mb-2" style="color:var(--muted);display:flex;align-items:center;gap:5px;"><i class="ph-bold ph-navigation-arrow"></i> NAVBAR</div>
-                        <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                        <div class="settings-group" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
                             <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
                                 <div>
                                     <div class="text-xs font-medium" style="color:var(--text)">Show Traefik version badge</div>
@@ -903,7 +913,7 @@
                     </div>
                     <div>
                         <div class="text-xs font-medium mb-2" style="color:var(--muted);display:flex;align-items:center;gap:5px;"><i class="ph-bold ph-tabs"></i> TABS</div>
-                        <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                        <div class="settings-group" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
                             <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
                                 <div>
                                     <div class="text-xs font-medium" style="color:var(--text)">Dashboard</div>

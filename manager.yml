@@ -144,6 +144,7 @@ default_theme: "dark"
 #   showRouteIcons: false
 #   statBarScope: all      # all | dashboard
 #   layoutMode: classic    # classic | modern
+#   dashPodDensity: list   # list | icons
 #   routeViewMode: grid    # grid | list
 #   mwViewMode: grid
 #   svcViewMode: grid
