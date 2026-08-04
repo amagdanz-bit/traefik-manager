@@ -48,6 +48,10 @@ async function capture(theme) {
     await tab('certs');
     await shot('certs');
     await tab('logs', 2500);
+    await tab('plugins', 2000);
+    await shot('plugins');
+    await js(`openPluginForm()`); await sleep(1200); await shot('plugins-add');
+    await js(`closePluginForm()`); await sleep(500);
     await shot('logs');
 
     await tab('services', 600);

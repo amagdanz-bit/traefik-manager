@@ -13,6 +13,7 @@ visible_tabs:
   routemap: true
   certs: true
   tls: true
+  plugins: true
   logs: true
 self_route:
   domain: manager.example.com
