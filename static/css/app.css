@@ -1,5 +1,6 @@
 
 :root {
+    --accent: #24a1de;
     color-scheme: dark;
     --bg: #0d1117;
     --card: #161b22;
@@ -29,6 +30,7 @@
     --border: #d0d7de;
     --muted: #656d76;
     --text: #1f2328;
+    --accent: #0969da;
     --text-secondary: #36414c;
     --blue: #0969da;
     --green: #1a7f37;
@@ -458,6 +460,19 @@ a.rm-route-row { text-decoration: none; color: inherit; }
     .rm-row-btn { visibility: visible; opacity: 1; width: 28px; height: 28px; }
 }
 .rm-route-row:last-child { border-bottom: none; }
+
+.settings-group > div:last-child { border-bottom: none !important; }
+.rm-pod-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding: 6px; }
+.rm-tile { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 9px 4px; border-radius: 8px; text-decoration: none; color: inherit; transition: background 0.12s; }
+.rm-tile-link { cursor: pointer; }
+.rm-tile:hover { background: var(--btn-secondary-bg); }
+.rm-tile-ic { position: relative; width: 30px; height: 30px; }
+.rm-tile-img { width: 30px; height: 30px; border-radius: 7px; object-fit: contain; }
+.rm-tile .rm-presence { right: -2px; bottom: -2px; box-shadow: 0 0 0 2px var(--card); }
+.rm-tile-name { font-size: 10px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+.rm-tile:hover .rm-tile-name { color: var(--text); }
+@media (max-width: 640px) { .rm-pod-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
 .rm-route-info { flex: 1; min-width: 0; }
 .rm-route-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; }
 .rm-route-sub { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: 3px; display: flex; align-items: center; gap: 4px; min-width: 0; }
@@ -940,4 +955,62 @@ a.rm-route-row { text-decoration: none; color: inherit; }
 
     html.tm-modern #routeGrid.grid, html.tm-modern #mwGrid.grid, html.tm-modern .svc-card-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
     html.tm-modern .rm-pods-grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+}
+
+html.tm-modern .tm-card { position: relative; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 13px 14px 11px 15px; cursor: pointer; transition: border-color .12s, box-shadow .12s, opacity .12s; }
+html.tm-modern .tm-card:hover { border-color: var(--muted); box-shadow: 0 6px 20px rgba(0,0,0,.16); }
+html.tm-modern .tm-card::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2px; border-radius: 0 2px 2px 0; background: transparent; transition: background .12s; }
+html.tm-modern .tm-card:hover::before, html.tm-modern .tm-card:focus-within::before { background: var(--tm-accent, var(--blue)); box-shadow: 0 0 8px var(--tm-accent, var(--blue)); }
+html.tm-modern .tm-card[data-health="down"]::before { background: var(--red); box-shadow: 0 0 8px var(--red); }
+html.tm-modern .tm-card[data-enabled="false"] { opacity: .5; filter: saturate(.4); }
+html.tm-modern .tm-card[data-enabled="false"]:hover { opacity: .85; }
+html.tm-modern .tm-card[data-enabled="false"]::before { display: none; }
+html.tm-modern .tm-head { display: flex; align-items: flex-start; gap: 10px; }
+html.tm-modern .tm-ic { position: relative; width: 28px; height: 28px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+html.tm-modern .tm-ic-tile { background: var(--input-bg); }
+html.tm-modern .tm-ic > i { font-size: 14px; color: var(--muted); }
+html.tm-modern .tm-ic img { width: 28px; height: 28px; border-radius: 6px; object-fit: contain; }
+html.tm-modern .tm-ic .status-dot { position: absolute; right: -2px; bottom: -2px; box-shadow: 0 0 0 2px var(--card); }
+html.tm-modern .tm-ic-bare { width: 8px; height: 16px; margin-top: 3px; display: flex; align-items: center; flex-shrink: 0; }
+html.tm-modern .tm-head-txt { flex: 1; min-width: 0; }
+html.tm-modern .tm-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; font-weight: 600; letter-spacing: -.01em; color: var(--text); }
+html.tm-modern .tm-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html.tm-modern .tm-glyph { font-size: 11px; flex-shrink: 0; }
+html.tm-modern .tm-sub { margin-top: 2px; font: 500 11px/1.4 'JetBrains Mono', monospace; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html.tm-modern .tm-rail { display: flex; align-items: center; justify-content: flex-end; gap: 2px; width: 80px; flex-shrink: 0; position: relative; }
+html.tm-modern .tm-rail-sm { width: 54px; }
+html.tm-modern .tm-hint { font-size: 12px; color: var(--muted); opacity: .5; position: absolute; right: 4px; transition: opacity .12s; }
+html.tm-modern .tm-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; border: none; background: none; padding: 0; color: var(--muted); opacity: 0; cursor: pointer; transition: opacity .12s, background .12s, color .12s; }
+html.tm-modern .tm-btn i { font-size: 12px; }
+html.tm-modern .tm-card:hover .tm-hint, html.tm-modern .tm-card:focus-within .tm-hint { opacity: 0; }
+html.tm-modern .tm-card:hover .tm-btn, html.tm-modern .tm-card:focus-within .tm-btn { opacity: 1; }
+html.tm-modern .tm-btn:hover { background: var(--border); color: var(--text); }
+html.tm-modern .tm-btn-tog { color: var(--green); }
+html.tm-modern .tm-card[data-enabled="false"] .tm-btn-tog { color: var(--muted); }
+html.tm-modern .tm-vals { display: grid; row-gap: 4px; margin-top: 9px; }
+html.tm-modern .tm-val { display: flex; align-items: center; gap: 6px; min-width: 0; font: 400 12px/18px 'JetBrains Mono', monospace; }
+html.tm-modern .tm-val > i { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+html.tm-modern .tm-v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+html.tm-modern .tm-val-host .tm-v { color: var(--blue); }
+html.tm-modern .tm-val-rule .tm-v { color: var(--muted); }
+html.tm-modern .tm-val-target .tm-v { color: var(--green); }
+html.tm-modern .tm-more { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+html.tm-modern .tm-copy { font-size: 11px; color: var(--muted); opacity: 0; cursor: pointer; flex-shrink: 0; margin-left: auto; background: none; border: none; padding: 0; transition: opacity .12s, color .12s; }
+html.tm-modern .tm-val:hover .tm-copy { opacity: .7; }
+html.tm-modern .tm-copy:hover { opacity: 1; color: var(--text); }
+html.tm-modern .tm-code { margin-top: 9px; background: var(--input-bg); border-radius: 6px; padding: 8px 10px; height: 54px; overflow: hidden; font: 400 11px/1.55 'JetBrains Mono', monospace; color: var(--green); white-space: pre; -webkit-mask-image: linear-gradient(180deg,#000 60%,transparent); mask-image: linear-gradient(180deg,#000 60%,transparent); }
+html.tm-modern .tm-foot { display: flex; align-items: center; flex-wrap: nowrap; gap: 6px; font-size: 11px; margin-top: 9px; padding-top: 7px; border-top: 1px solid var(--border); min-width: 0; }
+html.tm-modern .tm-meta { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+html.tm-modern .tm-mw { color: var(--purple); }
+html.tm-modern .tm-sep { color: var(--muted); opacity: .45; }
+html.tm-modern .tm-warn { color: var(--yellow); }
+html.tm-modern .tm-svcname { color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
+html.tm-modern .tm-cf { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; max-width: 132px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--muted); }
+html.tm-modern .tm-cf:hover { color: var(--text); }
+html.tm-modern .tm-card.tm-sel { outline: 2px solid var(--blue); outline-offset: -2px; }
+html.tm-modern .tm-card.tm-sel .tm-rail { display: none; }
+@media (hover: none) {
+    html.tm-modern .tm-btn { opacity: 1; }
+    html.tm-modern .tm-hint { display: none; }
+    html.tm-modern .tm-copy { opacity: .5; }
 }

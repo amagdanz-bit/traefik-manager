@@ -642,6 +642,102 @@ function _routeIconHtml(app) {
     return `<img src="${url}" data-slug="${slug}" onerror="window.rmIconFallback(this)" alt="" class="route-app-icon" style="width:18px;height:18px;border-radius:4px;object-fit:contain;flex-shrink:0">`;
 }
 
+function _tmModern() {
+    return document.documentElement.classList.contains('tm-modern');
+}
+
+function _tmFolderMode(apps) {
+    const on = (typeof MULTI_CONFIG !== 'undefined' && MULTI_CONFIG) || (typeof CONFIG_DIR_SET !== 'undefined' && CONFIG_DIR_SET);
+    if (!on) return false;
+    const d = new Set((apps || []).filter(a => !a.provider || a.provider === 'file')
+                                  .map(a => a.configFile).filter(Boolean));
+    return d.size > 1;
+}
+
+function _tmCopy(val) {
+    return `<button type="button" class="tm-copy" title="Copy" onclick="event.stopPropagation();_copyToClipboard('${_esc(val)}')"><i class="ph-bold ph-copy"></i></button>`;
+}
+
+function _tmCf(name) {
+    if (!name) return '';
+    const short = String(name).replace(/\.(ya?ml)$/i, '');
+    return `<span class="tm-cf" title="${_esc(name)}"><i class="ph-bold ph-file-code"></i>${_esc(short)}</span>`;
+}
+
+function _tmRouteCard(app, i, opts) {
+    const proto      = (app.protocol || 'http').toLowerCase();
+    const enabled    = app.enabled !== false;
+    const isFile     = !app.provider || app.provider === 'file';
+    const appJson    = JSON.stringify(app).replace(/'/g, '&#39;');
+    const allDomains = [...(app.rule || '').matchAll(/Host\(`([^`]+)`\)/g)].map(m => m[1]);
+    const domain0    = allDomains[0] || '';
+    const openUrl    = (proto === 'http' && domain0 && !domain0.includes('{') && !domain0.includes('*') && !domain0.includes('HostRegexp')) ? 'https://' + domain0 : '';
+    const bulkSel    = _bulkMode && _bulkSelected.has(app.id);
+
+    const glyphs = [
+        app.provider && app.provider !== 'file'
+            ? `<i class="ph-bold ph-cube tm-glyph" style="color:var(--muted)" title="Managed by ${_esc(app.provider)} - read only"></i>` : '',
+        !enabled ? '<i class="ph-bold ph-pause tm-glyph" style="color:var(--muted)" title="Disabled"></i>' : '',
+        app.insecureSkipVerify
+            ? '<i class="ph-bold ph-shield-warning tm-glyph" style="color:var(--orange)" title="insecureSkipVerify - backend certificate not verified"></i>' : '',
+        proto === 'udp' ? '' : (app.tls
+            ? '<i class="ph-bold ph-lock-simple tm-glyph" style="color:var(--muted)" title="TLS"></i>'
+            : '<i class="ph-bold ph-lock-simple-open tm-glyph" style="color:var(--yellow)" title="No TLS"></i>'),
+    ].join('');
+
+    const iconUrl = (typeof _routeIconUrl === 'function' && window._showRouteIcons) ? _routeIconUrl(app) : '';
+    const head = iconUrl
+        ? `<span class="tm-ic"><img src="${iconUrl}" data-slug="${_esc(_routeIconSlug(app))}" onerror="window.rmIconFallback(this)" alt="" class="route-app-icon"><span class="status-dot status-checking" title="Checking..."></span></span>`
+        : `<span class="tm-ic-bare"><span class="status-dot status-checking" title="Checking..."></span></span>`;
+
+    let valRows;
+    if (proto === 'http' && allDomains.length) {
+        valRows = allDomains.slice(0, 2).map((d, n) =>
+            `<div class="tm-val tm-val-host"><i class="ph-bold ph-globe-simple" ${n ? 'style="opacity:0"' : ''}></i><span class="tm-v">${_esc(d)}</span>` +
+            (allDomains.length > 2 && n === 1 ? `<span class="tm-more" title="${_esc(allDomains.join(', '))}">+${allDomains.length - 2}</span>` : '') +
+            _tmCopy(d) + '</div>').join('');
+    } else if (app.rule) {
+        valRows = `<div class="tm-val tm-val-rule"><i class="ph-bold ph-brackets-curly"></i><span class="tm-v" title="${_esc(app.rule)}">${_esc(app.rule)}</span>${_tmCopy(app.rule)}</div>`;
+    } else {
+        valRows = '';
+    }
+    const nBackends = (app.servers || []).length;
+    valRows += `<div class="tm-val tm-val-target"><i class="ph-bold ph-arrow-elbow-down-right"></i><span class="tm-v">${_esc(app.target)}</span>` +
+        (nBackends > 1 ? `<span class="tm-more" title="${nBackends} backends, load balanced">+${nBackends - 1}</span>` : '') +
+        _tmCopy(app.target) + '</div>';
+
+    const eps = (app.entryPoints || []).join(' \u00b7 ');
+    const mws = (app.middlewares || []).map(m => _esc(m)).join(' \u00b7 ');
+    const meta = [
+        eps ? `<span>${_esc(eps)}</span>` : '',
+        mws ? `<span class="tm-mw">${mws}</span>` : '',
+        app.service_name ? `<span class="tm-svcname">${_esc(app.service_name)}</span>` : '',
+    ].filter(Boolean).join('<span class="tm-sep"> \u00b7 </span>');
+
+    const rail = `<span class="tm-rail" onclick="event.stopPropagation()">` +
+        (openUrl ? '<i class="ph-bold ph-arrow-up-right tm-hint"></i>' : '') +
+        `<button type="button" class="tm-btn" title="More" data-app='${appJson}' data-openurl="${openUrl}" onclick="event.stopPropagation();_openRouteMenu(event,this)"><i class="ph-bold ph-dots-three"></i></button>` +
+        `<button type="button" class="tm-btn" title="Edit" data-app='${appJson}' onclick="event.stopPropagation();handleEdit(this)"><i class="ph-bold ph-pencil-simple"></i></button>` +
+        (isFile ? `<button type="button" class="tm-btn tm-btn-tog" title="${enabled ? 'Disable route' : 'Enable route'}" onclick="event.stopPropagation();toggleRoute('${_esc(app.id)}',${enabled})"><i class="ph-bold ${enabled ? 'ph-toggle-right' : 'ph-toggle-left'}"></i></button>` : '') +
+        '</span>';
+
+    const bulkCheckbox = _bulkMode
+        ? `<input type="checkbox" class="bulk-check" onclick="event.stopPropagation()" ${bulkSel ? 'checked' : ''} onchange="toggleBulkSelect('${_esc(app.id)}')" style="width:15px;height:15px;accent-color:var(--blue);cursor:pointer;flex-shrink:0;margin-top:6px">`
+        : '';
+
+    const dataAttrs = `data-protocol="${proto}" data-name="${_esc(app.name.toLowerCase())}" data-routekey="${_esc(app.name)}" data-idx="${i}" data-enabled="${enabled}" data-domains="${allDomains.map(d => _esc(d)).join('|')}" data-target="${_esc(app.target)}" data-configfile="${_esc(app.configFile || '')}"`;
+
+    return `<div class="tm-card route-card${bulkSel ? ' tm-sel' : ''}" ${dataAttrs} style="--tm-accent:var(--blue)" onclick="openRouteDetailFromCard(this)">
+        <div class="tm-head">${bulkCheckbox}${head}
+            <div class="tm-head-txt">
+                <div class="tm-title">${proto !== 'http' ? `<span class="rm-proto-pill rm-proto-${proto}">${proto.toUpperCase()}</span>` : ''}<span class="tm-name">${_esc(app.name)}</span>${glyphs}</div>
+            </div>${rail}
+        </div>
+        <div class="tm-vals">${valRows}</div>
+        <div class="tm-foot"><span class="tm-meta">${meta}</span>${opts.showCf ? _tmCf(app.configFile) : ''}</div>
+    </div>`;
+}
+
 function renderRouteGrid(apps) {
     window._lastRenderedApps = apps;
     if (window._showRouteIcons && !window._routeIconCfgLoaded) {
@@ -673,7 +769,10 @@ function renderRouteGrid(apps) {
     }
     if (emptyEl) emptyEl.style.display = 'none';
     const _allAppsForRender = apps;
+    const _tmOn = _tmModern() && _routeViewMode !== 'list';
+    const _tmCfShow = _tmOn ? _tmFolderMode(apps) : false;
     grid.innerHTML = apps.map((app, i) => {
+        if (_tmOn) return _tmRouteCard(app, i, { showCf: _tmCfShow });
         const proto = app.protocol || 'http';
         const allDomains = [...(app.rule || '').matchAll(/Host\(`([^`]+)`\)/g)].map(m => m[1]);
         const domain     = allDomains[0] || '';
@@ -727,8 +826,12 @@ function renderRouteGrid(apps) {
         const header = `<div class="svc-list-header route-list-grid"><div></div><div>Protocol</div><div>Name</div><div>Domain / Rule</div><div>Target</div><div>Entry Points</div><div>Middlewares</div><div></div></div>`;
         grid.className = '';
         grid.innerHTML = `<div class="svc-list">${header}${grid.innerHTML}</div>`;
+    } else if (_tmOn) {
+        grid.className = 'grid gap-3';
+        grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(330px, 1fr))';
     } else {
         grid.className = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4';
+        grid.style.gridTemplateColumns = '';
     }
     _routeCardEls = Array.from(grid.querySelectorAll('.route-card'));
 }
