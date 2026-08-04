@@ -168,3 +168,6 @@ if (document.getElementById('toastContainer') && document.getElementById('toastC
 }
 
 placeStatCards();
+
+watchTabBarForSideNav();
+buildSideNav();

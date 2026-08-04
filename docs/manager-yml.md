@@ -387,6 +387,7 @@ Display preferences, stored here rather than in the browser so they follow you a
 | Key | Values | Default |
 |---|---|---|
 | `showStatCards`, `compactStatCards`, `showEntrypoints` | boolean | `true`, `false`, `true` |
+| `layoutMode` | `classic` \| `modern` | Classic top tab row, or the Modern collapsible sidebar with full-width content |
 | `statBarScope` | string | `all` (default) or `dashboard` - where the stat cards and entry points bar appear |
 | `showDocsLink`, `showApiLink`, `showShortcutsBtn`, `showIpDiagBtn` | boolean | `true`, `false`, `true`, `true` |
 | `showTraefikBadge`, `showTmBadge`, `showRouteIcons` | boolean | `true`, `true`, `false` |

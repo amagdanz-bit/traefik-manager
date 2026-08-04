@@ -5,7 +5,7 @@ cert_resolver: letsencrypt
 traefik_api_url: http://tmshot-traefik:8080
 acme_json_path: /config/acme.json
 access_log_path: /config/access.log
-auth_enabled: true
+auth_enabled: false
 setup_complete: true
 default_theme: dark
 visible_tabs:

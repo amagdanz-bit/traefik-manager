@@ -111,6 +111,8 @@ Every change writes a timestamped backup first, and any of them can be restored 
 
 Optional tabs - toggle on in **Settings - Interface - Tabs** or during the setup wizard. No extra mounts needed.
 
+The whole interface has two layouts, chosen under **Settings - Interface - Layout**: **Classic**, the top tab row with a centered page, and **Modern**, a collapsible side navigation with full-width content that fits as many card columns as your screen allows. The choice follows you across browsers like the other interface settings; the collapse state is remembered per device.
+
 | Tab                           | Description                                                                    |
 | -------------------------------| --------------------------------------------------------------------------------|
 | [Dashboard](tab-dashboard.md) | Routes grouped by category with app icons, custom groups, per-card editing, and one-click app launching |

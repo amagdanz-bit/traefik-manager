@@ -1,7 +1,7 @@
 # Screenshot rig
 
 Recaptures every desktop screenshot for the docs and README from a seeded
-demo environment, in both themes, at the repo's 1920x1248 content-fit standard (viewport hugs the app's max-w-7xl container, so no wasted margins).
+demo environment, in both themes, at 1920x1080 in the Modern layout, which uses the full frame.
 
 ```bash
 scripts/screenshots/run.sh                 # shoot ghcr.io/chr0nzz/traefik-manager:beta
@@ -20,7 +20,7 @@ What it does:
 3. Logs in through the real login page (password `screenshots`) and drives
    headless Chrome through every tab, view mode, modal and settings panel in
    dark and light (`capture.mjs` - 26 views per theme).
-4. Resizes to 1920x1248, installs into `docs/public/images/` under the
+4. Resizes to 1920x1080, installs into `docs/public/images/` under the
    existing names, and rebuilds both README carousel GIFs
    (`install_images.py`).
 

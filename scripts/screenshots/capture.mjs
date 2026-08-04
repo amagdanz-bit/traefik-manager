@@ -6,7 +6,7 @@ const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-dev-s
 async function capture(theme) {
     const ctx  = await browser.createBrowserContext();
     const page = await ctx.newPage();
-    await page.setViewport({ width: 1320, height: 858, deviceScaleFactor: 2 });
+    await page.setViewport({ width: 1600, height: 900, deviceScaleFactor: 2 });
     const shot = async name => { await sleep(600); await page.screenshot({ path: `/out/${theme}/${name}.png` }); console.log(`${theme}/${name}`); };
     const js = code => page.evaluate(code);
     const tab = async (t, ms=1800) => { await js(`switchTab('${t}')`); await sleep(ms); };
@@ -14,15 +14,12 @@ async function capture(theme) {
     await page.goto(BASE, { waitUntil: 'networkidle2', timeout: 60000 });
     await js(`localStorage.setItem('tm-theme', '${theme}'); localStorage.setItem('tm-static-setup-v1', '1');`);
     await page.goto(BASE, { waitUntil: 'networkidle2', timeout: 60000 });
-    await sleep(1500);
-    if (await page.$('input[type="password"]')) {
-        await shot('login');
-        await page.type('input[type="password"]', 'screenshots');
-        await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }), page.click('button[type="submit"]')]);
-        await sleep(1500);
-    }
     await page.goto(BASE, { waitUntil: 'networkidle2', timeout: 60000 });
     await sleep(4500);
+    await js(`document.querySelectorAll('body > div[style*="--red"]').forEach(b => b.remove())`);
+    await js(`fetch('/api/settings/ui', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch', ..._csrfHeaders() }, body: JSON.stringify({ ui_prefs: { layoutMode: 'modern' } }) })`);
+    await js(`tmSetPref('layoutMode', 'modern'); applyUiPrefs();`);
+    await sleep(1200);
 
     await tab('services');
     await shot('routes-cards');

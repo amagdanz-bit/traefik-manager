@@ -19,24 +19,41 @@ function buildSideNav() {
     if (!nav || !bar) return;
     nav.innerHTML = '';
     bar.querySelectorAll('.tab-btn').forEach(btn => {
-        if (btn.style.display === 'none') return;
+        const optional = btn.classList.contains('tab-optional');
+        if (optional && btn.style.display !== 'block') return;
+        if (!optional && btn.style.display === 'none') return;
         const tab   = btn.id.replace(/^btn-/, '');
         const icon  = btn.querySelector('i');
-        const badge = btn.querySelector('.tab-count');
-        const label = (btn.textContent || '').trim().replace(/\s*\d+$/, '');
+        const badge = btn.querySelector('.badge');
+        const clone = btn.cloneNode(true);
+        clone.querySelectorAll('i, .badge').forEach(n => n.remove());
+        const label = (clone.textContent || '').trim();
+        const count = badge ? badge.textContent.trim() : '';
         const item  = document.createElement('button');
         item.className = 'side-nav-item' + (btn.classList.contains('active') ? ' active' : '');
         item.id = 'sbtn-' + tab;
-        item.title = label;
+        item.title = document.documentElement.classList.contains('tm-nav-collapsed') ? label : '';
         item.onclick = () => switchTab(tab);
-        item.innerHTML = `${icon ? `<i class="${icon.className}"></i>` : ''}<span class="side-nav-label">${_esc(label)}</span>${badge ? `<span class="side-nav-count">${_esc(badge.textContent)}</span>` : ''}`;
+        item.innerHTML = `${icon ? `<i class="${icon.className}"></i>` : ''}<span class="side-nav-label">${_esc(label)}</span>${count && count !== '-' ? `<span class="side-nav-count">${_esc(count)}</span>` : ''}`;
         nav.appendChild(item);
     });
+}
+
+let _sideNavSyncTimer = null;
+function watchTabBarForSideNav() {
+    const bar = document.getElementById('tabBar');
+    if (!bar || bar._sideNavWatched) return;
+    bar._sideNavWatched = true;
+    new MutationObserver(() => {
+        clearTimeout(_sideNavSyncTimer);
+        _sideNavSyncTimer = setTimeout(buildSideNav, 80);
+    }).observe(bar, { subtree: true, childList: true, characterData: true });
 }
 
 function toggleSideNavCollapse() {
     const on = document.documentElement.classList.toggle('tm-nav-collapsed');
     localStorage.setItem('tm-nav-collapsed', on ? '1' : '0');
+    buildSideNav();
 }
 
 function applyTabVisibility(map) {

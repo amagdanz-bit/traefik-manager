@@ -12,10 +12,7 @@ cp "$HERE/config/dynamic.yml" "$WORK/config/"
 cp "$HERE/traefik/traefik.yml" "$WORK/traefik/"
 sed '/certResolver: letsencrypt/d' "$HERE/config/dynamic.yml" > "$WORK/traefik/dynamic.yml"
 
-HASH=$(docker run --rm --entrypoint python3 "$IMAGE" -c \
-  "import bcrypt; print(bcrypt.hashpw(b'screenshots', bcrypt.gensalt()).decode())")
-{ cat "$HERE/config/manager.yml"; echo "password_hash: $HASH"; echo "must_change_password: false"; } \
-  > "$WORK/config/manager.yml"
+cp "$HERE/config/manager.yml" "$WORK/config/manager.yml"
 
 docker run --rm -v "$WORK/config:/data" -v "$HERE/gen_data.py:/gen.py:ro" \
   --entrypoint python3 "$IMAGE" /gen.py

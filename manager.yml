@@ -143,6 +143,7 @@ default_theme: "dark"
 #   showTmBadge: true
 #   showRouteIcons: false
 #   statBarScope: all      # all | dashboard
+#   layoutMode: classic    # classic | modern
 #   routeViewMode: grid    # grid | list
 #   mwViewMode: grid
 #   svcViewMode: grid
