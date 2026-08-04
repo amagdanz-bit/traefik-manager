@@ -6,7 +6,7 @@ copied = 0
 for theme in ("dark", "light"):
     for f in sorted(os.listdir(f"/new/{theme}")):
         im = Image.open(f"/new/{theme}/{f}").convert("RGB")
-        im = im.resize((1920, 1080), Image.LANCZOS)
+        im = im.resize((im.width // 2, im.height // 2), Image.LANCZOS)
         im.save(f"/img/{theme}-{f[:-4]}.png", optimize=True)
         copied += 1
 

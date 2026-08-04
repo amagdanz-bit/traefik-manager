@@ -3,12 +3,12 @@ import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-SCAN = ['app.py', 'core', 'tests', 'templates', 'docs',
+SCAN = ['app.py', 'core', 'tests', 'templates', 'docs', 'scripts',
         os.path.join('static', 'js'), os.path.join('static', 'css')]
 
-SKIP_DIRS = {'vendor', 'node_modules', '__pycache__', '.vitepress', 'public'}
+SKIP_DIRS = {'vendor', 'node_modules', '__pycache__', 'dist', 'cache', 'public'}
 
-SUFFIXES = ('.py', '.js', '.css', '.html', '.md', '.yml', '.yaml')
+SUFFIXES = ('.py', '.js', '.mjs', '.ts', '.mts', '.vue', '.css', '.html', '.md', '.yml', '.yaml')
 
 DASH = re.compile('[%s%s]|' % (chr(0x2013), chr(0x2014))
                   + r'\\u201[34]|&[mn]dash;|&#821[12];')
