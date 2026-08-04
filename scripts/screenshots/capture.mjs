@@ -6,7 +6,7 @@ const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-dev-s
 async function capture(theme) {
     const ctx  = await browser.createBrowserContext();
     const page = await ctx.newPage();
-    await page.setViewport({ width: 1600, height: 900, deviceScaleFactor: 2 });
+    await page.setViewport({ width: 1320, height: 858, deviceScaleFactor: 2 });
     const shot = async name => { await sleep(600); await page.screenshot({ path: `/out/${theme}/${name}.png` }); console.log(`${theme}/${name}`); };
     const js = code => page.evaluate(code);
     const tab = async (t, ms=1800) => { await js(`switchTab('${t}')`); await sleep(ms); };
