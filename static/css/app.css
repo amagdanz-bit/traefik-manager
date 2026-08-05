@@ -1124,3 +1124,6 @@ html.tm-modern .sc-sec [id^="staticPanel-"] .rounded-lg > .tab-toggle-row:first-
 html.tm-modern .sc-sec[data-sc-sec="api"] > [id^="staticPanel-"] > div:first-child > * + *,
 html.tm-modern .sc-sec[data-sc-sec="log"] > [id^="staticPanel-"] > div:first-child > * + * { margin-top: 0; }
 .nav-more-menu .nav-btn-primary { color: var(--blue) !important; }
+.detail-panel-form { display: flex; flex-direction: column; }
+.detail-panel-form > div:nth-child(2) { flex: 1; overflow-y: auto; }
+.detail-panel-foot { flex-shrink: 0; border-top: 1px solid var(--border); background: var(--card); position: sticky; bottom: 0; }

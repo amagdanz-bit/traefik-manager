@@ -1,14 +1,14 @@
-<div id="tlsOptionsModal" class="modal-overlay" style="display:none">
-    <div class="modal-box modal-box-tls">
-        <div class="flex items-center justify-between px-5 py-4" style="border-bottom:1px solid var(--border)">
-            <div class="flex items-center gap-2">
-                <i class="ph-bold ph-lock-key" style="color:var(--blue)"></i>
-                <h3 class="font-bold text-sm" style="color:var(--text)" id="tlsOptionsModalTitle">Add TLS Profile</h3>
-            </div>
-            <button type="button" onclick="closeTlsOptionModal()" class="btn-icon"><i class="ph-bold ph-x text-sm"></i></button>
+<div class="detail-backdrop" id="tlsOptionsBackdrop" onclick="closeTlsOptionModal()"></div>
+<div class="detail-panel detail-panel-form" id="tlsOptionsModal">
+    <div class="sticky top-0 z-10 flex items-center justify-between px-6 py-4" style="background:var(--card);border-bottom:1px solid var(--border)">
+        <div class="flex items-center gap-3">
+            <i class="ph-bold ph-lock-key" style="color:var(--blue)"></i>
+            <h2 class="font-bold text-sm" style="color:var(--text)" id="tlsOptionsModalTitle">Add TLS Profile</h2>
         </div>
+        <button type="button" onclick="closeTlsOptionModal()" class="btn-icon"><i class="ph-bold ph-x text-base"></i></button>
+    </div>
 
-        <div class="px-5 py-4 space-y-4" style="max-height:70vh;overflow-y:auto">
+        <div class="px-6 py-5 space-y-4">
             <input type="hidden" id="tlsOptEditName">
             <input type="hidden" id="tlsOptConfigFile">
 
@@ -102,9 +102,8 @@
             </div>
         </div>
 
-        <div class="flex justify-end gap-2 px-5 py-4" style="border-top:1px solid var(--border)">
-            <button type="button" onclick="closeTlsOptionModal()" class="btn-secondary">Cancel</button>
-            <button type="button" onclick="saveTlsOption()" class="btn-primary">Save Profile</button>
-        </div>
+    <div class="detail-panel-foot flex justify-end gap-2 px-6 py-4">
+        <button type="button" onclick="closeTlsOptionModal()" class="btn-secondary">Cancel</button>
+        <button type="button" onclick="saveTlsOption()" class="btn-primary">Save Profile</button>
     </div>
 </div>

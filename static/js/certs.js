@@ -129,7 +129,13 @@ function _tlsVer(v) {
     return String(v).replace(/^VersionTLS(\d)(\d)$/, 'TLS $1.$2');
 }
 
-function _tmTlsOptCard(o, i, cfShow) {
+function _tlsCfChip(path) {
+    if (!path) return '';
+    const name = String(path).split('/').filter(Boolean).pop() || String(path);
+    return `<span class="tm-cf" title="${_esc(path)}"><i class="ph-bold ph-file-code"></i>${_esc(name)}</span>`;
+}
+
+function _tmTlsOptCard(o, i) {
     const mtls = o.clientAuthType && o.clientAuthType !== 'NoClientCert';
     const sub = [
         o.minVersion ? _tlsVer(o.minVersion) + '+' : '',
@@ -161,7 +167,7 @@ function _tmTlsOptCard(o, i, cfShow) {
             </div>${rail}
         </div>
         ${vals ? `<div class="tm-vals">${vals}</div>` : ''}
-        <div class="tm-foot"><span class="tm-meta">${_tmTlsOptUsage(o)}</span>${cfShow ? _tmCf(o.configFile) : ''}</div>
+        <div class="tm-foot"><span class="tm-meta">${_tmTlsOptUsage(o)}</span>${_tlsCfChip(o.configFile || o.configFilePath)}</div>
     </div>`;
 }
 
@@ -178,10 +184,9 @@ function renderTlsOptions(opts) {
         el.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-lock-key text-4xl block mb-3 opacity-30"></i><p class="text-sm">No TLS profiles defined.</p><p class="text-xs mt-1">Click <strong>Add TLS Profile</strong> to create one.</p></div>`;
         return;
     }
-    const cfShow = new Set(opts.map(o => o.configFile).filter(Boolean)).size > 1;
     const cards = opts.map(o => {
         const i = _tlsOptions.indexOf(o);
-        if (_tmModern()) return _tmTlsOptCard(o, i, cfShow);
+        if (_tmModern()) return _tmTlsOptCard(o, i);
         const cfBadge = o.configFile ? `<span class="badge badge-muted" style="font-size:9px">${_esc(o.configFile)}</span>` : '';
         const verBadge = o.minVersion ? `<span class="badge badge-green" style="font-size:9px"><i class="ph-bold ph-lock"></i> ${_esc(_tlsVer(o.minVersion))}+</span>` : '';
         const sniBadge = o.sniStrict ? `<span class="badge" style="font-size:9px;background:rgba(36,161,222,0.12);color:var(--blue);border:1px solid rgba(36,161,222,0.35)">SNI Strict</span>` : '';
@@ -307,11 +312,16 @@ function openTlsOptionModal(opt) {
     const newFileInput = document.getElementById('tlsOptNewFileName');
     if (newFileInput) { newFileInput.style.display = 'none'; newFileInput.value = ''; }
     document.getElementById('tlsOptConfigFile').value = isEdit ? (opt.configFile || '') : '';
-    modal.style.display = 'flex';
+    modal.classList.add('open');
+    document.getElementById('tlsOptionsBackdrop').classList.add('open');
+    if (!setDetailDockOpen(true)) document.body.style.overflow = 'hidden';
 }
 
 function closeTlsOptionModal() {
-    document.getElementById('tlsOptionsModal').style.display = 'none';
+    setDetailDockOpen(false);
+    document.getElementById('tlsOptionsModal').classList.remove('open');
+    document.getElementById('tlsOptionsBackdrop').classList.remove('open');
+    document.body.style.overflow = '';
 }
 
 async function saveTlsOption() {

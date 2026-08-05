@@ -1459,7 +1459,7 @@ async function _loadStaticFromDisk() {
         initStaticDirtyTracking();
         _renderStaticSections(data.parsed || {});
         _renderEpRuntimeWarning();
-        switchStaticSection(_staticActiveSection);
+        if (!_tmModern()) switchStaticSection(_staticActiveSection);
         requestAnimationFrame(_updateStaticTabArrows);
     } catch(e) {
         wrapper.innerHTML = `<div class="text-center py-16" style="color:var(--muted)">

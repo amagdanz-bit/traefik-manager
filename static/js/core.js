@@ -285,7 +285,10 @@ function _closeTopModal() {
     ];
     for (const [id, close] of modals) {
         const el = document.getElementById(id);
-        if (el && getComputedStyle(el).display !== 'none' && typeof close === 'function') {
+        const shown = el && (el.classList.contains('detail-panel')
+            ? el.classList.contains('open')
+            : getComputedStyle(el).display !== 'none');
+        if (shown && typeof close === 'function') {
             close();
             return true;
         }
