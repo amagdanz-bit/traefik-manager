@@ -322,17 +322,6 @@ async function gitViewDiff(sha) {
 function bool(v) { return v === true || v === 1 || v === 'true'; }
 function _setVal(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
 
-let _staticSettingsLoaded = false;
-function openStaticSettingsPanel() {
-    const warn = document.getElementById('staticDangerWarn');
-    if (warn) warn.style.display = localStorage.getItem('staticWarnHidden') === '1' ? 'none' : '';
-    if (!_staticSettingsLoaded) {
-        refreshStaticTab();
-        _staticSettingsLoaded = true;
-    }
-    requestAnimationFrame(_updateStaticTabArrows);
-}
-
 function hideStaticDangerWarn() {
     localStorage.setItem('staticWarnHidden', '1');
     const warn = document.getElementById('staticDangerWarn');
@@ -363,10 +352,6 @@ function _updateSettingsSidebarForAgent(active) {
         const mob = document.getElementById('msb-' + id + '-mobile');
         if (mob) mob.style.display = active ? 'none' : '';
     });
-    const staticBtn = document.getElementById('msb-static');
-    if (staticBtn && active) staticBtn.style.display = 'none';
-    const staticMob = document.getElementById('msb-static-mobile');
-    if (staticMob && active) staticMob.style.display = 'none';
     const keysBtn = document.getElementById('msb-agent-keys');
     if (keysBtn) keysBtn.style.display = active ? '' : 'none';
     const keysMob = document.getElementById('msb-agent-keys-mobile');
@@ -412,7 +397,7 @@ function switchSettingsPanel(id, btn) {
     document.getElementById('mpanel-' + id).classList.add('active');
     if (id === 'about') _loadAboutAgentInfo();
     if (window.innerWidth < 640) {
-        const titles = {connection:'Connection',routes:'Route Monitoring',system:'System Monitoring',auth:'Authentication',backups:'Backups',static:'Static Config',ui:'Interface',notifications:'Notifications',about:'About','agent-keys':'API Keys'};
+        const titles = {connection:'Connection',routes:'Route Monitoring',system:'System Monitoring',auth:'Authentication',backups:'Backups',ui:'Interface',notifications:'Notifications',about:'About','agent-keys':'API Keys'};
         document.getElementById('settingsModalTitle').textContent = titles[id] || 'Settings';
         document.getElementById('settingsGearIcon').style.display = 'none';
         document.getElementById('settingsMobileRoot').style.display = 'none';
@@ -1196,6 +1181,7 @@ function _rerenderCardGrids() {
     if (typeof renderTlsOptions === 'function' && typeof _tlsOptions !== 'undefined' && _tlsOptions.length) {
         renderTlsOptions(_tlsOptions);
     }
+    if (typeof rerenderStaticBody === 'function') rerenderStaticBody();
     if (typeof renderPluginCards === 'function' && typeof _allPlugins !== 'undefined' && _allPlugins.length) {
         renderPluginCards();
     }

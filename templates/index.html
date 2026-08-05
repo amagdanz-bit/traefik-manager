@@ -378,10 +378,10 @@
                 Logs
             </span>
         </button>
-        <button onclick="switchTab('static')" id="btn-static" class="tab-btn" style="display:none;pointer-events:none;position:absolute;visibility:hidden">
+        <button onclick="switchTab('static')" id="btn-static" class="tab-btn tab-optional" data-tab="static">
             <span class="flex items-center gap-2">
                 <i class="ph-bold ph-sliders"></i>
-                Static
+                Static Config
             </span>
         </button>
     </div>
@@ -436,6 +436,8 @@
 
     {% include 'tabs/tab_plugins.html' %}
 
+    {% include 'tabs/tab_static.html' %}
+
     
     {% include 'tabs/tab_logs.html' %}
 
@@ -478,6 +480,25 @@ function agentFetch(path, opts) {
     if (!_activeAgent) return fetch(path, merged);
     const proxyPath = '/api/agents/proxy/' + _activeAgent.id + '/' + path.replace(/^\/api\//, '');
     return fetch(proxyPath, merged);
+}
+
+async function refreshStaticTabAvailability() {
+    const row = document.getElementById('staticTabToggleRow');
+    const btn = document.getElementById('btn-static');
+    let available = false;
+    try {
+        if (_activeAgent) {
+            available = (await agentFetch('/api/static')).ok;
+        } else {
+            available = !!(await (await fetch('/api/static/available')).json()).available;
+        }
+    } catch(e) { available = false; }
+    if (row) row.style.display = available ? '' : 'none';
+    if (!available && btn) {
+        btn.style.display = 'none';
+        if (btn.classList.contains('active')) switchTab('services');
+        if (typeof buildSideNav === 'function') buildSideNav();
+    }
 }
 
 function _renderServerSwitcherList(runHealthChecks) {
@@ -550,36 +571,14 @@ function switchServer(agentId) {
     const chip = document.getElementById('agentServerLabel');
     if (chip) { chip.textContent = agent ? agent.name : ''; chip.style.display = agent ? '' : 'none'; }
     _renderServerSwitcherList(false);
-    if (typeof _staticSettingsLoaded !== 'undefined') _staticSettingsLoaded = false;
-    _refreshStaticAvailability();
+    if (typeof _staticLoadedFor !== 'undefined') _staticLoadedFor = null;
+    refreshStaticTabAvailability();
     loadOverviewStats();
     refreshCurrentTab();
     loadOverviewStats();
     if (typeof updateTmVersionBadge === 'function') updateTmVersionBadge();
 }
 
-async function _refreshStaticAvailability() {
-    const sidebarBtn = document.getElementById('msb-static');
-    const mobileRow  = document.getElementById('msb-static-mobile');
-    try {
-        let available = false;
-        if (_activeAgent) {
-            const res = await agentFetch('/api/static');
-            available = res.ok;
-        } else {
-            const res  = await fetch('/api/static/available');
-            const data = await res.json();
-            available  = !!data.available;
-        }
-        if (sidebarBtn) sidebarBtn.style.display = available ? '' : 'none';
-        if (mobileRow)  mobileRow.style.display  = available ? '' : 'none';
-    } catch(e) {
-        if (_activeAgent) {
-            if (sidebarBtn) sidebarBtn.style.display = 'none';
-            if (mobileRow)  mobileRow.style.display  = 'none';
-        }
-    }
-}
 
 function _setAgentEditControls(_agentActive) {}
 

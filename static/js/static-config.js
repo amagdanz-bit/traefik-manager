@@ -4,6 +4,7 @@ let _staticMonaco          = null;
 let _staticRawContent      = '';
 let _staticOriginalContent = '';
 let _staticPendingChanges  = false;
+let _staticSectionEdits    = false;
 let _staticSaved           = false;
 
 function _confirm(message, title, okLabel) {
@@ -76,7 +77,6 @@ function _initStaticMonaco(content) {
     if (!container) return;
     if (_staticMonaco) {
         _staticMonaco.setValue(content);
-        _staticOriginalContent = content;
         return;
     }
     require(['vs/editor/editor.main'], function() {
@@ -93,11 +93,10 @@ function _initStaticMonaco(content) {
                 automaticLayout: true,
                 wordWrap: 'off',
             });
-            _staticOriginalContent = content;
             _staticMonaco.onDidChangeModelContent(() => {
                 if (_staticMonaco.getValue() !== _staticOriginalContent) {
                     _markStaticPending();
-                } else {
+                } else if (!_staticSectionEdits) {
                     _clearStaticPending();
                 }
             });
@@ -209,31 +208,51 @@ async function saveStaticPopout() {
     closeStaticYamlPopout();
 }
 
+let _staticRestartNeeded = false;
+
+function _renderStaticStateBar() {
+    const bar = document.getElementById('staticStateBar');
+    if (!bar) return;
+    if (_staticPendingChanges) {
+        bar.className = 'static-state-bar static-state-pending';
+        bar.style.display = 'flex';
+        bar.innerHTML = `<i class="ph-bold ph-warning"></i>
+            <span class="static-state-text">Unsaved changes - nothing is written to <code>traefik.yml</code> until you save</span>
+            <button onclick="discardStaticChanges()" class="btn-secondary text-xs">Discard</button>
+            <button onclick="saveStaticConfig()" class="btn-primary text-xs">Save</button>`;
+        return;
+    }
+    if (_staticRestartNeeded) {
+        bar.className = 'static-state-bar static-state-restart';
+        bar.style.display = 'flex';
+        bar.innerHTML = `<i class="ph-bold ph-warning-circle"></i>
+            <span class="static-state-text">Saved. Traefik is still running the previous config.</span>
+            <button onclick="triggerTraefikRestart()" class="btn-secondary text-xs static-state-restart-btn">Restart Traefik</button>`;
+        return;
+    }
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+}
+
 function _markStaticPending() {
     if (_staticPendingChanges) return;
     _staticPendingChanges = true;
-    const b = document.getElementById('staticPendingBanner');
-    if (b) b.style.display = 'flex';
+    _renderStaticStateBar();
 }
 
 function _clearStaticPending() {
     _staticPendingChanges = false;
-    const b = document.getElementById('staticPendingBanner');
-    if (b) b.style.display = 'none';
+    _renderStaticStateBar();
 }
 
 function _showStaticRestartBanner() {
-    const b = document.getElementById('staticRestartBanner');
-    if (b) {
-        b.style.display = 'flex';
-        b.style.background = 'rgba(239,68,68,0.08)';
-        b.style.border = '1px solid rgba(239,68,68,0.25)';
-    }
+    _staticRestartNeeded = true;
+    _renderStaticStateBar();
 }
 
 function _hideStaticRestartBanner() {
-    const b = document.getElementById('staticRestartBanner');
-    if (b) b.style.display = 'none';
+    _staticRestartNeeded = false;
+    _renderStaticStateBar();
 }
 
 async function discardStaticChanges() {
@@ -252,6 +271,7 @@ async function saveStaticConfig() {
             _staticRawContent = content;
             _staticOriginalContent = content;
             _staticSaved = true;
+            _staticSectionEdits = false;
             _clearStaticPending();
             _showStaticRestartBanner();
             showToast('Static config saved', 'success');
@@ -425,6 +445,11 @@ function _scrollStaticTabs(dir) {
 
 function switchStaticSection(section) {
     _staticActiveSection = section;
+    if (_tmModern()) {
+        const head = document.getElementById('scHead-' + section);
+        if (head) head.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        return;
+    }
     const sectionColors  = { entrypoints: 'var(--blue)', resolvers: 'var(--green)', plugins: 'var(--purple)', providers: 'var(--teal)' };
     const sectionLabels  = { entrypoints: 'Entrypoint', resolvers: 'Resolver', plugins: 'Plugin', providers: 'Provider' };
     const hdrIcon   = document.getElementById('staticHdrAddIcon');
@@ -576,6 +601,7 @@ async function _applyStaticSectionChange(body) {
     _staticRawContent = data.raw || '';
     _renderStaticSections(_staticParsedData);
     if (_staticMonaco) _staticMonaco.setValue(_staticRawContent);
+    _staticSectionEdits = true;
     _markStaticPending();
 }
 
@@ -607,6 +633,96 @@ async function removeStaticItem(section, name) {
     } catch(e) { showToast('Request failed', 'error'); }
 }
 
+function _scFile(path) {
+    if (!path) return '';
+    const name = String(path).split('/').filter(Boolean).pop() || String(path);
+    return `<span class="tm-cf" title="${_esc(path)}"><i class="ph-bold ph-file-code"></i>${_esc(name)}</span>`;
+}
+
+function _scRail(section, name) {
+    const nd = JSON.stringify(name);
+    return `<span class="tm-rail tm-rail-sm" onclick="event.stopPropagation()">` +
+        `<button type="button" class="tm-btn" title="Edit" onclick='event.stopPropagation();openStaticEditForm("${section}",${nd})'><i class="ph-bold ph-pencil-simple"></i></button>` +
+        `<button type="button" class="tm-btn" title="Delete" onclick='event.stopPropagation();removeStaticItem("${section}",${nd})'><i class="ph-bold ph-trash"></i></button>` +
+        '</span>';
+}
+
+function _scGrid(cards) {
+    return `<div class="tm-card-grid">${cards}</div>`;
+}
+
+function _scEmpty(text) {
+    return `<div class="px-5 py-8 text-center text-sm" style="color:var(--muted)">${_esc(text)}</div>`;
+}
+
+function _tmEpCard(name, ep) {
+    const addr  = ep.address || '';
+    const redir = ep.http?.redirections?.entryPoint?.to || '';
+    const uhs   = ep.http?.underscoreHeadersStrategy || '';
+    const tips  = Array.isArray(ep.forwardedHeaders?.trustedIPs) ? ep.forwardedHeaders.trustedIPs.length : 0;
+    const isUdp = /\/udp$/i.test(addr);
+    const isTcp = /\/tcp$/i.test(addr);
+    const port  = addr.replace(/\/(tcp|udp)$/i, '').replace(/^.*:/, '');
+    const proto = isUdp ? ['UDP', '#e2c041'] : isTcp ? ['TCP', 'var(--teal)']
+                : port === '443' ? ['HTTPS', 'var(--green)'] : ['HTTP', 'var(--blue)'];
+    const glyphs = (ep.http3 ? '<i class="ph-bold ph-lightning tm-glyph" style="color:var(--purple)" title="HTTP/3 enabled"></i>' : '')
+        + (tips ? `<i class="ph-bold ph-shield tm-glyph" style="color:var(--blue)" title="forwardedHeaders.trustedIPs: ${tips} range(s)"></i>` : '')
+        + (uhs ? `<i class="ph-bold ph-shield-check tm-glyph" style="color:var(--green)" title="underscoreHeadersStrategy: ${_esc(uhs)}"></i>` : '');
+    const vals = redir
+        ? `<div class="tm-vals"><div class="tm-val tm-val-target"><i class="ph-bold ph-arrow-u-up-right"></i><span class="tm-v">redirects to ${_esc(redir)}</span></div></div>`
+        : '';
+    const meta = [
+        `<span class="d-flat" style="color:${proto[1]}">${proto[0]}${port ? ' ' + _esc(port) : ''}</span>`,
+        tips ? `${tips} trusted range${tips > 1 ? 's' : ''}` : '',
+        uhs ? _esc(uhs) : '',
+    ].filter(Boolean).join('<span class="tm-sep"> \u00b7 </span>');
+    return `<div class="tm-card tm-card-flat" style="--tm-accent:${proto[1]}">
+        <div class="tm-head">
+            <span class="tm-ic tm-ic-tile"><i class="ph-bold ph-door-open"></i></span>
+            <div class="tm-head-txt">
+                <div class="tm-title"><span class="tm-name">${_esc(name)}</span>${glyphs}</div>
+            </div>${_scRail('entrypoints', name)}
+        </div>
+        ${vals}
+        <div class="tm-foot"><span class="tm-meta">${meta}</span></div>
+    </div>`;
+}
+
+function _tmResolverCard(name, res) {
+    const acme  = (res || {}).acme || {};
+    const isDns = !!acme.dnsChallenge, isHttp = !!acme.httpChallenge;
+    const kind  = isDns ? `DNS challenge \u00b7 ${acme.dnsChallenge.provider || '?'}` : isHttp ? 'HTTP challenge' : 'TLS challenge';
+    const accent = isDns ? 'var(--blue)' : isHttp ? 'var(--orange)' : 'var(--green)';
+
+    return `<div class="tm-card tm-card-flat" style="--tm-accent:${accent}">
+        <div class="tm-head">
+            <span class="tm-ic tm-ic-tile"><i class="ph-bold ph-certificate"></i></span>
+            <div class="tm-head-txt">
+                <div class="tm-title"><span class="tm-name">${_esc(name)}</span></div>
+                <div class="tm-sub">${_esc(kind)}</div>
+            </div>${_scRail('resolvers', name)}
+        </div>
+        <div class="tm-foot"><span class="tm-meta">${acme.email ? _esc(acme.email) : 'no account email'}</span>${_scFile(acme.storage || 'acme.json')}</div>
+    </div>`;
+}
+
+function _tmPluginCard(name, p) {
+    const vals = p.moduleName
+        ? `<div class="tm-vals"><div class="tm-val"><i class="ph-bold ph-package"></i><span class="tm-v" title="${_esc(p.moduleName)}">${_esc(p.moduleName)}</span>${_tmCopy(p.moduleName)}</div></div>`
+        : '';
+    return `<div class="tm-card tm-card-flat" style="--tm-accent:var(--purple)">
+        <div class="tm-head">
+            <span class="tm-ic tm-ic-tile"><i class="ph-bold ph-puzzle-piece"></i></span>
+            <div class="tm-head-txt">
+                <div class="tm-title"><span class="tm-name">${_esc(name)}</span></div>
+                <div class="tm-sub">${_esc(p.version || 'no version pinned')}</div>
+            </div>${_scRail('plugins', name)}
+        </div>
+        ${vals}
+        <div class="tm-foot"><span class="tm-meta">declared in traefik.yml</span></div>
+    </div>`;
+}
+
 function _renderStaticEntrypoints(eps) {
     const keys = Object.keys(eps || {});
     const cnt  = document.getElementById('staticEpCount');
@@ -614,7 +730,11 @@ function _renderStaticEntrypoints(eps) {
     const el = document.getElementById('staticEpList');
     if (!el) return;
     if (!keys.length) {
-        el.innerHTML = `<div class="px-5 py-8 text-center text-sm" style="color:var(--muted)">No entrypoints configured</div>`;
+        el.innerHTML = _scEmpty('No entrypoints configured');
+        return;
+    }
+    if (_tmModern()) {
+        el.innerHTML = _scGrid(keys.map(name => _tmEpCard(name, eps[name] || {})).join(''));
         return;
     }
     const rows = keys.map((name, i) => {
@@ -654,7 +774,11 @@ function _renderStaticResolvers(resolvers) {
     const el = document.getElementById('staticResolverList');
     if (!el) return;
     if (!keys.length) {
-        el.innerHTML = `<div class="px-5 py-8 text-center text-sm" style="color:var(--muted)">No certificate resolvers configured</div>`;
+        el.innerHTML = _scEmpty('No certificate resolvers configured');
+        return;
+    }
+    if (_tmModern()) {
+        el.innerHTML = _scGrid(keys.map(name => _tmResolverCard(name, resolvers[name])).join(''));
         return;
     }
     const rows = keys.map((name, i) => {
@@ -691,7 +815,11 @@ function _renderStaticPlugins(plugins) {
     const el = document.getElementById('staticPluginList');
     if (!el) return;
     if (!keys.length) {
-        el.innerHTML = `<div class="px-5 py-8 text-center text-sm" style="color:var(--muted)">No plugins installed</div>`;
+        el.innerHTML = _scEmpty('No plugins installed');
+        return;
+    }
+    if (_tmModern()) {
+        el.innerHTML = _scGrid(keys.map(name => _tmPluginCard(name, plugins[name] || {})).join(''));
         return;
     }
     const rows = keys.map((name, i) => {
@@ -736,6 +864,16 @@ function _setStaticToggle(id, on) {
     if (el) el.classList.toggle('on', !!on);
 }
 
+function _syncStaticApiWarn() {
+    const warn = document.getElementById('staticApiWarn');
+    if (warn) warn.style.display = _staticToggleState('apiEnabled') ? 'none' : '';
+}
+
+function onApiEnabledToggle() {
+    staticToggle('apiEnabled');
+    _syncStaticApiWarn();
+}
+
 function onAccessLogToggle() {
     staticToggle('accessLog');
     const row = document.getElementById('accessLogPathRow');
@@ -759,6 +897,7 @@ function _renderStaticApi(apiData) {
     _setStaticToggle('dashboardEnabled', api.dashboard !== false);
     _setStaticToggle('insecure', !!api.insecure);
     _setStaticToggle('debugMode', !!api.debug);
+    _syncStaticApiWarn();
 }
 
 function _renderStaticLog(logData, accessLogData) {
@@ -907,10 +1046,48 @@ async function saveStaticSingleSection(section) {
     }
     try {
         await _applyStaticSectionChange({ action: 'set', section, name: '', data });
+        const save = document.querySelector(`.sc-save[data-sc-save="${section}"]`);
+        if (save) save.style.display = 'none';
     } catch(e) { showToast('Request failed', 'error'); }
 }
 
 function _buildStaticTabHTML() {
+    return _tmModern() ? _buildStaticOnePage() : _buildStaticClassicHTML();
+}
+
+function _scSectionHead(key, label, icon, color, countId, addLabel) {
+    const count = countId ? `<span class="d-n sc-count" id="${countId}">0</span>` : '';
+    const add = addLabel
+        ? `<div class="flex gap-1 p-1 rounded-lg" style="background:var(--input-bg);border:1px solid var(--border)"><button onclick="openStaticAddForm('${key}')" class="proto-btn text-xs px-3 py-1.5" title="Add ${addLabel}"><i class="ph-bold ph-plus"></i></button></div>`
+        : '';
+    return `<div class="sc-sec-head" id="scHead-${key}"><i class="ph-bold ${icon} sc-sec-icon" style="color:${color}"></i><span class="sc-sec-label">${label}</span>${count}<span class="sc-sec-rule"></span>${add}</div>`;
+}
+
+const SC_SECTIONS = [
+    ['entrypoints', 'Entrypoints',           'ph-door-open',    'var(--blue)',   'staticEpCount',       'Entrypoint'],
+    ['resolvers',   'Certificate resolvers', 'ph-certificate',  'var(--green)',  'staticResolverCount', 'Resolver'],
+    ['providers',   'Providers',             'ph-cloud',        'var(--teal)',   null,                  'Provider'],
+    ['api',         'API and dashboard',     'ph-gauge',        'var(--orange)', null,                  null],
+    ['log',         'Logging',               'ph-scroll',       '#ca8a04',       null,                  null],
+];
+
+function _buildStaticOnePage() {
+    const classic = document.createElement('div');
+    classic.innerHTML = _buildStaticClassicHTML();
+    return SC_SECTIONS.map(([key, label, icon, color, countId, addLabel]) => {
+        const panel = classic.querySelector('#staticPanel-' + key);
+        if (!panel) return '';
+        panel.style.display = '';
+        const warn = panel.querySelector('#staticEpWarning');
+        const form = panel.querySelector('#staticForm-' + key);
+        if (warn && form) form.insertBefore(warn, form.firstChild);
+        return `<section class="sc-sec" data-sc-sec="${key}">`
+             + _scSectionHead(key, label, icon, color, countId, addLabel)
+             + panel.outerHTML + '</section>';
+    }).join('');
+}
+
+function _buildStaticClassicHTML() {
     return `
     <div style="border-bottom:1px solid var(--border);flex-shrink:0;padding:12px 16px 0;display:flex;align-items:flex-end;gap:2px;">
         <button id="staticTabArrowL" onclick="_scrollStaticTabs(-1)" style="display:none;flex-shrink:0;background:none;border:none;cursor:pointer;padding:4px 3px 6px;color:var(--muted)" title="Scroll left"><i class="ph-bold ph-caret-left text-sm"></i></button>
@@ -1058,11 +1235,11 @@ function _buildStaticTabHTML() {
 
     <div id="staticPanel-api" style="display:none">
         <div class="px-4 py-4 space-y-1.5">
-            <div class="mb-3 rounded-lg px-3 py-2.5 flex items-start gap-2.5 text-xs" style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.25);color:#ca8a04">
+            <div id="staticApiWarn" class="mb-3 rounded-lg px-3 py-2.5 flex items-start gap-2.5 text-xs" style="display:none;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.25);color:#ca8a04">
                 <i class="ph-bold ph-warning text-sm shrink-0 mt-0.5"></i>
-                <span>Disabling the Traefik API will prevent Traefik Manager from reading routes, services, and middleware. Keep it enabled while using TM.</span>
+                <span>Traefik Manager reads your routes, services and middlewares from the Traefik API. With it disabled those tabs will be empty until you turn it back on and restart Traefik.</span>
             </div>
-            <div class="tab-toggle-row" onclick="staticToggle('apiEnabled')">
+            <div class="tab-toggle-row" onclick="onApiEnabledToggle()">
                 <span class="flex items-center gap-2 text-sm"><i class="ph-bold ph-terminal-window" style="color:var(--muted)"></i> API Enabled</span>
                 <div class="toggle-switch" id="staticT-apiEnabled"><div class="toggle-knob"></div></div>
             </div>
@@ -1082,7 +1259,7 @@ function _buildStaticTabHTML() {
                 <span class="flex items-center gap-2 text-sm"><i class="ph-bold ph-bug" style="color:var(--muted)"></i> Debug Mode</span>
                 <div class="toggle-switch" id="staticT-debugMode"><div class="toggle-knob"></div></div>
             </div>
-            <div class="flex justify-end pt-2">
+            <div class="flex justify-end pt-2 sc-save" data-sc-save="api" style="display:none">
                 <button onclick="saveStaticSingleSection('api')" class="btn-primary text-xs">Save Changes</button>
             </div>
         </div>
@@ -1107,7 +1284,7 @@ function _buildStaticTabHTML() {
                 <label class="text-xs block mb-1" style="color:var(--muted)">Log File Path <span style="font-weight:400">(leave empty for stdout)</span></label>
                 <input id="sfAccessLogPath" type="text" class="input-field text-sm" placeholder="/var/log/traefik/access.log">
             </div>
-            <div class="flex justify-end pt-1">
+            <div class="flex justify-end pt-1 sc-save" data-sc-save="log" style="display:none">
                 <button onclick="saveStaticSingleSection('log')" class="btn-primary text-xs">Save Changes</button>
             </div>
         </div>
@@ -1152,7 +1329,7 @@ function _buildStaticTabHTML() {
                     </div>
                 </div>
             </div>
-            <div class="flex justify-end pt-1">
+            <div class="flex justify-end pt-1 sc-save" data-sc-save="providers" style="display:none">
                 <button onclick="saveStaticSingleSection('providers')" class="btn-primary text-xs">Save Changes</button>
             </div>
         </div>
@@ -1232,18 +1409,37 @@ async function _loadStaticFromDisk() {
         const data = await res.json();
         if (_activeAgent && data.content !== undefined) data.raw = data.content;
         if (data.error) {
-            wrapper.innerHTML = `<div class="text-center py-16" style="color:var(--muted)">
-                <i class="ph-light ph-warning-circle text-4xl block mb-3 opacity-40"></i>
-                <p>${_esc(data.error)}</p></div>`;
+            _staticLoadedFor = null;
+            const bar = document.getElementById('staticStateBar');
+            if (bar) bar.style.display = 'none';
+            const acts = document.querySelector('#tab-static .fb-secondary');
+            if (acts) acts.style.display = 'none';
+            wrapper.innerHTML = (!_activeAgent && typeof _emptyMountState === 'function')
+                ? _emptyMountState({
+                    icon: 'ph-sliders',
+                    title: 'traefik.yml not mounted',
+                    description: 'Mount your Traefik <code class="font-mono" style="color:var(--blue)">traefik.yml</code> read-write to edit entrypoints, certificate resolvers, plugins and providers from here.',
+                    steps: [
+                        { label: 'Add this volume to the <code class="font-mono">traefik-manager</code> service in your <code class="font-mono">docker-compose.yml</code>:',
+                          code: '- /path/to/traefik/traefik.yml:/app/traefik.yml' },
+                    ],
+                    note: 'Mount it read-write, without <code class="font-mono">:ro</code> - this tab writes to the file. A backup is taken before every save.'
+                })
+                : `<div class="text-center py-16" style="color:var(--muted)">
+                    <i class="ph-light ph-warning-circle text-4xl block mb-3 opacity-40"></i>
+                    <p>${_esc(data.error)}</p></div>`;
             return;
         }
+        const acts = document.querySelector('#tab-static .fb-secondary');
+        if (acts) acts.style.display = '';
         if (_staticMonaco) { _staticMonaco.dispose(); _staticMonaco = null; }
         if (_providerMonaco) { _providerMonaco.dispose(); _providerMonaco = null; }
         _staticRawContent = data.raw || '';
         _staticOriginalContent = _staticRawContent;
+        _staticSectionEdits = false;
         _clearStaticPending();
         _staticPendingChanges = false;
-        _hideStaticRestartBanner();
+        if (!_staticSaved) _hideStaticRestartBanner();
         if (_activeAgent) {
             const hdrAddBtn = document.getElementById('staticHdrAddBtn');
             if (hdrAddBtn) hdrAddBtn.style.display = 'none';
@@ -1260,6 +1456,7 @@ async function _loadStaticFromDisk() {
         const hdrAddBtn = document.getElementById('staticHdrAddBtn');
         if (hdrAddBtn) hdrAddBtn.style.display = '';
         wrapper.innerHTML = _buildStaticTabHTML();
+        initStaticDirtyTracking();
         _renderStaticSections(data.parsed || {});
         _renderEpRuntimeWarning();
         switchStaticSection(_staticActiveSection);
@@ -1269,6 +1466,84 @@ async function _loadStaticFromDisk() {
             <i class="ph-light ph-warning-circle text-4xl block mb-3 opacity-40"></i>
             <p>Failed to load static config</p></div>`;
     }
+}
+
+let _staticLoadedFor = null;
+
+function _scMarkSectionDirty(el) {
+    const sec = el.closest ? el.closest('.sc-sec, [id^="staticPanel-"]') : null;
+    const key = sec ? (sec.dataset.scSec || (sec.id || '').replace('staticPanel-', '')) : null;
+    if (!key) return;
+    const save = document.querySelector(`.sc-save[data-sc-save="${key}"]`);
+    if (save) save.style.display = '';
+}
+
+function _scResetSaves() {
+    document.querySelectorAll('.sc-save').forEach(el => { el.style.display = 'none'; });
+}
+
+function initStaticDirtyTracking() {
+    const root = document.getElementById('staticSettingsContent');
+    if (!root || root.dataset.dirtyBound) return;
+    root.dataset.dirtyBound = '1';
+    const mark = e => {
+        if (e.target.closest('.sc-save')) return;
+        _scMarkSectionDirty(e.target);
+    };
+    root.addEventListener('input', mark);
+    root.addEventListener('change', mark);
+    root.addEventListener('click', e => {
+        if (e.target.closest('.tab-toggle-row')) mark(e);
+    });
+}
+
+function rerenderStaticBody() {
+    const wrapper = document.getElementById('staticSettingsContent');
+    if (!wrapper || _staticLoadedFor === null || _activeAgent) return;
+    wrapper.innerHTML = _buildStaticTabHTML();
+    initStaticDirtyTracking();
+    _renderStaticSections(_staticParsedData);
+    _renderEpRuntimeWarning();
+    if (!_tmModern()) switchStaticSection(_staticActiveSection);
+    _renderStaticStateBar();
+    filterStatic();
+}
+
+function filterStatic() {
+    const q = (document.getElementById('staticSearch')?.value || '').trim().toLowerCase();
+    let shown = 0;
+    document.querySelectorAll('#staticSettingsContent .sc-sec').forEach(sec => {
+        const cards = sec.querySelectorAll('.tm-card');
+        if (!cards.length) {
+            sec.style.display = q ? 'none' : '';
+            return;
+        }
+        let hits = 0;
+        cards.forEach(card => {
+            const match = !q || card.textContent.toLowerCase().includes(q);
+            card.style.display = match ? '' : 'none';
+            if (match) hits++;
+        });
+        sec.style.display = hits ? '' : 'none';
+        shown += hits;
+    });
+    const empty = document.getElementById('staticNoMatch');
+    if (empty) empty.style.display = (q && shown === 0) ? '' : 'none';
+}
+
+function openStaticTab() {
+    const warn = document.getElementById('staticDangerWarn');
+    if (warn) warn.style.display = localStorage.getItem('staticWarnHidden') === '1' ? 'none' : '';
+    const server = _activeAgent ? _activeAgent.id : 'host';
+    if (_staticLoadedFor !== server) {
+        _staticLoadedFor = server;
+        _loadStaticFromDisk();
+    } else {
+        _renderStaticStateBar();
+        requestAnimationFrame(_updateStaticTabArrows);
+    }
+    const tip = document.getElementById('staticTrustedIpsWrap');
+    if (tip) tip.style.display = _activeAgent ? 'none' : '';
 }
 
 async function refreshStaticTab() {

@@ -22,7 +22,7 @@ async function _recordNotification(msg, type) {
     } catch (e) {}
 }
 
-const OPTIONAL_TABS = ['dashboard', 'routemap', 'docker', 'kubernetes', 'swarm', 'nomad', 'ecs', 'consulcatalog', 'redis', 'etcd', 'consul', 'zookeeper', 'http_provider', 'file_external', 'certs', 'tls', 'crowdsec', 'plugins', 'logs'];
+const OPTIONAL_TABS = ['dashboard', 'routemap', 'docker', 'kubernetes', 'swarm', 'nomad', 'ecs', 'consulcatalog', 'redis', 'etcd', 'consul', 'zookeeper', 'http_provider', 'file_external', 'certs', 'tls', 'crowdsec', 'plugins', 'logs', 'static'];
 
 let _visibleTabsCache = {};
 let _localTabsCache   = {};
@@ -134,8 +134,8 @@ function switchTab(tab) {
     document.querySelectorAll('.side-nav-item').forEach(i => i.classList.remove('active'));
     document.getElementById('sbtn-' + tab)?.classList.add('active');
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('tab-' + tab).classList.add('active');
-    document.getElementById('btn-' + tab).classList.add('active');
+    document.getElementById('tab-' + tab)?.classList.add('active');
+    document.getElementById('btn-' + tab)?.classList.add('active');
     if (tab === 'dashboard')     refreshDashboardTab();
     if (tab === 'routemap')      refreshRoutemapTab();
     if (tab === 'services' || tab === 'middlewares') refreshRoutes();
@@ -156,6 +156,7 @@ function switchTab(tab) {
     if (tab === 'tls')           refreshTlsOptionsTab();
     if (tab === 'crowdsec')      refreshCrowdSecTab();
     if (tab === 'plugins')       refreshPluginsTab();
+    if (tab === 'static')        openStaticTab();
     if (tab === 'logs')          refreshLogs();
     _initMobileFilterBars();
 }

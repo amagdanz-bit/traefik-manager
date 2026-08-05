@@ -118,7 +118,6 @@ window.addEventListener('appinstalled', () => {
     } catch(e) {
         applyTabVisibility({});
     }
-    _refreshStaticAvailability();
     if (typeof applyUiPrefs === 'function') applyUiPrefs();
     if (typeof _applyDocsLinkVisibility === 'function') _applyDocsLinkVisibility();
     _initMobileFilterBars();
@@ -138,6 +137,7 @@ window.addEventListener('appinstalled', () => {
         }
     }).catch(() => { if (_storedAgentId) refreshRoutes(); });
     initNavOverflow();
+    if (typeof refreshStaticTabAvailability === 'function') refreshStaticTabAvailability();
     window.addEventListener('resize', () => { if (window.innerWidth >= 768) closeSideNavDrawer(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSideNavDrawer(); });
     setInterval(fetchNotifications, 60000);
