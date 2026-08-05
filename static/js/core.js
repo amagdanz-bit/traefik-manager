@@ -1,4 +1,4 @@
-function showToast(msg, type='success') {
+function showToast(msg, type='success', record=true) {
     const icon = type === 'success' ? 'ph-check-circle' : 'ph-warning-circle';
     const color = type === 'success' ? 'text-green-400' : 'text-red-400';
     const el = document.createElement('div');
@@ -6,6 +6,20 @@ function showToast(msg, type='success') {
     el.innerHTML = `<i class="ph-fill ${icon} ${color} text-lg"></i><span>${_esc(msg)}</span>`;
     document.getElementById('toastContainer').appendChild(el);
     setTimeout(() => { el.style.animation='slideOut 0.3s ease forwards'; setTimeout(()=>el.remove(),300); }, 4000);
+    if (record) _recordNotification(msg, type);
+}
+
+async function _recordNotification(msg, type) {
+    if (typeof _csrfHeaders !== 'function') return;
+    try {
+        const res = await fetch('/api/notifications/log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch', ..._csrfHeaders() },
+            body: JSON.stringify({ message: msg, type: type === 'success' ? 'success' : type === 'info' ? 'info' : 'error' }),
+        });
+        const json = await res.json();
+        if (json && json.stored) fetchNotifications();
+    } catch (e) {}
 }
 
 const OPTIONAL_TABS = ['dashboard', 'routemap', 'docker', 'kubernetes', 'swarm', 'nomad', 'ecs', 'consulcatalog', 'redis', 'etcd', 'consul', 'zookeeper', 'http_provider', 'file_external', 'certs', 'tls', 'crowdsec', 'plugins', 'logs'];

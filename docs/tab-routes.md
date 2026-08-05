@@ -126,7 +126,7 @@ For HTTP routes, the **Load balancing** section adds:
 |---|---|---|
 | Sticky sessions | `loadBalancer.sticky.cookie` | Pins a client to one backend via a cookie. Cookie name, `secure` and `httpOnly` are optional. |
 | Health check | `loadBalancer.healthCheck` | Path is required; interval and timeout accept Go durations (`10s`, `500ms`). A bare number is read as seconds. |
-| Router priority | `router.priority` | Higher wins when several routers match the same request. Also available for TCP routes. |
+| Router priority | `router.priority` | Higher wins when several routers match the same request. Negative values are allowed, which is how you make a wildcard catchall lose against every explicit route. `0` means unset and is not written. Also available for TCP routes. |
 
 These round-trip on edit, so reopening a route shows the backends and settings it already has.
 

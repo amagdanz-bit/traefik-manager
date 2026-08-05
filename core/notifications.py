@@ -80,9 +80,33 @@ def _save_notifications_bg():
     except Exception:
         logger.exception("Failed to save notifications")
 
-def add_notification(type_, msg):
-    entry = {'ts': time.strftime("%Y-%m-%d %H:%M:%S"), 'type': type_, 'msg': msg}
+DEDUPE_WINDOW = 8
+
+
+def _recently_logged(msg, now):
+    for entry in reversed(_notifications):
+        try:
+            age = now - time.mktime(time.strptime(entry.get('ts', ''), "%Y-%m-%d %H:%M:%S"))
+        except (ValueError, TypeError):
+            continue
+        if age > DEDUPE_WINDOW:
+            return False
+        if entry.get('msg') == msg:
+            return True
+    return False
+
+
+def add_notification(type_, msg, webhook=True):
+    msg = str(msg or '').strip()
+    if not msg:
+        return False
+    now = time.time()
     with _notif_lock:
+        if _recently_logged(msg, now):
+            return False
+        entry = {'ts': time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now)), 'type': type_, 'msg': msg}
         _notifications.append(entry)
     _save_notifications_bg()
-    threading.Thread(target=_fire_webhook, args=(type_, msg, entry['ts']), daemon=True).start()
+    if webhook:
+        threading.Thread(target=_fire_webhook, args=(type_, msg, entry['ts']), daemon=True).start()
+    return True

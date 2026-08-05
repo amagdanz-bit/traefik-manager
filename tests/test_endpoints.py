@@ -109,3 +109,35 @@ def test_agent_visible_tabs_follow_the_hub(client):
 
     reloaded = agents_store.load_agents()
     assert reloaded[0]['visible_tabs'] == {'logs': True, 'certs': False, 'docker': True}
+
+
+def test_toast_messages_are_recorded_in_the_drawer(client):
+    r = client.post('/api/notifications/log',
+                    json={'message': 'Route gone deleted', 'type': 'error'},
+                    headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    assert r.status_code == 200 and r.get_json()['stored'] is True
+
+    entries = client.get('/api/notifications').get_json()
+    assert any(e['msg'] == 'Route gone deleted' and e['type'] == 'error' for e in entries)
+
+
+def test_the_same_message_is_not_recorded_twice(client):
+    payload = {'message': 'Saved app1', 'type': 'success'}
+    hdrs = {'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'}
+    assert client.post('/api/notifications/log', json=payload, headers=hdrs).get_json()['stored'] is True
+    assert client.post('/api/notifications/log', json=payload, headers=hdrs).get_json()['stored'] is False
+
+    entries = client.get('/api/notifications').get_json()
+    assert sum(1 for e in entries if e['msg'] == 'Saved app1') == 1
+
+
+def test_empty_toast_messages_are_rejected(client):
+    r = client.post('/api/notifications/log', json={'message': '   '},
+                    headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    assert r.status_code == 400
+
+
+def test_recording_a_toast_requires_a_session(anon_client):
+    r = anon_client.post('/api/notifications/log', json={'message': 'hi'},
+                         headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    assert r.status_code in (302, 401, 403)

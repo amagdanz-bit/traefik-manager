@@ -465,3 +465,54 @@ def test_switching_own_route_to_ref_cleans_up_orphan(client):
     assert cfg['http']['routers']['app2']['service'] == 'app1-service'
     assert 'app2-service' not in cfg['http']['services']
     assert 'app1-service' in cfg['http']['services']
+
+
+def test_negative_router_priority_is_kept(client):
+    """Traefik allows negative priorities; a wildcard catchall needs one (#128)."""
+    r = _save_http(client, name="catchall", backendsJsonHttp=json.dumps({
+        "servers": [{"scheme": "http", "host": "10.0.0.1", "port": "8080"}],
+        "priority": -100,
+    }))
+    assert r.status_code < 400
+    assert read_config()["http"]["routers"]["catchall"]["priority"] == -100
+
+
+def test_zero_router_priority_is_dropped(client):
+    r = _save_http(client, name="zeroprio", backendsJsonHttp=json.dumps({
+        "servers": [{"scheme": "http", "host": "10.0.0.1", "port": "8080"}],
+        "priority": 0,
+    }))
+    assert r.status_code < 400
+    assert "priority" not in read_config()["http"]["routers"]["zeroprio"]
+
+
+def _seed_disabled(app_module, route_id):
+    s = app_module.load_settings()
+    disabled = dict(s.get("disabled_routes", {}))
+    disabled[route_id] = {"protocol": "http", "configFile": "dynamic.yml",
+                          "router": {"rule": "Host(`gone.example.com`)", "service": "gone-service"},
+                          "service": {"loadBalancer": {"servers": [{"url": "http://10.0.0.1:8080"}]}}}
+    app_module.save_settings(
+        domains=s["domains"], cert_resolver=s["cert_resolver"],
+        traefik_api_url=s["traefik_api_url"], auth_enabled=s["auth_enabled"],
+        password_hash=s["password_hash"], visible_tabs=s["visible_tabs"],
+        disabled_routes=disabled, managed_middlewares=s["managed_middlewares"])
+
+
+def test_delete_a_disabled_route_stored_under_a_prefixed_id(client, app_module):
+    """Disabling stores the full id, and multi-config ids carry a configFile:: prefix."""
+    route_id = "dynamic.yml::gone"
+    _seed_disabled(app_module, route_id)
+
+    r = post_form(client, f"/delete/{route_id}")
+    assert r.status_code < 400, r.data
+    assert route_id not in app_module.load_settings().get("disabled_routes", {})
+
+
+def test_delete_a_disabled_route_stored_under_a_bare_id(client, app_module):
+    """Single-file installs store the bare name; that path must keep working."""
+    _seed_disabled(app_module, "gone")
+
+    r = post_form(client, "/delete/gone")
+    assert r.status_code < 400, r.data
+    assert "gone" not in app_module.load_settings().get("disabled_routes", {})
