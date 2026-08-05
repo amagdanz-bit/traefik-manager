@@ -27,11 +27,14 @@ SETTINGS_PATH.write_text(
     "password_hash: '$2b$12$abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQR'\n"
 )
 DYNAMIC_PATH.write_text("http:\n  routers: {}\n  services: {}\n")
+STATIC_PATH = _CONFIG_DIR / "traefik.yml"
+STATIC_PATH.write_text("providers:\n  docker: {}\n")
 
 os.environ["SETTINGS_PATH"] = str(SETTINGS_PATH)
 os.environ["CONFIG_PATHS"] = str(DYNAMIC_PATH)
 os.environ["BACKUP_DIR"] = str(BACKUP_DIR)
 os.environ["TRAEFIK_API_URL"] = "http://traefik.invalid:8080"
+os.environ["STATIC_CONFIG_PATH"] = str(STATIC_PATH)
 
 import app as tm
 

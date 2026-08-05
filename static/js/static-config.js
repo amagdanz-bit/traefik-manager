@@ -921,7 +921,7 @@ function _renderStaticProviders(providersData) {
     if (hasDocker) {
         const ep = document.getElementById('sfDockerEndpoint');
         if (ep) ep.value = (prov.docker || {}).endpoint || 'unix:///var/run/docker.sock';
-        _setStaticToggle('dockerExposedByDefault', !!(prov.docker || {}).exposedByDefault);
+        _setStaticToggle('dockerExposedByDefault', (prov.docker || {}).exposedByDefault !== false);
         _setStaticToggle('dockerWatch', (prov.docker || {}).watch !== false);
     }
     const hasFile = prov.file !== undefined && prov.file !== null;

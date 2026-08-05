@@ -127,3 +127,38 @@ def test_recording_a_toast_requires_a_session(anon_client):
     r = anon_client.post('/api/notifications/log', json={'message': 'hi'},
                          headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
     assert r.status_code in (302, 401, 403)
+
+
+def _static_providers_roundtrip(client, raw, payload):
+    import json
+    res = client.post('/api/static/section',
+                      data=json.dumps({'action': 'set', 'section': 'providers',
+                                       'name': '', 'data': payload, 'current_raw': raw}),
+                      content_type='application/json',
+                      headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    assert res.status_code == 200, res.data
+    body = res.get_json()
+    assert body.get('ok'), body
+    return body['raw'], body.get('parsed') or {}
+
+
+BARE_DOCKER = "providers:\n  docker: {}\n"
+
+
+def test_turning_off_expose_by_default_is_written_to_the_file(client):
+    raw, parsed = _static_providers_roundtrip(client, BARE_DOCKER, {
+        'docker': True, 'dockerEndpoint': '', 'dockerExposedByDefault': False,
+        'dockerWatch': True, 'file': False,
+    })
+    assert parsed['providers']['docker'].get('exposedByDefault') is False, (
+        'Traefik defaults exposedByDefault to true, so turning it off must write the key.\n'
+        'Leaving it out leaves every container auto-exposed.\n' + raw)
+    assert 'exposedByDefault: false' in raw
+
+
+def test_leaving_expose_by_default_on_does_not_write_the_key(client):
+    raw, parsed = _static_providers_roundtrip(client, BARE_DOCKER, {
+        'docker': True, 'dockerEndpoint': '', 'dockerExposedByDefault': True,
+        'dockerWatch': True, 'file': False,
+    })
+    assert 'exposedByDefault' not in (parsed['providers']['docker'] or {}), raw

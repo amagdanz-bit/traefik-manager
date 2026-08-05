@@ -1631,8 +1631,8 @@ def api_static_section_update():
                 endpoint = str(payload.get('dockerEndpoint', '')).strip()
                 if endpoint and endpoint != 'unix:///var/run/docker.sock':
                     docker_cfg['endpoint'] = endpoint
-                if payload.get('dockerExposedByDefault'):
-                    docker_cfg['exposedByDefault'] = True
+                if not payload.get('dockerExposedByDefault', True):
+                    docker_cfg['exposedByDefault'] = False
                 if not payload.get('dockerWatch', True):
                     docker_cfg['watch'] = False
                 providers['docker'] = docker_cfg
