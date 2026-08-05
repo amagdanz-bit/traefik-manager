@@ -895,6 +895,8 @@ async function clearAllNotifications() {
 
 let _navReflowPending = false;
 
+const NAV_PHONE_BELOW = 768;
+
 function _navItems(bar, menu) {
     return [...bar.children, ...menu.children]
         .filter(el => el.dataset && el.dataset.navprio)
@@ -902,8 +904,21 @@ function _navItems(bar, menu) {
         .sort((a, b) => a.prio - b.prio);
 }
 
+function _navMovable(el) {
+    if (el.id !== 'serverSwitcherWrap') return true;
+    return window.innerWidth < NAV_PHONE_BELOW;
+}
+
+function _navRestore(bar, menu, wrap) {
+    [...bar.children, ...menu.children]
+        .filter(el => el.dataset && el.dataset.navorder !== undefined)
+        .sort((a, b) => a.dataset.navorder - b.dataset.navorder)
+        .forEach(el => bar.insertBefore(el, wrap));
+}
+
 function _navVisible(el) {
-    return !el.classList.contains('hidden') && el.style.display !== 'none';
+    if (el.classList.contains('hidden') || el.style.display === 'none') return false;
+    return getComputedStyle(el).display !== 'none';
 }
 
 const NAV_COLLAPSE_ALL_BELOW = 1024;
@@ -917,23 +932,21 @@ function reflowNav() {
     const items = _navItems(bar, menu);
     const collapseAll = window.innerWidth < NAV_COLLAPSE_ALL_BELOW;
 
+    _navRestore(bar, menu, wrap);
+
     if (collapseAll) {
         wrap.style.display = '';
         for (const { el } of items) {
-            if (el.parentElement !== menu) menu.appendChild(el);
+            if (_navMovable(el)) menu.appendChild(el);
         }
     } else {
-        for (const { el } of items) {
-            if (el.parentElement === menu) bar.insertBefore(el, wrap);
-        }
         wrap.style.display = 'none';
-
         const room = () => bar.parentElement.clientWidth - bar.parentElement.firstElementChild.offsetWidth - 24;
         if (bar.offsetWidth > room()) wrap.style.display = '';
 
         for (const { el } of items) {
             if (bar.offsetWidth <= room()) break;
-            if (!_navVisible(el)) continue;
+            if (!_navVisible(el) || !_navMovable(el)) continue;
             menu.appendChild(el);
         }
     }
@@ -959,7 +972,9 @@ function closeNavMore() {
 }
 
 function initNavOverflow() {
-    if (!document.getElementById('navActions')) return;
+    const bar = document.getElementById('navActions');
+    if (!bar) return;
+    [...bar.children].forEach((el, i) => { el.dataset.navorder = i; });
     scheduleNavReflow();
     window.addEventListener('resize', scheduleNavReflow);
     document.addEventListener('click', e => {
