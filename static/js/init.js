@@ -138,6 +138,8 @@ window.addEventListener('appinstalled', () => {
         }
     }).catch(() => { if (_storedAgentId) refreshRoutes(); });
     initNavOverflow();
+    window.addEventListener('resize', () => { if (window.innerWidth >= 768) closeSideNavDrawer(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSideNavDrawer(); });
     setInterval(fetchNotifications, 60000);
 })();
 

@@ -38,8 +38,8 @@ function buildSideNav() {
         const item  = document.createElement('button');
         item.className = 'side-nav-item' + (btn.classList.contains('active') ? ' active' : '');
         item.id = 'sbtn-' + tab;
-        item.title = document.documentElement.classList.contains('tm-nav-collapsed') ? label : '';
-        item.onclick = () => switchTab(tab);
+        item.title = (window.innerWidth >= 768 && document.documentElement.classList.contains('tm-nav-collapsed')) ? label : '';
+        item.onclick = () => { closeSideNavDrawer(); switchTab(tab); };
         item.innerHTML = `${icon ? `<i class="${icon.className}"></i>` : ''}<span class="side-nav-label">${_esc(label)}</span>${count && count !== '-' ? `<span class="side-nav-count">${_esc(count)}</span>` : ''}`;
         const group = SIDE_NAV_GROUPS.providers.tabs.includes(tab) ? 'providers'
                     : SIDE_NAV_GROUPS.system.tabs.includes(tab) ? 'system' : 'core';
@@ -844,9 +844,8 @@ function toggleNotifPanel() {
     const color = _notifPanelOpen ? 'var(--blue)' : '';
     if (btn)  btn.style.color  = color;
     if (_notifPanelOpen) {
-        const activeBtn = (btnM && btnM.offsetParent) ? btnM : btn;
-        if (activeBtn) {
-            const r = activeBtn.getBoundingClientRect();
+        if (btn) {
+            const r = btn.getBoundingClientRect();
             const panelW = Math.min(360, window.innerWidth - 16);
             let left = r.right - panelW;
             if (left < 8) left = 8;
@@ -907,6 +906,8 @@ function _navVisible(el) {
     return !el.classList.contains('hidden') && el.style.display !== 'none';
 }
 
+const NAV_COLLAPSE_ALL_BELOW = 1024;
+
 function reflowNav() {
     const bar = document.getElementById('navActions');
     const wrap = document.getElementById('navMoreWrap');
@@ -914,19 +915,27 @@ function reflowNav() {
     if (!bar || !wrap || !menu || getComputedStyle(bar).display === 'none') return;
 
     const items = _navItems(bar, menu);
-    for (const { el } of items) {
-        if (el.parentElement === menu) bar.insertBefore(el, wrap);
-    }
-    wrap.style.display = 'none';
+    const collapseAll = window.innerWidth < NAV_COLLAPSE_ALL_BELOW;
 
-    const room = () => bar.parentElement.clientWidth - bar.parentElement.firstElementChild.offsetWidth - 24;
-    let overflowing = bar.offsetWidth > room();
-    if (overflowing) wrap.style.display = '';
+    if (collapseAll) {
+        wrap.style.display = '';
+        for (const { el } of items) {
+            if (el.parentElement !== menu) menu.appendChild(el);
+        }
+    } else {
+        for (const { el } of items) {
+            if (el.parentElement === menu) bar.insertBefore(el, wrap);
+        }
+        wrap.style.display = 'none';
 
-    for (const { el } of items) {
-        if (bar.offsetWidth <= room()) break;
-        if (!_navVisible(el)) continue;
-        menu.appendChild(el);
+        const room = () => bar.parentElement.clientWidth - bar.parentElement.firstElementChild.offsetWidth - 24;
+        if (bar.offsetWidth > room()) wrap.style.display = '';
+
+        for (const { el } of items) {
+            if (bar.offsetWidth <= room()) break;
+            if (!_navVisible(el)) continue;
+            menu.appendChild(el);
+        }
     }
 
     const moved = [...menu.children].filter(_navVisible).length;
@@ -956,7 +965,21 @@ function initNavOverflow() {
     document.addEventListener('click', e => {
         if (!e.target.closest('#navMoreWrap')) closeNavMore();
     });
-    new MutationObserver(scheduleNavReflow).observe(document.getElementById('navActions').parentElement, {
+    const menu = document.getElementById('navMoreMenu');
+    new MutationObserver(muts => {
+        if (muts.every(m => m.target === menu)) return;
+        scheduleNavReflow();
+    }).observe(document.getElementById('navActions').parentElement, {
         attributes: true, attributeFilter: ['class', 'style'], subtree: true,
     });
+}
+
+function toggleSideNavDrawer() {
+    const open = document.documentElement.classList.toggle('tm-drawer-open');
+    document.body.style.overflow = open ? 'hidden' : '';
+}
+
+function closeSideNavDrawer() {
+    document.documentElement.classList.remove('tm-drawer-open');
+    document.body.style.overflow = '';
 }
