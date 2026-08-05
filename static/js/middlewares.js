@@ -503,7 +503,7 @@ function renderMwGrid(middlewares) {
     }).join('');
 
     if (_mwViewMode === 'list') {
-        const header = `<div class="svc-list-header mw-list-grid"><div>Protocol</div><div>Name</div><div>Config File</div><div></div></div>`;
+        const header = `<div class="svc-list-header mw-list-grid"><div>Protocol</div><div>Name</div><div>Config File</div><div class="rl-actions-head">Actions</div></div>`;
         grid.className = '';
         grid.innerHTML = `<div class="svc-list">${header}${grid.innerHTML}</div>`;
     } else if (_tmOn) {

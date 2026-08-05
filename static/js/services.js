@@ -260,8 +260,8 @@ function renderServicesTable() {
                     return `<span class="text-xs font-mono truncate" style="color:${color}" title="${_esc(url)}">${_esc(url)}</span>`;
                 }).join('')}</div>`
                 : '<span style="color:var(--muted);font-size:11px">-</span>';
-            return `<div class="svc-list-row" onclick="openSvcDetail(${globalIdx})">
-                <div class="svc-list-col-status"><span class="svc-status-dot" style="background:${stColor}"></span></div>
+            return `<div class="svc-list-row svc-list-grid" onclick="openSvcDetail(${globalIdx})">
+                <div class="svc-list-col-status"><span class="svc-status-dot" style="background:${stColor}"></span><span class="d-flat rl-state" style="color:${stColor}">${st === 'success' ? 'Success' : st === 'error' ? 'Error' : 'Warning'}</span></div>
                 <div class="svc-list-col-proto">
                     <span class="d-flat d-proto d-proto-${proto.toLowerCase()}">${proto}</span>
                     ${type ? `<span class="d-flat d-blue">${type}</span>` : ''}
@@ -273,8 +273,8 @@ function renderServicesTable() {
                 <div class="svc-list-col-usedby">${usedBy.length > 0 ? `<span class="d-flat d-mw"><i class="ph-bold ph-git-branch" style="font-size:9px;margin-right:4px"></i>${usedBy.length}</span>` : '<span class="d-flat d-off">-</span>'}</div>
             </div>`;
         }).join('');
-        const header = `<div class="svc-list-header">
-            <div class="svc-list-col-status"></div>
+        const header = `<div class="svc-list-header svc-list-grid">
+            <div class="svc-list-col-status">Status</div>
             <div class="svc-list-col-proto">Protocol</div>
             <div class="svc-list-col-name">Name</div>
             <div class="svc-list-col-url">Backend URL</div>
