@@ -2,29 +2,29 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6">
         <div class="flex items-center justify-between h-14">
 
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 min-w-0">
                 <div class="flex items-center gap-2">
                     <img src="/static/icons/icon.png" alt="logo" style="width:24px;height:24px">
-                    <span class="font-bold text-base tracking-tight" style="color:var(--text)">Traefik <span style="color:var(--blue)">Manager</span></span>
+                    <span class="font-bold text-base tracking-tight nav-brand" style="color:var(--text)">Traefik <span style="color:var(--blue)">Manager</span></span>
                     <span id="agentServerLabel" style="display:none;font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;background:rgba(36,161,222,0.12);border:1px solid rgba(36,161,222,0.25);color:var(--blue)"></span>
                 </div>
             </div>
 
-            <div class="hidden sm:flex items-center gap-2">
-                <button id="versionBadge" class="hidden nav-btn font-mono" title="Traefik version">
+            <div class="flex items-center gap-2" id="navActions">
+                <button id="versionBadge" class="hidden nav-btn font-mono" data-navprio="30" title="Traefik version">
                     <span id="apiStatusDot" style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;flex-shrink:0"></span>
                     <i class="ph-bold ph-git-branch"></i>
                     <span id="versionText">-</span>
                 </button>
                 <div id="updateBadge" class="hidden"></div>
-                <button id="tmVersionBadge" class="hidden nav-btn font-mono" title="Traefik Manager version">
+                <button id="tmVersionBadge" class="hidden nav-btn font-mono" data-navprio="25" title="Traefik Manager version">
                     <i class="ph-bold ph-package"></i>
                     <span id="tmVersionText">-</span>
                 </button>
-                <a href="https://traefik-manager.xyzlab.dev" target="_blank" rel="noopener" class="nav-btn nav-docs-link" title="Documentation">
+                <a href="https://traefik-manager.xyzlab.dev" target="_blank" rel="noopener" class="nav-btn nav-docs-link" data-navprio="10" title="Documentation">
                     <i class="ph-bold ph-book-open"></i>
                 </a>
-                <a href="/api" class="nav-btn nav-api-link" title="API Reference">
+                <a href="/api" class="nav-btn nav-api-link" data-navprio="15" title="API Reference">
                     <span style="font-size:11px;font-weight:700;font-family:monospace">API</span>
                 </a>
                 <div id="serverSwitcherWrap" style="display:none;position:relative;">
@@ -37,7 +37,7 @@
                         <div id="serverSwitcherList"></div>
                     </div>
                 </div>
-                <div class="shortcuts-btn-wrap">
+                <div class="shortcuts-btn-wrap" data-navprio="35">
                     <button onclick="toggleShortcutsPanel()" class="nav-btn" id="shortcutsBellBtn" title="Keyboard shortcuts">
                         <i class="ph-bold ph-keyboard"></i>
                     </button>
@@ -48,46 +48,44 @@
                         <span id="notifBadge" class="notif-badge hidden"></span>
                     </button>
                 </div>
-                <button onclick="cycleTheme()" id="themeToggleBtn" class="nav-btn" title="Toggle theme">
+                <button onclick="cycleTheme()" id="themeToggleBtn" class="nav-btn" data-navprio="60" title="Toggle theme">
                     <i class="ph-bold ph-moon tm-theme-icon" data-pref="dark"></i>
                     <i class="ph-bold ph-sun tm-theme-icon" data-pref="light"></i>
                     <i class="ph-bold ph-desktop tm-theme-icon" data-pref="system"></i>
                 </button>
-                <button onclick="openIpDiagModal()" class="nav-btn nav-ipdiag-btn" title="Client IP diagnostic">
+                <button onclick="openIpDiagModal()" class="nav-btn nav-ipdiag-btn" data-navprio="20" title="Client IP diagnostic">
                     <i class="ph-bold ph-network"></i>
                 </button>
-                <button onclick="openSettingsModal()" class="nav-btn" title="Settings">
+                <button onclick="openSettingsModal()" class="nav-btn" data-navprio="80" title="Settings">
                     <i class="ph-bold ph-gear"></i>
                 </button>
                 {% if auth_enabled %}
-                <form method="POST" action="{{ url_for('logout') }}" style="display:inline">
+                <form method="POST" action="{{ url_for('logout') }}" style="display:inline" data-navprio="40">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="nav-btn" title="Sign out" style="color:var(--muted)">
                         <i class="ph-bold ph-sign-out"></i>
                     </button>
                 </form>
                 {% endif %}
-                <button id="navAddMwBtn" onclick="openMwModal()" class="nav-btn" title="Add Middleware">
+                <button id="pwaInstallBtn" onclick="installPWA()" class="hidden nav-btn" data-navprio="5" title="Install as App">
+                    <i class="ph-bold ph-device-mobile"></i>
+                </button>
+                <button id="navAddMwBtn" onclick="openMwModal()" class="nav-btn nav-labelled" data-navprio="50" title="Add Middleware">
                     <i class="ph-bold ph-plugs-connected"></i>
                     <span>Middleware</span>
                 </button>
-                <button id="navAddRouteBtn" onclick="openModal()" class="nav-btn nav-btn-primary">
+                <button id="navAddRouteBtn" onclick="openModal()" class="nav-btn nav-btn-primary nav-labelled" data-navprio="90" title="Add Route">
                     <i class="ph-bold ph-plus"></i>
                     <span>Add Route</span>
                 </button>
+                <div class="nav-more-wrap" id="navMoreWrap" style="display:none">
+                    <button type="button" class="nav-btn" id="navMoreBtn" onclick="toggleNavMore()" title="More">
+                        <i class="ph-bold ph-dots-three"></i>
+                    </button>
+                    <div class="nav-more-menu" id="navMoreMenu"></div>
+                </div>
             </div>
 
-            <div class="flex sm:hidden items-center gap-2">
-                <div class="notif-bell-wrap" id="notifBellWrapMobile">
-                    <button onclick="toggleNotifPanel()" class="btn-icon" id="notifBellBtnMobile" title="Notifications">
-                        <i class="ph-bold ph-bell text-lg"></i>
-                        <span id="notifBadgeMobile" class="notif-badge hidden"></span>
-                    </button>
-                </div>
-                <button onclick="toggleMobileMenu()" class="btn-icon" id="hamburgerBtn">
-                    <i class="ph-bold ph-list text-xl" id="hamburgerIcon"></i>
-                </button>
-            </div>
         </div>
     </div>
 

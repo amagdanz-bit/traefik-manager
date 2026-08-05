@@ -388,17 +388,6 @@ function cycleTheme() {
     setTheme(next);
 }
 
-function toggleMobileMenu() {
-    const menu = document.getElementById('mobileMenu');
-    const icon = document.getElementById('hamburgerIcon');
-    menu.style.display = '';
-    const isOpen = menu.classList.toggle('open');
-    icon.className = isOpen ? 'ph-bold ph-x text-xl' : 'ph-bold ph-list text-xl';
-}
-function closeMobileMenu() {
-    document.getElementById('mobileMenu').classList.remove('open');
-    document.getElementById('hamburgerIcon').className = 'ph-bold ph-list text-xl';
-}
 const _autofillAllowed = new Set(['pwCurrent', 'pwNew', 'pwConfirm', 'otpVerifyCode']);
 
 function _guardAutofillField(el) {
@@ -813,20 +802,13 @@ async function fetchNotifications() {
 function _renderNotifPanel() {
     const list  = document.getElementById('notifList');
     const badge = document.getElementById('notifBadge');
-    const badgeM = document.getElementById('notifBadgeMobile');
     const markReadBtn = document.getElementById('notifMarkRead');
     if (!list || !badge) return;
 
     const unreadCount = _notifData.filter((_, i) => i < (_notifData.length - _notifLastRead)).length;
     const hasUnread = unreadCount > 0;
 
-    if (hasUnread) {
-        badge.classList.remove('hidden');
-        badgeM?.classList.remove('hidden');
-    } else {
-        badge.classList.add('hidden');
-        badgeM?.classList.add('hidden');
-    }
+    badge.classList.toggle('hidden', !hasUnread);
 
     if (markReadBtn) markReadBtn.style.display = hasUnread ? '' : 'none';
 
@@ -856,13 +838,11 @@ function _renderNotifPanel() {
 function toggleNotifPanel() {
     const panel = document.getElementById('notifPanel');
     const btn   = document.getElementById('notifBellBtn');
-    const btnM  = document.getElementById('notifBellBtnMobile');
     if (!panel) return;
     _notifPanelOpen = !_notifPanelOpen;
     panel.classList.toggle('open', _notifPanelOpen);
     const color = _notifPanelOpen ? 'var(--blue)' : '';
     if (btn)  btn.style.color  = color;
-    if (btnM) btnM.style.color = color;
     if (_notifPanelOpen) {
         const activeBtn = (btnM && btnM.offsetParent) ? btnM : btn;
         if (activeBtn) {
@@ -912,4 +892,71 @@ async function clearAllNotifications() {
         localStorage.setItem('notifLastRead', _notifLastRead);
         await fetchNotifications();
     } catch(e) {}
+}
+
+let _navReflowPending = false;
+
+function _navItems(bar, menu) {
+    return [...bar.children, ...menu.children]
+        .filter(el => el.dataset && el.dataset.navprio)
+        .map(el => ({ el, prio: parseInt(el.dataset.navprio, 10) }))
+        .sort((a, b) => a.prio - b.prio);
+}
+
+function _navVisible(el) {
+    return !el.classList.contains('hidden') && el.style.display !== 'none';
+}
+
+function reflowNav() {
+    const bar = document.getElementById('navActions');
+    const wrap = document.getElementById('navMoreWrap');
+    const menu = document.getElementById('navMoreMenu');
+    if (!bar || !wrap || !menu || getComputedStyle(bar).display === 'none') return;
+
+    const items = _navItems(bar, menu);
+    for (const { el } of items) {
+        if (el.parentElement === menu) bar.insertBefore(el, wrap);
+    }
+    wrap.style.display = 'none';
+
+    const room = () => bar.parentElement.clientWidth - bar.parentElement.firstElementChild.offsetWidth - 24;
+    let overflowing = bar.offsetWidth > room();
+    if (overflowing) wrap.style.display = '';
+
+    for (const { el } of items) {
+        if (bar.offsetWidth <= room()) break;
+        if (!_navVisible(el)) continue;
+        menu.appendChild(el);
+    }
+
+    const moved = [...menu.children].filter(_navVisible).length;
+    wrap.style.display = moved ? '' : 'none';
+    if (!moved) closeNavMore();
+    _navReflowPending = false;
+}
+
+function scheduleNavReflow() {
+    if (_navReflowPending) return;
+    _navReflowPending = true;
+    requestAnimationFrame(reflowNav);
+}
+
+function toggleNavMore() {
+    document.getElementById('navMoreMenu')?.classList.toggle('open');
+}
+
+function closeNavMore() {
+    document.getElementById('navMoreMenu')?.classList.remove('open');
+}
+
+function initNavOverflow() {
+    if (!document.getElementById('navActions')) return;
+    scheduleNavReflow();
+    window.addEventListener('resize', scheduleNavReflow);
+    document.addEventListener('click', e => {
+        if (!e.target.closest('#navMoreWrap')) closeNavMore();
+    });
+    new MutationObserver(scheduleNavReflow).observe(document.getElementById('navActions').parentElement, {
+        attributes: true, attributeFilter: ['class', 'style'], subtree: true,
+    });
 }

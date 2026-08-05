@@ -14,7 +14,7 @@ agent/                  TMA - the Go agent for remote servers
 tests/                  pytest suite
 templates/
     index.html          SPA shell, no application JS
-    sections/           Navbar, stats bar, mobile menu
+    sections/           Navbar, stats bar
     tabs/               One file per tab
     modals/             Route, middleware, settings and other modals
 static/

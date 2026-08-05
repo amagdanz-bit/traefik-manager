@@ -84,14 +84,6 @@ document.addEventListener('click', e => {
     });
 })();
 
-document.addEventListener('click', e => {
-    const menu = document.getElementById('mobileMenu');
-    const btn = document.getElementById('hamburgerBtn');
-    if (menu.classList.contains('open') && !menu.contains(e.target) && !btn.contains(e.target)) {
-        closeMobileMenu();
-    }
-});
-
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _initAutofillGuard);
 else _initAutofillGuard();
 
@@ -107,14 +99,12 @@ window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
     _pwaInstallPrompt = e;
     document.getElementById('pwaInstallBtn')?.classList.remove('hidden');
-    document.getElementById('pwaInstallBtnMobile')?.classList.remove('hidden');
-});
+    });
 
 window.addEventListener('appinstalled', () => {
     _pwaInstallPrompt = null;
     document.getElementById('pwaInstallBtn')?.classList.add('hidden');
-    document.getElementById('pwaInstallBtnMobile')?.classList.add('hidden');
-    showToast('Traefik Manager installed as app!', 'success');
+        showToast('Traefik Manager installed as app!', 'success');
 });
 
 (async () => {
@@ -147,17 +137,16 @@ window.addEventListener('appinstalled', () => {
             refreshRoutes();
         }
     }).catch(() => { if (_storedAgentId) refreshRoutes(); });
+    initNavOverflow();
     setInterval(fetchNotifications, 60000);
 })();
 
 document.addEventListener('click', e => {
-    if (_notifPanelOpen && !e.target.closest('#notifBellWrap') && !e.target.closest('#notifBellWrapMobile')) {
+    if (_notifPanelOpen && !e.target.closest('#notifBellWrap')) {
         _notifPanelOpen = false;
         document.getElementById('notifPanel')?.classList.remove('open');
         const btn  = document.getElementById('notifBellBtn');
-        const btnM = document.getElementById('notifBellBtnMobile');
         if (btn)  btn.style.color  = '';
-        if (btnM) btnM.style.color = '';
         markNotifsRead();
     }
 });
