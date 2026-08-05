@@ -2356,6 +2356,21 @@ def api_notifications():
         entries = list(reversed(list(_notifications)))
     return jsonify(entries)
 
+@app.route('/api/notifications/log', methods=['POST'])
+@csrf_protect
+@login_required
+def api_notifications_log():
+    data = request.get_json(silent=True) or {}
+    msg = str(data.get('message', ''))[:300].strip()
+    type_ = str(data.get('type', 'info')).lower()
+    if type_ not in ('info', 'success', 'warning', 'error'):
+        type_ = 'info'
+    if not msg:
+        return jsonify({'ok': False}), 400
+    stored = add_notification(type_, msg, webhook=False)
+    return jsonify({'ok': True, 'stored': stored})
+
+
 @app.route('/api/notifications/delete', methods=['POST'])
 @login_required
 def api_notifications_delete():
@@ -3011,7 +3026,7 @@ def _clean_priority(value):
         n = int(value)
     except (TypeError, ValueError):
         return None
-    return n if n > 0 else None
+    return n if n != 0 else None
 
 
 def _clean_duration(value):
@@ -3132,6 +3147,30 @@ def _service_shared(config: dict, svc_name: str, exclude_router: str) -> bool:
             if _svc_key(rd.get('service', '')) == target:
                 return True
     return False
+
+
+def _disabled_key(disabled, full_id, plain_id, prefix=''):
+    for key in (full_id, plain_id, prefix + plain_id):
+        if key and key in disabled:
+            return key
+    for key in disabled:
+        if prefix and not key.startswith(prefix):
+            continue
+        if key.split('::')[-1] == plain_id:
+            return key
+    return None
+
+
+def _save_disabled_routes(settings, disabled):
+    save_settings(
+        domains=settings['domains'],
+        cert_resolver=settings['cert_resolver'],
+        traefik_api_url=settings['traefik_api_url'],
+        auth_enabled=settings['auth_enabled'],
+        password_hash=settings['password_hash'],
+        visible_tabs=settings['visible_tabs'],
+        disabled_routes=disabled,
+    )
 
 
 def _toggle_route(route_id: str, enable: bool):
@@ -4018,9 +4057,9 @@ def save_entry():
             if dkey in disabled:
                 disabled.pop(dkey)
                 save_settings(disabled_routes=disabled)
-        msg = f"Successfully saved {svc_name}"
         action = "updated" if is_edit else "created"
-        add_notification('success', f"Route {svc_name} {action}")
+        msg = f"Route {svc_name} {action}"
+        add_notification('success', msg)
         if fetch:
             return jsonify({'ok': True, 'message': msg})
         flash(msg, "success")
@@ -4084,21 +4123,16 @@ def delete_entry(router_id):
                 if deleted:
                     break
         if not deleted:
-            disabled = settings.get('disabled_routes', {})
+            disabled = dict(settings.get('disabled_routes', {}))
             if agent:
                 agent_id = request.form.get('agent_id', '').strip()
-                store_key = f"agent_{agent_id}::{router_id}"
-                if store_key not in disabled:
-                    cand = [k for k in disabled
-                            if k.startswith(f"agent_{agent_id}::") and (k.split('::')[-1] == plain_id)]
-                    store_key = cand[0] if cand else store_key
-                if store_key in disabled:
-                    disabled.pop(store_key)
-                    save_settings(disabled_routes=disabled)
-                    deleted = True
-            elif plain_id in disabled:
-                disabled.pop(plain_id)
-                save_settings(disabled_routes=disabled)
+                prefix = f"agent_{agent_id}::"
+                store_key = _disabled_key(disabled, prefix + router_id, plain_id, prefix)
+            else:
+                store_key = _disabled_key(disabled, router_id, plain_id)
+            if store_key:
+                disabled.pop(store_key)
+                _save_disabled_routes(settings, disabled)
                 deleted = True
         if not deleted:
             if fetch:
@@ -4109,8 +4143,8 @@ def delete_entry(router_id):
             threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'route delete'), daemon=True).start()
         else:
             threading.Thread(target=lambda: _git_push_if_enabled('route delete'), daemon=True).start()
-        msg = f"Deleted {plain_id}"
-        add_notification('warning', f"Route {plain_id} deleted")
+        msg = f"Route {plain_id} deleted"
+        add_notification('warning', msg)
         if fetch:
             return jsonify({'ok': True, 'message': msg})
         flash(msg, "success")
@@ -4194,9 +4228,9 @@ def save_middleware():
             save_config(_strip_empty_sections(config), target_path)
             _register_config_path(target_path)
             threading.Thread(target=lambda: _git_push_if_enabled('middleware save'), daemon=True).start()
-        msg = f"Successfully saved middleware {mw_name}"
         action = "updated" if is_edit else "created"
-        add_notification('success', f"Middleware {mw_name} {action}")
+        msg = f"Middleware {mw_name} {action}"
+        add_notification('success', msg)
         if fetch:
             return jsonify({'ok': True, 'message': msg})
         flash(msg, "success")
@@ -4254,8 +4288,8 @@ def delete_middleware(mw_name):
             threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'middleware delete'), daemon=True).start()
         else:
             threading.Thread(target=lambda: _git_push_if_enabled('middleware delete'), daemon=True).start()
-        msg = f"Deleted middleware {mw_name}"
-        add_notification('warning', f"Middleware {mw_name} deleted")
+        msg = f"Middleware {mw_name} deleted"
+        add_notification('warning', msg)
         if fetch:
             return jsonify({'ok': True, 'message': msg})
         flash(msg, "success")
