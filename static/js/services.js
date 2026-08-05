@@ -263,14 +263,14 @@ function renderServicesTable() {
             return `<div class="svc-list-row" onclick="openSvcDetail(${globalIdx})">
                 <div class="svc-list-col-status"><span class="svc-status-dot" style="background:${stColor}"></span></div>
                 <div class="svc-list-col-proto">
-                    <span class="badge badge-${proto.toLowerCase()}" style="font-size:9px">${proto}</span>
-                    ${type ? `<span class="svc-type-badge">${type}</span>` : ''}
+                    <span class="d-flat d-proto d-proto-${proto.toLowerCase()}">${proto}</span>
+                    ${type ? `<span class="d-flat d-blue">${type}</span>` : ''}
                 </div>
                 <div class="svc-list-col-name">${_esc(name)}</div>
                 <div class="svc-list-col-url overflow-hidden">${serverUrlHtml}</div>
-                <div class="svc-list-col-provider"><span class="svc-meta-chip"><i class="ph-bold ph-database" style="font-size:10px"></i>${_esc(provider)}</span></div>
-                <div class="svc-list-col-servers">${serverSummary ? `<span class="svc-meta-chip" style="color:${srvColor};background:color-mix(in srgb,${srvColor} 10%,transparent);border-color:color-mix(in srgb,${srvColor} 35%,transparent)"><i class="ph-bold ph-server" style="font-size:10px"></i>${serverSummary}</span>` : '<span style="color:var(--muted);font-size:11px">-</span>'}</div>
-                <div class="svc-list-col-usedby">${usedBy.length > 0 ? `<span class="svc-used-chip"><i class="ph-bold ph-git-branch" style="font-size:9px"></i>${usedBy.length}</span>` : '<span style="color:var(--muted);font-size:11px">-</span>'}</div>
+                <div class="svc-list-col-provider"><span class="d-flat d-off"><i class="ph-bold ph-database" style="font-size:10px;margin-right:4px"></i>${_esc(provider)}</span></div>
+                <div class="svc-list-col-servers">${serverSummary ? `<span class="d-flat" style="color:${srvColor}"><i class="ph-bold ph-server" style="font-size:10px;margin-right:4px"></i>${serverSummary}</span>` : '<span class="d-flat d-off">-</span>'}</div>
+                <div class="svc-list-col-usedby">${usedBy.length > 0 ? `<span class="d-flat d-mw"><i class="ph-bold ph-git-branch" style="font-size:9px;margin-right:4px"></i>${usedBy.length}</span>` : '<span class="d-flat d-off">-</span>'}</div>
             </div>`;
         }).join('');
         const header = `<div class="svc-list-header">

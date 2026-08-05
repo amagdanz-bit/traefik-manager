@@ -1026,3 +1026,7 @@ html.tm-modern .tm-card-flat:hover { border-color: var(--border); box-shadow: no
     html.tm-modern #sideNav .side-nav-item.active::before { left: -10px; }
     html.tm-modern #sideNav .side-nav-section { padding: 14px 12px 4px; }
 }
+.d-proto-http { color: var(--blue); }
+.d-proto-tcp { color: var(--teal); }
+.d-proto-udp { color: var(--orange); }
+.d-glyph { font-size: 11px; flex-shrink: 0; }
