@@ -427,41 +427,71 @@ func (a *App) csPageJSON(ctx context.Context, path string, useJWT bool) ([]json.
 	return result, nil
 }
 
+const (
+	csPageSize      = 500
+	csMaxPages      = 10
+	csMaxLocalPages = 20
+	csLocalOrigins  = "crowdsec,cscli,console"
+)
+
 func (a *App) crowdsecDecisionsHandler(w http.ResponseWriter, r *http.Request) {
 	if a.cfg.CrowdSecLAPIURL == "" {
 		jsonError(w, "CROWDSEC_LAPI_URL not configured", http.StatusNotFound)
 		return
 	}
-	var all []json.RawMessage
 	now := time.Now().UTC()
-	for page := 1; page <= 10; page++ {
-		chunk, err := a.csPageJSON(r.Context(), fmt.Sprintf("/v1/decisions?limit=500&page=%d", page), false)
-		if err != nil {
-			if page == 1 {
-				jsonError(w, "crowdsec unavailable: "+err.Error(), http.StatusBadGateway)
-				return
+	seen := map[float64]bool{}
+	var all []json.RawMessage
+
+	collect := func(query string, maxPages int, required bool) error {
+		for page := 1; page <= maxPages; page++ {
+			path := fmt.Sprintf("/v1/decisions?limit=%d&page=%d", csPageSize, page)
+			if query != "" {
+				path += "&" + query
 			}
-			break
-		}
-		if len(chunk) == 0 {
-			break
-		}
-		for _, raw := range chunk {
-			var d struct {
-				Until string `json:"until"`
-			}
-			if err := json.Unmarshal(raw, &d); err == nil && d.Until != "" {
-				exp, err := time.Parse(time.RFC3339, d.Until)
-				if err == nil && exp.Before(now) {
-					continue
+			chunk, err := a.csPageJSON(r.Context(), path, false)
+			if err != nil {
+				if page == 1 && required {
+					return err
 				}
+				return nil
 			}
-			all = append(all, raw)
+			if len(chunk) == 0 {
+				return nil
+			}
+			for _, raw := range chunk {
+				var d struct {
+					ID    float64 `json:"id"`
+					Until string  `json:"until"`
+				}
+				if err := json.Unmarshal(raw, &d); err == nil {
+					if d.Until != "" {
+						if exp, perr := time.Parse(time.RFC3339, d.Until); perr == nil && exp.Before(now) {
+							continue
+						}
+					}
+					if d.ID != 0 {
+						if seen[d.ID] {
+							continue
+						}
+						seen[d.ID] = true
+					}
+				}
+				all = append(all, raw)
+			}
+			if len(chunk) < csPageSize {
+				return nil
+			}
 		}
-		if len(chunk) < 500 {
-			break
-		}
+		return nil
 	}
+
+	if err := collect("", csMaxPages, true); err != nil {
+		jsonError(w, "crowdsec unavailable: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	_ = collect("origins="+csLocalOrigins, csMaxLocalPages, false)
+
 	if all == nil {
 		all = []json.RawMessage{}
 	}

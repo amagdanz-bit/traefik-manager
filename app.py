@@ -1137,6 +1137,12 @@ def api_version():
 
 
 
+CS_PAGE_SIZE = 500
+CS_MAX_PAGES = 10
+CS_MAX_LOCAL_PAGES = 20
+CS_LOCAL_ORIGINS = ('crowdsec', 'cscli', 'console')
+
+
 @app.route('/api/crowdsec/decisions')
 @login_required
 def api_cs_decisions():
@@ -1145,17 +1151,31 @@ def api_cs_decisions():
     if not (lapi and key):
         return jsonify({'error': 'CrowdSec not configured'}), 503
     try:
-        all_decisions = []
-        page = 1
-        MAX_CS_PAGES = 10
-        while page <= MAX_CS_PAGES:
-            chunk = _cs_request('GET', f'/v1/decisions?limit=500&page={page}', lapi=lapi, key=key)
-            if not isinstance(chunk, list):
-                break
-            all_decisions.extend(chunk)
-            if len(chunk) < 500:
-                break
-            page += 1
+        def _fetch_pages(query='', max_pages=CS_MAX_PAGES):
+            out = []
+            page = 1
+            while page <= max_pages:
+                sep = '&' if query else ''
+                chunk = _cs_request(
+                    'GET', f'/v1/decisions?limit={CS_PAGE_SIZE}&page={page}{sep}{query}',
+                    lapi=lapi, key=key)
+                if not isinstance(chunk, list):
+                    break
+                out.extend(chunk)
+                if len(chunk) < CS_PAGE_SIZE:
+                    break
+                page += 1
+            return out
+
+        all_decisions = _fetch_pages()
+        try:
+            local = _fetch_pages(f'origins={",".join(CS_LOCAL_ORIGINS)}', CS_MAX_LOCAL_PAGES)
+        except Exception:
+            logger.warning('CrowdSec local-origin decisions fetch failed', exc_info=True)
+            local = []
+        if local:
+            seen = {d.get('id') for d in all_decisions if d.get('id') is not None}
+            all_decisions.extend(d for d in local if d.get('id') not in seen)
         now = datetime.now(timezone.utc)
         active = []
         for d in all_decisions:

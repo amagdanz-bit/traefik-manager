@@ -162,3 +162,62 @@ def test_leaving_expose_by_default_on_does_not_write_the_key(client):
         'dockerWatch': True, 'file': False,
     })
     assert 'exposedByDefault' not in (parsed['providers']['docker'] or {}), raw
+
+
+def _cs_lapi_stub(monkeypatch, capi_count, local_ip):
+    """LAPI with capi_count CAPI decisions and one local decision that sorts last.
+
+    Mirrors issue #130: the local decision only exists beyond the paginated cap,
+    so a blind sweep can never reach it.
+    """
+    import app as tm
+    pool = [{'id': i, 'origin': 'CAPI', 'value': f'10.0.{i // 256}.{i % 256}',
+             'type': 'ban', 'scenario': 'capi', 'until': '2099-01-01T00:00:00Z'}
+            for i in range(capi_count)]
+    pool.append({'id': 999999, 'origin': 'crowdsec', 'value': local_ip, 'type': 'ban',
+                 'scenario': 'crowdsecurity/http-probing', 'until': '2099-01-01T00:00:00Z'})
+
+    calls = []
+
+    def fake(method, path, **kw):
+        calls.append(path)
+        from urllib.parse import urlparse, parse_qs
+        q = parse_qs(urlparse(path).query)
+        limit = int(q.get('limit', ['500'])[0])
+        page = int(q.get('page', ['1'])[0])
+        origins = q.get('origins', [None])[0]
+        rows = pool
+        if origins:
+            wanted = set(origins.split(','))
+            rows = [d for d in pool if d.get('origin') in wanted]
+        start = (page - 1) * limit
+        return rows[start:start + limit]
+
+    monkeypatch.setattr(tm, '_cs_lapi_url', lambda: 'http://lapi:8080')
+    monkeypatch.setattr(tm, '_cs_api_key', lambda: 'key')
+    monkeypatch.setattr(tm, '_cs_request', fake)
+    return calls
+
+
+def test_local_decisions_survive_the_pagination_cap(client, monkeypatch):
+    ip = '45.148.10.125'
+    calls = _cs_lapi_stub(monkeypatch, capi_count=5000, local_ip=ip)
+
+    res = client.get('/api/crowdsec/decisions')
+    assert res.status_code == 200, res.data
+    values = [d['value'] for d in res.get_json()]
+
+    assert ip in values, (
+        'A local (origin: crowdsec) decision sitting past the %d-decision cap was '
+        'dropped, so the UI can never find it. See issue #130.' % (500 * 10))
+    assert any('origins=' in c for c in calls), 'no targeted local-origin query was made'
+
+
+def test_local_decisions_are_not_duplicated(client, monkeypatch):
+    ip = '45.148.10.125'
+    _cs_lapi_stub(monkeypatch, capi_count=3, local_ip=ip)
+
+    res = client.get('/api/crowdsec/decisions')
+    ids = [d['id'] for d in res.get_json()]
+    assert len(ids) == len(set(ids)), 'merging the targeted fetch duplicated decisions'
+    assert ids.count(999999) == 1
