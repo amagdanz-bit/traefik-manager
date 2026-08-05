@@ -32,9 +32,9 @@ export default defineConfig({
       { text: 'Hardening', link: '/hardening' },
       { text: 'API', link: '/api' },
       {
-        text: 'v1.9.1',
+        text: 'v1.10.0',
         items: [
-          { text: 'v1.9.1', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.9.1' },
+          { text: 'v1.10.0', link: 'https://github.com/chr0nzz/traefik-manager/releases/tag/v1.10.0' },
            { text: 'All releases', link: 'https://github.com/chr0nzz/traefik-manager/releases' },
         ],
       },
