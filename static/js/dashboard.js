@@ -221,10 +221,11 @@ async function loadOverviewStats() {
             const list = document.getElementById('entrypointsList');
             list.innerHTML = entrypoints.value.map(ep => {
                 const addr = ep.address || '';
-                const port = addr.split(':').pop();
-                const isHttp = ['80','8080'].includes(port);
-                const isHttps = ['443','8443'].includes(port);
-                const color = isHttps ? 'var(--green)' : isHttp ? 'var(--blue)' : 'var(--muted)';
+                const isUdp = /\/udp$/i.test(addr);
+                const isTcp = /\/tcp$/i.test(addr);
+                const port = addr.replace(/\/(tcp|udp)$/i, '').replace(/^.*:/, '');
+                const color = isUdp ? '#e2c041' : isTcp ? 'var(--teal)'
+                    : port === '443' ? 'var(--green)' : 'var(--blue)';
                 return `<div class="ep-pill">
                     <span class="d-flat font-semibold" style="color:${color}">${_esc(ep.name)}</span>
                     <span class="font-mono text-xs" style="color:var(--muted)">${_esc(addr)}</span>

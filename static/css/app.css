@@ -44,8 +44,9 @@
     --code-bg: #f6f8fa;
 }
 
-body { background: var(--bg); color: var(--text); overflow-x: hidden; }
-main { overflow-x: hidden; }
+body { background: var(--bg); color: var(--text); overflow-x: hidden; display: flex; flex-direction: column; }
+main { overflow-x: hidden; flex: 1 0 auto; }
+body > footer { flex-shrink: 0; }
 
 .tab-content { display: none; }
 .tab-content.active { display: block; }
