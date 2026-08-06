@@ -730,13 +730,17 @@ function ipClassBadge(cls) {
 function openIpDiagModal() {
     const m = document.getElementById('ipDiagModal');
     if (!m) return;
-    m.style.display = 'flex';
+    m.classList.add('open');
+    document.getElementById('ipDiagBackdrop').classList.add('open');
+    if (!setDetailDockOpen(true)) document.body.style.overflow = 'hidden';
     loadIpDiagnostic();
 }
 
 function closeIpDiagModal() {
-    const m = document.getElementById('ipDiagModal');
-    if (m) m.style.display = 'none';
+    setDetailDockOpen(false);
+    document.getElementById('ipDiagModal')?.classList.remove('open');
+    document.getElementById('ipDiagBackdrop')?.classList.remove('open');
+    document.body.style.overflow = '';
 }
 
 async function loadIpDiagnostic() {
