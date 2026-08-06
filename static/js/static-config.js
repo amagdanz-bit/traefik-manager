@@ -72,8 +72,8 @@ function _initMwMonaco(value) {
     });
 }
 
-function _initStaticMonaco(content) {
-    const container = document.getElementById('staticYamlPopoutEditor');
+function _initStaticMonaco(content, containerId) {
+    const container = document.getElementById(containerId || 'staticYamlPopoutEditor');
     if (!container) return;
     if (_staticMonaco) {
         _staticMonaco.setValue(content);
@@ -275,13 +275,14 @@ async function saveStaticConfig() {
             _clearStaticPending();
             _showStaticRestartBanner();
             showToast('Static config saved', 'success');
-            if (!_activeAgent) {
-                try {
-                    const r2 = await fetch('/api/static/config');
-                    const d2 = await r2.json();
-                    _renderStaticSections(d2.parsed);
-                } catch(e) {}
-            }
+            try {
+                const cfgUrl = _activeAgent
+                    ? '/api/static/config?server=' + encodeURIComponent(_activeAgent.id)
+                    : '/api/static/config';
+                const r2 = await fetch(cfgUrl);
+                const d2 = await r2.json();
+                if (d2.parsed) _renderStaticSections(d2.parsed);
+            } catch(e) {}
         } else {
             showToast(data.error || 'Save failed', 'error');
         }
@@ -1401,13 +1402,27 @@ async function _loadStaticFromDisk() {
     const wrapper = document.getElementById('staticSettingsContent');
     if (!wrapper) return;
     try {
-        const fetches = [_activeAgent ? agentFetch('/api/static') : fetch('/api/static/config')];
-        if (!_traefikRuntime) fetches.push(fetch('/api/traefik/runtime').then(r => r.json()).catch(() => null));
+        const cfgUrl = _activeAgent
+            ? '/api/static/config?server=' + encodeURIComponent(_activeAgent.id)
+            : '/api/static/config';
+        _traefikRuntime = null;
+        const fetches = [fetch(cfgUrl)];
+        if (_activeAgent) {
+            fetches.push(agentFetch('/api/static/status').then(r => r.json()).catch(() => null));
+        } else {
+            fetches.push(fetch('/api/traefik/runtime').then(r => r.json()).catch(() => null));
+        }
         const results = await Promise.all(fetches);
         const res = results[0];
-        if (results[1]) _traefikRuntime = results[1];
+        if (_activeAgent) {
+            const st = results[1];
+            if (st && ['proxy', 'socket'].includes(st.restart_method)) {
+                _traefikRuntime = { method: st.restart_method, runtime: 'docker', container: st.traefik_container || '' };
+            }
+        } else if (results[1]) {
+            _traefikRuntime = results[1];
+        }
         const data = await res.json();
-        if (_activeAgent && data.content !== undefined) data.raw = data.content;
         if (data.error) {
             _staticLoadedFor = null;
             const bar = document.getElementById('staticStateBar');
@@ -1440,19 +1455,6 @@ async function _loadStaticFromDisk() {
         _clearStaticPending();
         _staticPendingChanges = false;
         if (!_staticSaved) _hideStaticRestartBanner();
-        if (_activeAgent) {
-            const hdrAddBtn = document.getElementById('staticHdrAddBtn');
-            if (hdrAddBtn) hdrAddBtn.style.display = 'none';
-            wrapper.innerHTML = `<div class="text-center py-16" style="color:var(--muted)">
-                <i class="ph-light ph-sliders-horizontal text-4xl block mb-3 opacity-30"></i>
-                <p class="text-sm font-medium mb-2" style="color:var(--text)">Remote Static Config</p>
-                <p class="text-xs max-w-xs mx-auto mb-4">Section editing is not available for remote agents. Use the Raw YAML editor to view and edit the config.</p>
-                <button onclick="openStaticYamlPopout()" class="nav-btn text-xs">
-                    <i class="ph-bold ph-code"></i> Open Raw YAML Editor
-                </button>
-            </div>`;
-            return;
-        }
         const hdrAddBtn = document.getElementById('staticHdrAddBtn');
         if (hdrAddBtn) hdrAddBtn.style.display = '';
         wrapper.innerHTML = _buildStaticTabHTML();
@@ -1543,7 +1545,7 @@ function openStaticTab() {
         requestAnimationFrame(_updateStaticTabArrows);
     }
     const tip = document.getElementById('staticTrustedIpsWrap');
-    if (tip) tip.style.display = _activeAgent ? 'none' : '';
+    if (tip) tip.style.display = '';
 }
 
 async function refreshStaticTab() {

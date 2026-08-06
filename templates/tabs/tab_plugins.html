@@ -38,6 +38,11 @@
                     <label class="text-xs font-semibold mb-1.5 block" style="color:var(--muted)">Step 2 - Paste the middleware snippet and edit the settings for your needs</label>
                     <div id="pluginMwEditorContainer" style="height:200px;border:1px solid var(--border);border-radius:8px;overflow:hidden"></div>
                 </div>
+                <div class="mb-3" id="pluginMwFileSelectWrap">
+                    <label class="text-xs font-semibold mb-1.5 block" style="color:var(--muted)">Step 3 - Choose which config file the middleware is written to</label>
+                    <select id="pluginMwFileSelect" class="input-field text-xs" onchange="onPluginMwFileChange(this)"></select>
+                    <input type="text" id="pluginMwNewFileName" class="input-field text-xs mt-2" placeholder="plugin-middlewares.yml" style="display:none">
+                </div>
                 <p class="text-xs mb-3 flex items-center gap-1.5" style="color:var(--yellow)">
                     <i class="ph-bold ph-warning-circle text-sm"></i>
                     Edit the middleware before saving - replace all placeholder values and any <code style="font-family:monospace;background:rgba(234,179,8,0.15);padding:1px 4px;border-radius:3px">&#123;&#123; &#125;&#125;</code> template blocks with real values or Traefik will crash

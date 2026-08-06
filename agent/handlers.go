@@ -269,11 +269,45 @@ func (a *App) staticWriteHandler(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]any{"ok": true})
 }
 
+func (a *App) pluginsHandler(w http.ResponseWriter, r *http.Request) {
+	empty := []map[string]any{}
+	if a.cfg.StaticConfigPath == "" {
+		jsonOK(w, map[string]any{"plugins": empty, "error": "STATIC_CONFIG_PATH not configured on this agent"})
+		return
+	}
+	data, err := os.ReadFile(a.cfg.StaticConfigPath)
+	if err != nil {
+		jsonOK(w, map[string]any{"plugins": empty, "error": "cannot read static config: " + err.Error()})
+		return
+	}
+	var cfg struct {
+		Experimental struct {
+			Plugins map[string]struct {
+				ModuleName string `yaml:"moduleName"`
+				Version    string `yaml:"version"`
+				Settings   any    `yaml:"settings"`
+			} `yaml:"plugins"`
+		} `yaml:"experimental"`
+	}
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		jsonOK(w, map[string]any{"plugins": empty, "error": "invalid YAML: " + err.Error()})
+		return
+	}
+	plugins := make([]map[string]any, 0, len(cfg.Experimental.Plugins))
+	for name, p := range cfg.Experimental.Plugins {
+		plugins = append(plugins, map[string]any{"name": name, "moduleName": p.ModuleName, "version": p.Version, "settings": p.Settings})
+	}
+	sort.Slice(plugins, func(i, j int) bool {
+		return plugins[i]["name"].(string) < plugins[j]["name"].(string)
+	})
+	jsonOK(w, map[string]any{"plugins": plugins})
+}
+
 func (a *App) staticStatusHandler(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]any{
-		"configured":       a.cfg.StaticConfigPath != "",
-		"path":             a.cfg.StaticConfigPath,
-		"restart_method":   a.cfg.RestartMethod,
+		"configured":        a.cfg.StaticConfigPath != "",
+		"path":              a.cfg.StaticConfigPath,
+		"restart_method":    a.cfg.RestartMethod,
 		"traefik_container": a.cfg.TraefikContainer,
 	})
 }
@@ -561,8 +595,8 @@ func (a *App) crowdsecAddDecisionHandler(w http.ResponseWriter, r *http.Request)
 		"events": []any{}, "events_count": 1, "labels": nil, "leakspeed": "0",
 		"message": reason, "scenario": reason, "scenario_hash": "", "scenario_version": "",
 		"simulated": false,
-		"source":   map[string]any{"ip": ip, "scope": "Ip", "value": ip},
-		"start_at": now, "stop_at": now,
+		"source":    map[string]any{"ip": ip, "scope": "Ip", "value": ip},
+		"start_at":  now, "stop_at": now,
 	}}
 	buf, _ := json.Marshal(payload)
 	resp, err := a.csRequest(r.Context(), http.MethodPost, "/v1/alerts", bytes.NewReader(buf), true)

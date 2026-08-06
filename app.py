@@ -1438,6 +1438,29 @@ def api_static_available():
 @app.route('/api/static/config')
 @login_required
 def api_static_config_get():
+    server = (request.args.get('server') or '').strip()
+    if server:
+        agent = _agent_by_id(server)
+        if not agent:
+            return jsonify({'error': 'Agent not found'}), 404
+        try:
+            resp = _agent_request(agent, 'GET', '/api/static')
+        except requests.exceptions.RequestException as e:
+            return jsonify({'error': f'Cannot reach agent: {e}'}), 502
+        if resp.status_code != 200:
+            try:
+                msg = (resp.json() or {}).get('error', '')
+            except Exception:
+                msg = ''
+            return jsonify({'error': msg or 'Static config not available on this agent'}), resp.status_code
+        body = resp.json() or {}
+        raw = body.get('content', '')
+        try:
+            _y = SafeYAML(typ='safe')
+            parsed = _y.load(raw) or {}
+        except Exception as e:
+            return jsonify({'error': f'Agent static config is not valid YAML: {e}'}), 500
+        return jsonify({'raw': raw, 'parsed': parsed, 'path': body.get('path', '')})
     path = _readable_config_path(_get_static_config_path())
     if not path or not os.path.exists(path):
         return jsonify({'error': 'Static config not found or STATIC_CONFIG_PATH not set'}), 404
@@ -1521,10 +1544,10 @@ def api_traefik_runtime():
 @csrf_protect
 @login_required
 def api_static_section_update():
-    path = _get_static_config_path()
-    if not path or not os.path.exists(path):
-        return jsonify({'error': 'Static config not found'}), 404
     req      = request.get_json(silent=True) or {}
+    path     = _get_static_config_path()
+    if not req.get('current_raw') and (not path or not os.path.exists(path)):
+        return jsonify({'error': 'Static config not found'}), 404
     action   = req.get('action', '')
     section  = req.get('section', '')
     name     = str(req.get('name', '')).strip()
@@ -1977,14 +2000,30 @@ def api_plugins_install():
         plugins_block = parsed_static['plugins']
     if not plugins_block or not isinstance(plugins_block, dict):
         return jsonify({'ok': False, 'error': 'Could not find plugins block - paste the experimental.plugins YAML from the Traefik plugin page'}), 400
-    static_path = _get_static_config_path()
-    if not static_path or not os.path.exists(static_path):
-        return jsonify({'ok': False, 'error': 'Static config not found'}), 404
+    agent = None
+    static_path = None
+    server = str(data.get('server') or '').strip()
+    if server:
+        agent = _agent_by_id(server)
+        if not agent:
+            return jsonify({'ok': False, 'error': 'Agent not found'}), 404
+        try:
+            resp = _agent_request(agent, 'GET', '/api/static')
+        except requests.exceptions.RequestException as e:
+            return jsonify({'ok': False, 'error': f'Cannot reach agent: {e}'}), 502
+        if resp.status_code != 200:
+            return jsonify({'ok': False, 'error': 'Static config not available on this agent'}), 404
+        source_raw = (resp.json() or {}).get('content', '')
+    else:
+        static_path = _get_static_config_path()
+        if not static_path or not os.path.exists(static_path):
+            return jsonify({'ok': False, 'error': 'Static config not found'}), 404
+        with open(static_path, 'r') as f:
+            source_raw = f.read()
     try:
         _ry = YAML()
         _ry.preserve_quotes = True
-        with open(static_path, 'r') as f:
-            config = _ry.load(f) or {}
+        config = _ry.load(StringIO(source_raw)) or {}
         if 'experimental' not in config:
             config['experimental'] = {}
         if 'plugins' not in config['experimental']:
@@ -1994,16 +2033,26 @@ def api_plugins_install():
                 'moduleName': plugin_data.get('moduleName', ''),
                 'version': plugin_data.get('version', ''),
             }
-        create_backup(static_path)
         stream = StringIO()
         _ry.dump(config, stream)
-        with open(static_path, 'w') as f:
-            f.write(stream.getvalue())
+        if agent:
+            wresp = _agent_request(agent, 'POST', '/api/static', json={'content': stream.getvalue()})
+            if wresp.status_code != 200:
+                return jsonify({'ok': False, 'error': 'Agent rejected the static config write'}), 502
+        else:
+            create_backup(static_path)
+            with open(static_path, 'w') as f:
+                f.write(stream.getvalue())
+    except requests.exceptions.RequestException as e:
+        return jsonify({'ok': False, 'error': f'Cannot reach agent: {e}'}), 502
     except Exception as e:
         logger.exception("Failed to save plugin to static config")
         return jsonify({'ok': False, 'error': str(e)}), 500
     warning = None
-    if middleware_yaml and ACTIVE_CONFIG_DIR:
+    mw_written = None
+    if middleware_yaml and not agent and not ACTIVE_CONFIG_DIR:
+        warning = 'Plugin saved, but the middleware was not written - no config directory is configured, so there is no file to write it to'
+    if middleware_yaml and (agent or ACTIVE_CONFIG_DIR):
         if '{{' in middleware_yaml:
             return jsonify({'ok': False, 'error': 'The middleware snippet contains template placeholders ({{ ... }}) that must be replaced with real values before saving. Edit the middleware in the editor and replace all {{ }} placeholders.'}), 400
         try:
@@ -2016,11 +2065,34 @@ def api_plugins_install():
             else:
                 middlewares = {}
             if middlewares and isinstance(middlewares, dict):
-                mw_file = os.path.join(ACTIVE_CONFIG_DIR, 'plugin-middlewares.yml')
+                mw_choice = str(data.get('middleware_file') or '').strip()
                 existing = {}
-                if os.path.exists(mw_file):
-                    with open(mw_file, 'r') as f:
-                        existing = yaml.load(f) or {}
+                if agent:
+                    mw_name = os.path.basename(mw_choice) or 'plugin-middlewares.yml'
+                    if '..' in mw_name:
+                        raise ValueError('invalid middleware file name')
+                    if not mw_name.endswith(('.yml', '.yaml')):
+                        mw_name += '.yml'
+                    mw_label = mw_name
+                    try:
+                        cresp = _agent_request(agent, 'GET', '/api/configs')
+                        for fobj in (cresp.json() or {}).get('files', []):
+                            if fobj.get('name') == mw_name:
+                                existing = yaml.load(StringIO(fobj.get('content', ''))) or {}
+                                break
+                    except Exception:
+                        existing = {}
+                else:
+                    if mw_choice:
+                        mw_file = _resolve_config_path(mw_choice)
+                        if not mw_file:
+                            raise ValueError(f'middleware file not allowed: {mw_choice!r}')
+                    else:
+                        mw_file = os.path.join(ACTIVE_CONFIG_DIR, 'plugin-middlewares.yml')
+                    mw_label = os.path.basename(mw_file)
+                    if os.path.exists(mw_file):
+                        with open(mw_file, 'r') as f:
+                            existing = yaml.load(f) or {}
                 if 'http' not in existing:
                     existing['http'] = {}
                 if 'middlewares' not in existing['http']:
@@ -2028,14 +2100,24 @@ def api_plugins_install():
                 existing['http']['middlewares'].update(middlewares)
                 stream = StringIO()
                 yaml.dump(existing, stream)
-                with open(mw_file, 'w') as f:
-                    f.write(stream.getvalue())
+                if agent:
+                    mresp = _agent_request(agent, 'POST', '/api/configs', json={'name': mw_name, 'content': stream.getvalue()})
+                    if mresp.status_code != 200:
+                        raise RuntimeError('agent rejected the middleware file write')
+                else:
+                    if os.path.exists(mw_file):
+                        create_backup(mw_file)
+                    with open(mw_file, 'w') as f:
+                        f.write(stream.getvalue())
+                mw_written = mw_label
         except Exception as e:
             logger.exception("Failed to save middleware")
             warning = f'Plugin saved but middleware could not be written: {e}'
     plugin_names = list(plugins_block.keys())
     add_notification('success', f'Plugin installed: {", ".join(plugin_names)}')
     result = {'ok': True, 'plugins': plugin_names}
+    if mw_written:
+        result['middleware_file'] = mw_written
     if warning:
         result['warning'] = warning
     return jsonify(result)

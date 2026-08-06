@@ -171,17 +171,16 @@ function _buildConfigSelectOptions(sel, files, allowNew) {
 
 async function _populateConfigFileSelect(which) {
     const isRoute = which === 'route';
-    const wrapId     = isRoute ? 'configFileSelectWrap' : 'mwConfigFileSelectWrap';
-    const selId      = isRoute ? 'configFileSelect' : 'mwConfigFileSelect';
-    const newInputId = isRoute ? 'newRouteFileName' : 'newMwFileName';
-    const hidId      = isRoute ? 'configFile' : 'mwConfigFile';
+    const isPluginMw = which === 'pluginMw';
+    const wrapId     = isPluginMw ? 'pluginMwFileSelectWrap' : isRoute ? 'configFileSelectWrap' : 'mwConfigFileSelectWrap';
+    const selId      = isPluginMw ? 'pluginMwFileSelect' : isRoute ? 'configFileSelect' : 'mwConfigFileSelect';
+    const newInputId = isPluginMw ? 'pluginMwNewFileName' : isRoute ? 'newRouteFileName' : 'newMwFileName';
     const wrap    = document.getElementById(wrapId);
     const sel     = document.getElementById(selId);
     const newInput = document.getElementById(newInputId);
-    const hidEl   = document.getElementById(hidId);
     if (!sel) return;
     if (newInput) { newInput.style.display = 'none'; newInput.value = ''; }
-    const onChange = isRoute ? onRouteConfigFileChange : onMwConfigFileChange;
+    const onChange = isPluginMw ? onPluginMwFileChange : isRoute ? onRouteConfigFileChange : onMwConfigFileChange;
     if (_activeAgent) {
         if (wrap) wrap.style.display = '';
         try {

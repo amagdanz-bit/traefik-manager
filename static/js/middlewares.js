@@ -709,34 +709,38 @@ async function refreshPluginsTab() {
     container.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i><p>Loading plugins...</p></div>`;
     try {
         const availP = _activeAgent
-            ? Promise.resolve({ available: false })
+            ? agentFetch('/api/static/status').then(r => r.json()).then(d => ({ available: d.configured === true })).catch(() => ({ available: false }))
             : fetch('/api/static/available').then(r => r.json());
         const [res, avail] = await Promise.all([
             agentFetch('/api/traefik/plugins').then(r => r.json()),
             availP,
         ]);
-        _pluginCanManage = !_activeAgent && avail.available === true;
+        _pluginCanManage = avail.available === true;
         const addBtn = document.getElementById('pluginAddBtnWrap');
         if (addBtn) addBtn.style.display = _pluginCanManage ? 'flex' : 'none';
 
         const plugins = Array.isArray(res.plugins) ? res.plugins : [];
 
         if (res.error && plugins.length === 0) {
+            const svcName = _activeAgent ? 'traefik-manager-agent' : 'traefik-manager';
+            const docsUrl = _activeAgent
+                ? 'https://traefik-manager.xyzlab.dev/agent#static-config-editing'
+                : 'https://traefik-manager.xyzlab.dev/env-vars#static-config-path';
             container.innerHTML = `
             <div class="text-center py-10 rounded-xl" style="border:1px solid var(--border);color:var(--muted)">
                 <i class="ph-light ph-puzzle-piece text-5xl block mb-3 opacity-30"></i>
-                <p class="font-semibold mb-1" style="color:var(--text)">Static config not configured</p>
-                <p class="text-xs max-w-xs mx-auto mb-5">To manage plugins here, mount your Traefik static config and set <code class="font-mono" style="color:var(--blue)">STATIC_CONFIG_PATH</code>.</p>
+                <p class="font-semibold mb-1" style="color:var(--text)">Static config not configured${_activeAgent ? ' on this agent' : ''}</p>
+                <p class="text-xs max-w-xs mx-auto mb-5">To list plugins here, mount the Traefik static config into the <code class="font-mono" style="color:var(--blue)">${svcName}</code> service and set <code class="font-mono" style="color:var(--blue)">STATIC_CONFIG_PATH</code>.</p>
                 <div class="flex flex-col gap-2 items-center text-xs">
                     <a href="https://get-traefik.xyzlab.dev" target="_blank" class="btn-secondary" style="text-decoration:none"><i class="ph-bold ph-terminal"></i> Install script</a>
-                    <a href="https://traefik-manager.xyzlab.dev/env-vars#static-config-path" target="_blank" class="btn-secondary" style="text-decoration:none"><i class="ph-bold ph-book-open"></i> Setup docs</a>
+                    <a href="${docsUrl}" target="_blank" class="btn-secondary" style="text-decoration:none"><i class="ph-bold ph-book-open"></i> Setup docs</a>
                 </div>
                 <div class="mt-5 mx-auto text-left rounded-lg p-3 text-xs font-mono" style="max-width:420px;background:var(--input-bg);border:1px solid var(--border);color:var(--muted)">
-                    <div style="color:var(--text);margin-bottom:4px">docker-compose.yml</div>
+                    <div style="color:var(--text);margin-bottom:4px">docker-compose.yml - ${svcName}</div>
                     environment:<br>
-                    &nbsp;&nbsp;- STATIC_CONFIG_PATH=/app/traefik.yml<br>
+                    &nbsp;&nbsp;- STATIC_CONFIG_PATH=/traefik.yml<br>
                     volumes:<br>
-                    &nbsp;&nbsp;- /path/to/traefik.yml:/app/traefik.yml
+                    &nbsp;&nbsp;- /path/to/traefik.yml:/traefik.yml
                 </div>
             </div>`;
             document.getElementById('pluginsTabCount').textContent = '0';
@@ -843,6 +847,13 @@ function openPluginForm(idx = -1) {
         const rb = document.getElementById('pluginRestartBanner');
         if (rb) rb.style.display = 'none';
         form.style.display = 'block';
+        _populateConfigFileSelect('pluginMw').then(() => {
+            const sel = document.getElementById('pluginMwFileSelect');
+            if (sel && !sel.value) {
+                const opt = [...sel.options].find(o => o.value && (o.value === 'plugin-middlewares.yml' || o.value.endsWith('/plugin-middlewares.yml')));
+                if (opt) { sel.value = opt.value; onPluginMwFileChange(sel); }
+            }
+        });
         setTimeout(() => {
             _initPluginStaticMonaco('experimental:\n  plugins:\n    myPlugin:\n      moduleName: github.com/author/plugin\n      version: v0.1.0');
             _initPluginMwMonaco('http:\n  middlewares:\n    my-myPlugin:\n      plugin:\n        myPlugin:\n          setting: value');
@@ -862,20 +873,8 @@ async function savePlugin() {
         const moduleName = document.getElementById('pluginFormModule').value.trim();
         const version    = document.getElementById('pluginFormVersion').value.trim();
         if (!name || !moduleName || !version) { showToast('Name, module, and version are required', 'error'); return; }
-        const r1 = await fetch('/api/static/section', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
-            body: JSON.stringify({ section: 'plugins', action: 'edit', name, old_name: _pluginEditName, payload: { moduleName, version } }),
-        });
-        const d1 = await r1.json();
-        if (!d1.ok) { showToast(d1.error || 'Failed', 'error'); return; }
-        const r2 = await fetch('/api/static/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
-            body: JSON.stringify({ content: d1.raw }),
-        });
-        const d2 = await r2.json();
-        if (!d2.ok) { showToast(d2.error || 'Failed to save', 'error'); return; }
+        const d1 = await _pluginSectionWrite({ section: 'plugins', action: 'edit', name, old_name: _pluginEditName, data: { moduleName, version } });
+        if (!d1) return;
         closePluginForm();
         showToast('Plugin saved - restart Traefik to apply', 'success');
         refreshPluginsTab();
@@ -886,7 +885,7 @@ async function savePlugin() {
         const res = await fetch('/api/plugins/install', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
-            body: JSON.stringify({ static_yaml: staticYaml, middleware_yaml: mwYaml }),
+            body: JSON.stringify({ static_yaml: staticYaml, middleware_yaml: mwYaml, middleware_file: _pluginMwFileChoice(), server: _activeAgent ? _activeAgent.id : '' }),
         });
         const data = await res.json();
         if (!data.ok) { showToast(data.error || 'Failed to install plugin', 'error'); return; }
@@ -896,7 +895,7 @@ async function savePlugin() {
         if (banner) {
             const names = (data.plugins || []).join(', ');
             const hasMw = mwYaml.length > 0 && !data.warning;
-            if (detail) detail.textContent = `Plugin${data.plugins?.length > 1 ? 's' : ''} "${names}" saved to traefik.yml${hasMw ? ' and middleware saved to plugin-middlewares.yml' : ''}.`;
+            if (detail) detail.textContent = `Plugin${data.plugins?.length > 1 ? 's' : ''} "${names}" saved to traefik.yml${hasMw ? ` and middleware saved to ${data.middleware_file || 'plugin-middlewares.yml'}` : ''}.`;
             banner.style.display = 'block';
         }
         if (data.warning) showToast(data.warning, 'warning');
@@ -904,22 +903,50 @@ async function savePlugin() {
     }
 }
 
-async function deletePlugin(name) {
-    if (!await _confirm(`Remove plugin "${name}"?`, 'Remove Plugin', 'Remove')) return;
+function onPluginMwFileChange(sel) {
+    const newInput = document.getElementById('pluginMwNewFileName');
+    if (!newInput) return;
+    if (sel.value === '__new__') {
+        newInput.style.display = '';
+        if (!newInput.value) newInput.value = 'plugin-middlewares.yml';
+    } else {
+        newInput.style.display = 'none';
+        newInput.value = '';
+    }
+}
+
+function _pluginMwFileChoice() {
+    const sel = document.getElementById('pluginMwFileSelect');
+    if (!sel || sel.offsetParent === null) return '';
+    if (sel.value === '__new__') return (document.getElementById('pluginMwNewFileName')?.value || '').trim();
+    return sel.value;
+}
+
+async function _pluginSectionWrite(body) {
+    if (_activeAgent) {
+        const cur = await agentFetch('/api/static').then(r => r.json()).catch(() => null);
+        if (!cur || cur.content === undefined) { showToast('Cannot read the agent static config', 'error'); return null; }
+        body.current_raw = cur.content;
+    }
     const r1 = await fetch('/api/static/section', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
-        body: JSON.stringify({ section: 'plugins', action: 'remove', name, old_name: name, payload: {} }),
+        body: JSON.stringify(body),
     });
     const d1 = await r1.json();
-    if (!d1.ok) { showToast(d1.error || 'Failed', 'error'); return; }
-    const r2 = await fetch('/api/static/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
-        body: JSON.stringify({ content: d1.raw }),
-    });
+    if (!d1.ok) { showToast(d1.error || 'Failed', 'error'); return null; }
+    const r2 = _activeAgent
+        ? await agentFetch('/api/static', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: d1.raw }) })
+        : await fetch('/api/static/config', { method: 'POST', headers: { 'Content-Type': 'application/json', ..._csrfHeaders() }, body: JSON.stringify({ content: d1.raw }) });
     const d2 = await r2.json();
-    if (!d2.ok) { showToast(d2.error || 'Failed to save', 'error'); return; }
+    if (!d2.ok) { showToast(d2.error || 'Failed to save', 'error'); return null; }
+    return d1;
+}
+
+async function deletePlugin(name) {
+    if (!await _confirm(`Remove plugin "${name}"?`, 'Remove Plugin', 'Remove')) return;
+    const d1 = await _pluginSectionWrite({ section: 'plugins', action: 'remove', name, old_name: name, data: {} });
+    if (!d1) return;
     showToast('Plugin removed - restart Traefik to apply', 'success');
     refreshPluginsTab();
 }

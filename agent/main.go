@@ -12,36 +12,36 @@ import (
 const Version = "1.10.0"
 
 type Config struct {
-	APIKey                 string
-	Port                   string
-	RateLimit              int
-	TraefikAPIURL          string
-	TraefikAPIUser         string
-	TraefikAPIPassword     string
+	APIKey                    string
+	Port                      string
+	RateLimit                 int
+	TraefikAPIURL             string
+	TraefikAPIUser            string
+	TraefikAPIPassword        string
 	TraefikInsecureSkipVerify bool
-	ConfigPath         string
-	StaticConfigPath   string
-	ACMEJSONPath       string
-	AccessLogPath      string
-	PluginsDir         string
-	RestartMethod      string
-	TraefikContainer   string
-	DockerHost         string
-	SignalFilePath     string
-	CrowdSecLAPIURL         string
-	CrowdSecAPIKey          string
-	CrowdSecMachineID       string
-	CrowdSecMachinePassword string
-	GitBackupEnabled   bool
-	GitBackupRepo      string
-	GitBackupBranch    string
-	GitBackupUsername  string
-	GitBackupToken     string
-	GitBackupAutoPush  bool
-	GitBackupCommitMsg string
-	BackupDir          string
-	BackupKeepCount    int
-	Debug              bool
+	ConfigPath                string
+	StaticConfigPath          string
+	ACMEJSONPath              string
+	AccessLogPath             string
+	PluginsDir                string
+	RestartMethod             string
+	TraefikContainer          string
+	DockerHost                string
+	SignalFilePath            string
+	CrowdSecLAPIURL           string
+	CrowdSecAPIKey            string
+	CrowdSecMachineID         string
+	CrowdSecMachinePassword   string
+	GitBackupEnabled          bool
+	GitBackupRepo             string
+	GitBackupBranch           string
+	GitBackupUsername         string
+	GitBackupToken            string
+	GitBackupAutoPush         bool
+	GitBackupCommitMsg        string
+	BackupDir                 string
+	BackupKeepCount           int
+	Debug                     bool
 }
 
 type App struct {
@@ -87,29 +87,29 @@ func loadConfig() *Config {
 		TraefikAPIUser:            os.Getenv("TRAEFIK_API_USER"),
 		TraefikAPIPassword:        os.Getenv("TRAEFIK_API_PASSWORD"),
 		TraefikInsecureSkipVerify: envBool("TRAEFIK_INSECURE_SKIP_VERIFY", false),
-		ConfigPath:         envOr("CONFIG_PATH", "/app/config"),
-		StaticConfigPath:   os.Getenv("STATIC_CONFIG_PATH"),
-		ACMEJSONPath:       os.Getenv("ACME_JSON_PATH"),
-		AccessLogPath:      os.Getenv("ACCESS_LOG_PATH"),
-		PluginsDir:         os.Getenv("PLUGINS_DIR"),
-		RestartMethod:      os.Getenv("RESTART_METHOD"),
-		TraefikContainer:   envOr("TRAEFIK_CONTAINER", "traefik"),
-		DockerHost:         os.Getenv("DOCKER_HOST"),
-		SignalFilePath:     os.Getenv("SIGNAL_FILE_PATH"),
-		CrowdSecLAPIURL:         os.Getenv("CROWDSEC_LAPI_URL"),
-		CrowdSecAPIKey:          os.Getenv("CROWDSEC_API_KEY"),
-		CrowdSecMachineID:       os.Getenv("CROWDSEC_MACHINE_ID"),
-		CrowdSecMachinePassword: os.Getenv("CROWDSEC_MACHINE_PASSWORD"),
-		GitBackupEnabled:   envBool("GIT_BACKUP_ENABLED", false),
-		GitBackupRepo:      os.Getenv("GIT_BACKUP_REPO"),
-		GitBackupBranch:    envOr("GIT_BACKUP_BRANCH", "main"),
-		GitBackupUsername:  os.Getenv("GIT_BACKUP_USERNAME"),
-		GitBackupToken:     os.Getenv("GIT_BACKUP_TOKEN"),
-		GitBackupAutoPush:  envBool("GIT_BACKUP_AUTO_PUSH", true),
-		GitBackupCommitMsg: envOr("GIT_BACKUP_COMMIT_MESSAGE", "traefik-manager: {action} at {timestamp}"),
-		BackupDir:          envOr("BACKUP_DIR", "/app/backups"),
-		BackupKeepCount:    envInt("BACKUP_KEEP_COUNT", 0),
-		Debug:              envBool("TMA_DEBUG", false),
+		ConfigPath:                envOr("CONFIG_PATH", "/app/config"),
+		StaticConfigPath:          os.Getenv("STATIC_CONFIG_PATH"),
+		ACMEJSONPath:              os.Getenv("ACME_JSON_PATH"),
+		AccessLogPath:             os.Getenv("ACCESS_LOG_PATH"),
+		PluginsDir:                os.Getenv("PLUGINS_DIR"),
+		RestartMethod:             os.Getenv("RESTART_METHOD"),
+		TraefikContainer:          envOr("TRAEFIK_CONTAINER", "traefik"),
+		DockerHost:                os.Getenv("DOCKER_HOST"),
+		SignalFilePath:            os.Getenv("SIGNAL_FILE_PATH"),
+		CrowdSecLAPIURL:           os.Getenv("CROWDSEC_LAPI_URL"),
+		CrowdSecAPIKey:            os.Getenv("CROWDSEC_API_KEY"),
+		CrowdSecMachineID:         os.Getenv("CROWDSEC_MACHINE_ID"),
+		CrowdSecMachinePassword:   os.Getenv("CROWDSEC_MACHINE_PASSWORD"),
+		GitBackupEnabled:          envBool("GIT_BACKUP_ENABLED", false),
+		GitBackupRepo:             os.Getenv("GIT_BACKUP_REPO"),
+		GitBackupBranch:           envOr("GIT_BACKUP_BRANCH", "main"),
+		GitBackupUsername:         os.Getenv("GIT_BACKUP_USERNAME"),
+		GitBackupToken:            os.Getenv("GIT_BACKUP_TOKEN"),
+		GitBackupAutoPush:         envBool("GIT_BACKUP_AUTO_PUSH", true),
+		GitBackupCommitMsg:        envOr("GIT_BACKUP_COMMIT_MESSAGE", "traefik-manager: {action} at {timestamp}"),
+		BackupDir:                 envOr("BACKUP_DIR", "/app/backups"),
+		BackupKeepCount:           envInt("BACKUP_KEEP_COUNT", 0),
+		Debug:                     envBool("TMA_DEBUG", false),
 	}
 }
 
@@ -160,6 +160,8 @@ func (a *App) router(w http.ResponseWriter, r *http.Request) {
 		a.logsHandler(w, r)
 	case p == "/api/traefik/certs" && m == http.MethodGet:
 		a.certsHandler(w, r)
+	case p == "/api/traefik/plugins" && m == http.MethodGet:
+		a.pluginsHandler(w, r)
 
 	case p == "/api/configs" && m == http.MethodGet:
 		a.configsReadHandler(w, r)
