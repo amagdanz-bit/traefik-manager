@@ -25,7 +25,7 @@ When a remote agent is active:
 - **Services** - Shows the agent's services from the remote Traefik API.
 - **Route Map** - The route map diagram renders the agent's routes and services.
 - **Tab visibility** - Provider and monitoring tab toggles (Docker, Kubernetes, Certs, Plugins, etc.) are stored per-server in the browser. Changes made while on an agent do not affect the Host or other agents.
-- **Static Config** (Settings - Static Config) - Available if the agent has `STATIC_CONFIG_PATH` set. Raw YAML editing is supported; section-based editing (entrypoints, cert resolvers, etc.) is available only on the Host. Traefik restart works if the agent has `RESTART_METHOD` configured.
+- **Static Config tab** - Available if the agent has `STATIC_CONFIG_PATH` set and `traefik.yml` mounted read-write. With that agent selected in the server switcher, the tab toggle appears under **Settings - Interface**. Raw YAML editing is supported; section-based editing (entrypoints, cert resolvers, etc.) is available only on the Host. Traefik restart after save works if the agent has `RESTART_METHOD` configured. See [Static config editing](#static-config-editing).
 - **Backups** (Settings - Backups) - Shows the agent's local `.bak` backup files. The agent creates a `.bak` automatically before every config write; you can also create a manual backup at any time. In the Git sub-tab you can enable **Use Host Repository** to have the Host push this agent's config to the Host's git repository on a dedicated branch (no agent-side git config needed), or leave the agent autonomous via its `GIT_BACKUP_*` env vars. The Static Config backup sub-tab is not shown for agents.
 - **Logs** - The Logs tab shows the agent's access log when `ACCESS_LOG_PATH` is set on the agent. When installed via the installer script alongside Traefik, this is set automatically.
 - **Certificates** - The Certificates tab shows certs from the agent's `acme.json` when `ACME_JSON_PATH` is set. When installed via the installer script alongside Traefik, this is set automatically.
@@ -84,6 +84,23 @@ volumes:
 ```
 
 > **Backup persistence**: Always include the `tma_backups` named volume (or a bind mount to a host path via `BACKUP_DIR`). Without it, all backup files stored in `/app/backups` are lost when the container is recreated (e.g. on image update). The Settings - Agents wizard generates this volume automatically.
+
+## Static config editing
+
+Two additions to the agent service enable the **Static Config** tab for that server:
+
+```yaml
+    environment:
+      - STATIC_CONFIG_PATH=/traefik.yml
+    volumes:
+      - ./traefik/traefik.yml:/traefik.yml
+```
+
+- The mount must be **writable** - no `:ro`. A `.bak` backup is created in `BACKUP_DIR` before every save. Single-file bind mounts are supported.
+- The path is wherever you mount the file inside the **agent** container - it does not have to match the path inside the Traefik container.
+- The tab toggle only appears under **Settings - Interface** while that agent is the active server, and only when the agent reports the file as readable. Recreate the agent after adding the env var, then check again.
+- To restart Traefik after a save, set `RESTART_METHOD` on the agent. `proxy` needs `TRAEFIK_CONTAINER` plus `DOCKER_HOST` pointing at a docker socket proxy with `POST=1`, reachable from the agent's network.
+- Section-based editing (entrypoints, cert resolvers, providers as cards) is Host-only; agents get the raw YAML editor.
 
 ## Install via binary
 
