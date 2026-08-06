@@ -326,7 +326,7 @@ func (a *App) staticRestartHandler(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]any{"ok": true})
 
 	case "socket", "proxy":
-		if err := a.dockerKill(r.Context()); err != nil {
+		if err := a.dockerRestart(r.Context()); err != nil {
 			jsonError(w, "docker restart failed: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -337,12 +337,12 @@ func (a *App) staticRestartHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *App) dockerKill(ctx context.Context) error {
+func (a *App) dockerRestart(ctx context.Context) error {
 	container := a.cfg.TraefikContainer
 	if container == "" {
 		container = "traefik"
 	}
-	apiPath := "/containers/" + container + "/kill?signal=HUP"
+	apiPath := "/containers/" + container + "/restart?t=10"
 
 	var client *http.Client
 	var baseURL string
@@ -359,7 +359,13 @@ func (a *App) dockerKill(ctx context.Context) error {
 		baseURL = "http://localhost"
 	} else {
 		client = http.DefaultClient
-		baseURL = strings.TrimRight(dockerHost, "/")
+		h := strings.TrimRight(dockerHost, "/")
+		if strings.HasPrefix(h, "tcp://") {
+			h = "http://" + strings.TrimPrefix(h, "tcp://")
+		} else if !strings.HasPrefix(h, "http://") && !strings.HasPrefix(h, "https://") {
+			h = "http://" + h
+		}
+		baseURL = h
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+apiPath, nil)

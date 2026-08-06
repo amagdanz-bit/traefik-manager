@@ -100,7 +100,7 @@ Two additions to the agent service enable the **Static Config** tab for that ser
 - The mount must be **writable** - no `:ro`. A `.bak` backup is created in `BACKUP_DIR` before every save. Single-file bind mounts are supported.
 - The path is wherever you mount the file inside the **agent** container - it does not have to match the path inside the Traefik container.
 - The tab toggle only appears under **Settings - Interface** while that agent is the active server, and only when the agent reports the file as readable. Recreate the agent after adding the env var, then check again.
-- To restart Traefik after a save, set `RESTART_METHOD` on the agent. `proxy` needs `TRAEFIK_CONTAINER` plus `DOCKER_HOST` pointing at a docker socket proxy with `POST=1`, reachable from the agent's network.
+- To restart Traefik after a save, set `RESTART_METHOD` on the agent. `proxy` needs `TRAEFIK_CONTAINER` plus `DOCKER_HOST` pointing at a docker socket proxy (e.g. `tcp://socket-proxy:2375`) with `CONTAINERS=1` and `POST=1`, reachable from the agent's network.
 - Agents get the full section editing experience - entrypoints, cert resolvers, plugins, providers, API/log panels, trusted-IPs helper and the raw YAML editor - identical to the Host.
 - Setting `STATIC_CONFIG_PATH` also enables plugin management in the agent's **Plugins** tab.
 
