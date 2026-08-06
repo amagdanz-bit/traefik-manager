@@ -1745,13 +1745,32 @@ def api_static_section_update():
                 existing_res['acme'] = acme
                 resolvers[name] = existing_res
         elif section == 'plugins':
-            plugins = config.setdefault('experimental', {}).setdefault('plugins', {})
+            exp = config.setdefault('experimental', {})
+            plugins = exp.get('plugins') if isinstance(exp.get('plugins'), dict) else {}
+            local   = exp.get('localPlugins') if isinstance(exp.get('localPlugins'), dict) else {}
             if action == 'remove':
                 plugins.pop(name, None)
+                local.pop(name, None)
             else:
                 if action == 'edit' and old_name != name:
                     plugins.pop(old_name, None)
-                plugins[name] = {'moduleName': payload.get('moduleName', ''), 'version': payload.get('version', '')}
+                    local.pop(old_name, None)
+                if payload.get('local'):
+                    plugins.pop(name, None)
+                    local[name] = {'moduleName': payload.get('moduleName', '')}
+                else:
+                    local.pop(name, None)
+                    plugins[name] = {'moduleName': payload.get('moduleName', ''), 'version': payload.get('version', '')}
+            if plugins:
+                exp['plugins'] = plugins
+            else:
+                exp.pop('plugins', None)
+            if local:
+                exp['localPlugins'] = local
+            else:
+                exp.pop('localPlugins', None)
+            if not exp:
+                config.pop('experimental', None)
         elif section == 'api' and action == 'set':
             if payload.get('enabled', True):
                 api_cfg = config.get('api')
@@ -1888,6 +1907,13 @@ def api_static_section_update():
                 providers['file'] = file_cfg
             else:
                 providers.pop('file', None)
+            throttle = str(payload.get('providers_throttle', '')).strip()
+            if throttle:
+                if not _is_valid_duration(throttle):
+                    return jsonify({'error': f'Invalid providers throttle: {throttle!r} - use forms like 2s, 500ms'}), 400
+                providers['providersThrottleDuration'] = int(throttle) if throttle.isdigit() else throttle
+            else:
+                providers.pop('providersThrottleDuration', None)
             if not providers:
                 config.pop('providers', None)
         elif section == 'providers' and action in ('add', 'edit', 'remove'):
@@ -1998,6 +2024,40 @@ def api_static_section_update():
                 config['core'] = core_blk
             else:
                 config.pop('core', None)
+            st = config.get('serversTransport') if isinstance(config.get('serversTransport'), dict) else {}
+            if payload.get('st_insecure'):
+                st['insecureSkipVerify'] = True
+            else:
+                st.pop('insecureSkipVerify', None)
+            cas = [c for c in re.split(r'[\s,]+', str(payload.get('st_root_cas', ''))) if c]
+            if cas:
+                st['rootCAs'] = cas
+            else:
+                st.pop('rootCAs', None)
+            max_idle = str(payload.get('st_max_idle', '')).strip()
+            if max_idle:
+                if not max_idle.isdigit():
+                    return jsonify({'error': f'Max idle conns must be a whole number, got {max_idle!r}'}), 400
+                st['maxIdleConnsPerHost'] = int(max_idle)
+            else:
+                st.pop('maxIdleConnsPerHost', None)
+            fwd_t = st.get('forwardingTimeouts') if isinstance(st.get('forwardingTimeouts'), dict) else {}
+            for yaml_key, pay_key in (('dialTimeout', 'st_dial'), ('responseHeaderTimeout', 'st_resp_header'), ('idleConnTimeout', 'st_idle_conn')):
+                v = str(payload.get(pay_key, '')).strip()
+                if v:
+                    if not _is_valid_duration(v):
+                        return jsonify({'error': f'Invalid duration for {yaml_key}: {v!r}'}), 400
+                    fwd_t[yaml_key] = int(v) if v.isdigit() else v
+                else:
+                    fwd_t.pop(yaml_key, None)
+            if fwd_t:
+                st['forwardingTimeouts'] = fwd_t
+            else:
+                st.pop('forwardingTimeouts', None)
+            if st:
+                config['serversTransport'] = st
+            else:
+                config.pop('serversTransport', None)
         else:
             return jsonify({'error': f'Unknown section: {section!r}'}), 400
         stream = StringIO()

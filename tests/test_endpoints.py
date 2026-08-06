@@ -460,3 +460,50 @@ def test_system_editor_writes_global_and_core(client):
         'check_new_version': True, 'send_usage': False, 'rule_syntax': ''})
     parsed2 = back.get_json()['parsed']
     assert 'global' not in parsed2 and 'core' not in parsed2, 'defaults must remove the blocks'
+
+
+def test_local_plugins_are_managed_separately(client):
+    raw = "experimental:\n  plugins:\n    remote1:\n      moduleName: github.com/a/b\n      version: v1\n"
+    res = _static_section(client, raw, 'plugins', 'add', 'dev-plugin',
+                          {'moduleName': 'github.com/me/dev', 'version': '', 'local': True})
+    assert res.status_code == 200, res.data
+    exp = res.get_json()['parsed']['experimental']
+    assert exp['localPlugins'] == {'dev-plugin': {'moduleName': 'github.com/me/dev'}}
+    assert 'dev-plugin' not in exp['plugins']
+    res2 = _static_section(client, res.get_json()['raw'], 'plugins', 'edit', 'dev-plugin',
+                           {'moduleName': 'github.com/me/dev', 'version': 'v2', 'local': False})
+    exp2 = res2.get_json()['parsed']['experimental']
+    assert 'localPlugins' not in exp2, 'switching to remote must drop the local entry'
+    assert exp2['plugins']['dev-plugin'] == {'moduleName': 'github.com/me/dev', 'version': 'v2'}
+
+
+def test_providers_throttle_duration_roundtrip(client):
+    raw, parsed = _static_providers_roundtrip(client, BARE_DOCKER, {
+        'docker': True, 'dockerEndpoint': '', 'dockerExposedByDefault': True,
+        'dockerWatch': True, 'file': False, 'providers_throttle': '5s',
+    })
+    assert parsed['providers']['providersThrottleDuration'] == '5s'
+    raw2, parsed2 = _static_providers_roundtrip(client, raw, {
+        'docker': True, 'dockerEndpoint': '', 'dockerExposedByDefault': True,
+        'dockerWatch': True, 'file': False, 'providers_throttle': '',
+    })
+    assert 'providersThrottleDuration' not in parsed2['providers']
+
+
+def test_servers_transport_defaults_roundtrip(client):
+    res = _static_section(client, '', 'system', 'set', '', {
+        'check_new_version': True, 'send_usage': False, 'rule_syntax': '',
+        'st_insecure': True, 'st_root_cas': '/certs/ca.pem', 'st_max_idle': '100',
+        'st_dial': '10s', 'st_resp_header': '', 'st_idle_conn': '90',
+    })
+    assert res.status_code == 200, res.data
+    st = res.get_json()['parsed']['serversTransport']
+    assert st == {'insecureSkipVerify': True, 'rootCAs': ['/certs/ca.pem'],
+                  'maxIdleConnsPerHost': 100,
+                  'forwardingTimeouts': {'dialTimeout': '10s', 'idleConnTimeout': 90}}
+    bad = _static_section(client, '', 'system', 'set', '', {
+        'check_new_version': True, 'send_usage': False, 'rule_syntax': '',
+        'st_insecure': False, 'st_root_cas': '', 'st_max_idle': 'lots',
+        'st_dial': '', 'st_resp_header': '', 'st_idle_conn': '',
+    })
+    assert bad.status_code == 400

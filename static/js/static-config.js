@@ -548,6 +548,8 @@ function _resetStaticForm(section) {
         onStaticChallengeChange();
     } else if (section === 'plugins') {
         ['sfPluginName','sfPluginModule','sfPluginVersion'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+        const lp = document.getElementById('sfPluginLocal'); if (lp) lp.checked = false;
+        const pv = document.getElementById('sfPluginVersion'); if (pv) pv.disabled = false;
     } else if (section === 'providers') {
         const t = document.getElementById('sfProviderType'); if (t) t.value = '';
         const w = document.getElementById('sfProviderEditorWrap'); if (w) w.style.display = 'none';
@@ -608,10 +610,14 @@ function _prefillStaticForm(section, name) {
         const ncEl = document.getElementById('sfResDnsNoCheck'); if (ncEl) ncEl.checked = !!prop.disableChecks;
         onStaticChallengeChange();
     } else if (section === 'plugins') {
-        const p = ((d.experimental || {}).plugins || {})[name] || {};
+        const exp = d.experimental || {};
+        const isLocal = !!((exp.localPlugins || {})[name]);
+        const p = isLocal ? exp.localPlugins[name] || {} : (exp.plugins || {})[name] || {};
         document.getElementById('sfPluginName').value    = name;
         document.getElementById('sfPluginModule').value  = p.moduleName || '';
         document.getElementById('sfPluginVersion').value = p.version || '';
+        const lp = document.getElementById('sfPluginLocal'); if (lp) lp.checked = isLocal;
+        const pv = document.getElementById('sfPluginVersion'); if (pv) pv.disabled = isLocal;
     } else if (section === 'providers') {
         const sel = document.getElementById('sfProviderType');
         if (sel) sel.value = name;
@@ -681,7 +687,7 @@ async function submitStaticSection(section) {
             dns_disable_checks: document.getElementById('sfResDnsNoCheck')?.checked || false };
     } else if (section === 'plugins') {
         name    = document.getElementById('sfPluginName').value.trim();
-        payload = { moduleName: document.getElementById('sfPluginModule').value.trim(), version: document.getElementById('sfPluginVersion').value.trim() };
+        payload = { moduleName: document.getElementById('sfPluginModule').value.trim(), version: document.getElementById('sfPluginVersion').value.trim(), local: document.getElementById('sfPluginLocal')?.checked || false };
     }
     if (!name) { showToast('Name is required', 'error'); return; }
     try {
@@ -779,11 +785,11 @@ function _tmPluginCard(name, p) {
             <span class="tm-ic tm-ic-tile"><i class="ph-bold ph-puzzle-piece"></i></span>
             <div class="tm-head-txt">
                 <div class="tm-title"><span class="tm-name">${_esc(name)}</span></div>
-                <div class="tm-sub">${_esc(p.version || 'no version pinned')}</div>
+                <div class="tm-sub">${p._local ? 'local plugin' : _esc(p.version || 'no version pinned')}</div>
             </div>${_scRail('plugins', name)}
         </div>
         ${vals}
-        <div class="tm-foot"><span class="tm-meta">declared in traefik.yml</span></div>
+        <div class="tm-foot"><span class="tm-meta">${p._local ? 'plugins-local directory' : 'declared in traefik.yml'}</span></div>
     </div>`;
 }
 
@@ -872,8 +878,11 @@ function _renderStaticResolvers(resolvers) {
     el.innerHTML = `<div style="margin:12px 16px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;">${rows}</div>`;
 }
 
-function _renderStaticPlugins(plugins) {
-    const keys = Object.keys(plugins || {});
+function _renderStaticPlugins(plugins, localPlugins) {
+    const all = {};
+    Object.entries(plugins || {}).forEach(([n, p]) => { all[n] = p || {}; });
+    Object.entries(localPlugins || {}).forEach(([n, p]) => { all[n] = { ...(p || {}), _local: true }; });
+    const keys = Object.keys(all);
     const cnt  = document.getElementById('staticPluginCount');
     if (cnt) cnt.textContent = keys.length;
     const el = document.getElementById('staticPluginList');
@@ -883,11 +892,11 @@ function _renderStaticPlugins(plugins) {
         return;
     }
     if (_tmModern()) {
-        el.innerHTML = _scGrid(keys.map(name => _tmPluginCard(name, plugins[name] || {})).join(''));
+        el.innerHTML = _scGrid(keys.map(name => _tmPluginCard(name, all[name])).join(''));
         return;
     }
     const rows = keys.map((name, i) => {
-        const p   = plugins[name] || {};
+        const p   = all[name];
         const nd  = JSON.stringify(name);
         const sep = i < keys.length - 1 ? `border-bottom:1px solid var(--border);` : '';
         return `<div class="flex items-center gap-4 px-4 py-3" style="${sep}">
@@ -895,6 +904,7 @@ function _renderStaticPlugins(plugins) {
                 <span class="text-sm font-mono font-semibold flex-shrink-0" style="color:var(--text)">${_esc(name)}</span>
                 ${p.moduleName ? `<span class="text-xs font-mono truncate" style="color:var(--muted)">${_esc(p.moduleName)}</span>` : ''}
                 ${p.version    ? `<span class="text-xs font-mono px-2 py-0.5 rounded-md flex-shrink-0" style="background:rgba(168,85,247,0.1);color:var(--purple)">${_esc(p.version)}</span>` : ''}
+                ${p._local     ? `<span class="text-xs font-mono px-2 py-0.5 rounded-md flex-shrink-0" style="background:rgba(45,186,169,0.1);color:var(--teal)">local</span>` : ''}
             </div>
             <div class="flex gap-1 flex-shrink-0">
                 <button onclick='openStaticEditForm("plugins",${nd})' class="btn-icon text-xs" title="Edit"><i class="ph-bold ph-pencil-simple"></i></button>
@@ -909,11 +919,11 @@ function _renderStaticSections(parsed) {
     _staticParsedData = parsed || {};
     _renderStaticEntrypoints(_staticParsedData.entryPoints || _staticParsedData.entrypoints || {});
     _renderStaticResolvers(_staticParsedData.certificatesResolvers || {});
-    _renderStaticPlugins((_staticParsedData.experimental || {}).plugins || {});
+    _renderStaticPlugins((_staticParsedData.experimental || {}).plugins || {}, (_staticParsedData.experimental || {}).localPlugins || {});
     _renderStaticApi(_staticParsedData.api);
     _renderStaticLog(_staticParsedData.log, _staticParsedData.accessLog);
     _renderStaticObservability(_staticParsedData.metrics, _staticParsedData.tracing, _staticParsedData.ping);
-    _renderStaticSystem(_staticParsedData['global'], _staticParsedData.core);
+    _renderStaticSystem(_staticParsedData['global'], _staticParsedData.core, _staticParsedData.serversTransport);
     _renderStaticProviders(_staticParsedData.providers);
 }
 
@@ -950,12 +960,23 @@ function _renderStaticObservability(metrics, tracing, ping) {
     const te = document.getElementById('sfTraceEndpoint'); if (te) te.value = t.otlp?.http?.endpoint || '';
 }
 
-function _renderStaticSystem(globalData, coreData) {
+function _renderStaticSystem(globalData, coreData, serversTransport) {
     const g = globalData || {};
     _setStaticToggle('checkNewVersion', g.checkNewVersion !== false);
     _setStaticToggle('sendUsage', !!g.sendAnonymousUsage);
     const rs = document.getElementById('sfRuleSyntax');
     if (rs) rs.value = (coreData || {}).defaultRuleSyntax === 'v2' ? 'v2' : '';
+    const st = serversTransport || {};
+    _setStaticToggle('stInsecure', !!st.insecureSkipVerify);
+    const cas = document.getElementById('sfStRootCAs');
+    if (cas) cas.value = Array.isArray(st.rootCAs) ? st.rootCAs.join('\n') : '';
+    const mi = document.getElementById('sfStMaxIdle');
+    if (mi) mi.value = st.maxIdleConnsPerHost !== undefined && st.maxIdleConnsPerHost !== null ? String(st.maxIdleConnsPerHost) : '';
+    const ft = st.forwardingTimeouts || {};
+    [['sfStDialTimeout', 'dialTimeout'], ['sfStRespHeaderTimeout', 'responseHeaderTimeout'], ['sfStIdleConnTimeout', 'idleConnTimeout']].forEach(([id, k]) => {
+        const e = document.getElementById(id);
+        if (e) e.value = ft[k] !== undefined && ft[k] !== null ? String(ft[k]) : '';
+    });
 }
 
 function staticToggle(id) {
@@ -1056,6 +1077,8 @@ function _renderStaticProviders(providersData) {
         if (dir) dir.value = (prov.file || {}).directory || '';
         _setStaticToggle('fileWatch', (prov.file || {}).watch !== false);
     }
+    const thr = document.getElementById('sfProvidersThrottle');
+    if (thr) thr.value = prov.providersThrottleDuration !== undefined && prov.providersThrottleDuration !== null ? String(prov.providersThrottleDuration) : '';
     const otherEl = document.getElementById('staticOtherProvidersList');
     if (otherEl) {
         const others = Object.keys(prov).filter(k => k !== 'docker' && k !== 'file');
@@ -1185,6 +1208,12 @@ async function saveStaticSingleSection(section) {
             check_new_version: _staticToggleState('checkNewVersion'),
             send_usage: _staticToggleState('sendUsage'),
             rule_syntax: document.getElementById('sfRuleSyntax')?.value || '',
+            st_insecure: _staticToggleState('stInsecure'),
+            st_root_cas: document.getElementById('sfStRootCAs')?.value || '',
+            st_max_idle: document.getElementById('sfStMaxIdle')?.value.trim() || '',
+            st_dial: document.getElementById('sfStDialTimeout')?.value.trim() || '',
+            st_resp_header: document.getElementById('sfStRespHeaderTimeout')?.value.trim() || '',
+            st_idle_conn: document.getElementById('sfStIdleConnTimeout')?.value.trim() || '',
         };
     } else if (section === 'providers') {
         data = {
@@ -1195,6 +1224,7 @@ async function saveStaticSingleSection(section) {
             file: _staticToggleState('fileEnabled'),
             fileDirectory: document.getElementById('sfFileDirectory')?.value.trim() || '',
             fileWatch: _staticToggleState('fileWatch'),
+            providers_throttle: document.getElementById('sfProvidersThrottle')?.value.trim() || '',
         };
     }
     try {
@@ -1483,6 +1513,11 @@ function _buildStaticClassicHTML() {
                     <input id="sfPluginVersion" type="text" class="input-field text-sm" placeholder="v1.0.0">
                 </div>
             </div>
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="sfPluginLocal" class="rounded" style="accent-color:var(--teal)" onchange="document.getElementById('sfPluginVersion').disabled = this.checked">
+                <span class="text-xs" style="color:var(--text)">Local plugin</span>
+                <span class="text-xs" style="color:var(--muted)">- loaded from the <code class="font-mono">plugins-local</code> directory, no version needed</span>
+            </div>
             <div class="flex gap-2 justify-end pt-1">
                 <button onclick="closeStaticForm('plugins')" class="btn-secondary text-xs">Cancel</button>
                 <button onclick="submitStaticSection('plugins')" class="btn-primary text-xs" id="sfPluginBtn">Add Plugin</button>
@@ -1677,6 +1712,31 @@ function _buildStaticClassicHTML() {
                 </select>
                 <p class="text-xs mt-1" style="color:var(--muted)">Only change this while migrating rules written for Traefik v2.</p>
             </div>
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:var(--muted)">Servers transport defaults</p>
+                <div class="tab-toggle-row" onclick="staticToggle('stInsecure')">
+                    <span class="text-sm" style="color:var(--text)">Skip backend TLS verification <span class="text-xs" style="color:var(--red)">- insecure</span></span>
+                    <div class="toggle-switch" id="staticT-stInsecure"><div class="toggle-knob"></div></div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs block mb-1" style="color:var(--muted)">Root CAs <span style="font-weight:400">(optional, one path per line)</span></label>
+                    <textarea id="sfStRootCAs" class="input-field text-sm font-mono" rows="2" placeholder="/certs/internal-ca.pem" style="resize:vertical"></textarea>
+                </div>
+                <div>
+                    <label class="text-xs block mb-1" style="color:var(--muted)">Max idle conns per host <span style="font-weight:400">(optional)</span></label>
+                    <input id="sfStMaxIdle" type="text" class="input-field text-sm" placeholder="default 200">
+                </div>
+            </div>
+            <div>
+                <label class="text-xs block mb-1" style="color:var(--muted)">Forwarding timeouts <span style="font-weight:400">(optional, e.g. 30s)</span></label>
+                <div class="grid grid-cols-3 gap-3">
+                    <input id="sfStDialTimeout" type="text" class="input-field text-sm" placeholder="dial (30s)">
+                    <input id="sfStRespHeaderTimeout" type="text" class="input-field text-sm" placeholder="resp header (0)">
+                    <input id="sfStIdleConnTimeout" type="text" class="input-field text-sm" placeholder="idle conn (90s)">
+                </div>
+            </div>
             <div class="flex justify-end pt-1 sc-save" data-sc-save="system" style="display:none">
                 <button onclick="saveStaticSingleSection('system')" class="btn-primary text-xs">Save Changes</button>
             </div>
@@ -1721,6 +1781,10 @@ function _buildStaticClassicHTML() {
                         <div class="toggle-switch" id="staticT-fileWatch"><div class="toggle-knob"></div></div>
                     </div>
                 </div>
+            </div>
+            <div>
+                <label class="text-xs block mb-1" style="color:var(--muted)">Providers throttle <span style="font-weight:400">(optional, e.g. 2s)</span></label>
+                <input id="sfProvidersThrottle" type="text" class="input-field text-sm" placeholder="minimum time between config reloads (default 2s)">
             </div>
             <div class="flex justify-end pt-1 sc-save" data-sc-save="providers" style="display:none">
                 <button onclick="saveStaticSingleSection('providers')" class="btn-primary text-xs">Save Changes</button>
