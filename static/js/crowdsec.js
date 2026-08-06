@@ -12,7 +12,19 @@ function _csIp(d) { return (d.value || '').split('/')[0]; }
 function csGeo_click(cc) { _csCountryFilter = (_csCountryFilter === cc) ? '' : cc; _csDecisionsPage = 1; _csApplyFilters(); }
 function clearCsCountryFilter() { _csCountryFilter = ''; _csDecisionsPage = 1; _csApplyFilters(); }
 
+let _csRefreshing = false, _csRefreshQueued = false;
 async function refreshCrowdSecTab() {
+    if (_csRefreshing) { _csRefreshQueued = true; return; }
+    _csRefreshing = true;
+    try {
+        await _csRefreshInner();
+    } finally {
+        _csRefreshing = false;
+        if (_csRefreshQueued) { _csRefreshQueued = false; refreshCrowdSecTab(); }
+    }
+}
+
+async function _csRefreshInner() {
     const decEl   = document.getElementById('csDecisionsTable');
     const altEl   = document.getElementById('csAlertsTable');
     const statsEl = document.getElementById('crowdsecStats');
@@ -193,7 +205,7 @@ function _csRenderBanRecent() {
             <span class="text-xs font-semibold flex-shrink-0" style="color:${colour[d.type] || 'var(--muted)'}">${_esc(d.type || '-')}</span>
             <span class="text-xs truncate" style="color:var(--muted);max-width:150px" title="${_esc(d.scenario || '')}">${_esc(d.scenario || '')}</span>
             <span class="text-xs flex-shrink-0 tabular-nums" style="color:var(--muted)" title="Expires">${_esc(String(until))}</span>
-            <button onclick="csUnban(${d.id})" class="btn-icon text-xs flex-shrink-0" title="Unban / delete decision" style="color:var(--red)"><i class="ph-bold ph-trash"></i></button>
+            ${d.id ? `<button onclick="csUnban(${d.id})" class="btn-icon text-xs flex-shrink-0" title="Unban / delete decision" style="color:var(--red)"><i class="ph-bold ph-trash"></i></button>` : '<span class="text-xs flex-shrink-0" style="color:var(--muted);opacity:.6">syncing...</span>'}
         </div>`;
     }).join('');
 }
@@ -226,7 +238,9 @@ async function submitCsBan() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to add decision');
-        closeCsBanModal();
+        _csDecisions.unshift({ value: ip, type: _csBanType, scenario: reason || 'manual ban from Traefik Manager', origin: 'manual', duration });
+        _csRenderBanRecent();
+        document.getElementById('csBanIp').value = '';
         addNotification('success', `Decision added: ${_csBanType} ${ip} for ${duration}`);
         setTimeout(refreshCrowdSecTab, 800);
     } catch(e) {
@@ -393,7 +407,7 @@ function _renderCsDecisions(allFiltered, el) {
             <td class="px-3 py-2 text-xs" style="color:var(--muted)">${scenario}</td>
             <td class="px-3 py-2 text-xs" style="color:var(--muted)">${_esc(String(until))}</td>
             <td class="px-3 py-2 text-xs text-right">
-                <button onclick="csUnban(${d.id})" class="btn-icon text-xs" title="Unban / delete decision" style="color:var(--red)"><i class="ph-bold ph-trash"></i></button>
+                ${d.id ? `<button onclick="csUnban(${d.id})" class="btn-icon text-xs" title="Unban / delete decision" style="color:var(--red)"><i class="ph-bold ph-trash"></i></button>` : ''}
             </td>
         </tr>`;
     }).join('');
