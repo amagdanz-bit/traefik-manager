@@ -224,10 +224,10 @@ async function loadOverviewStats() {
                 const port = addr.split(':').pop();
                 const isHttp = ['80','8080'].includes(port);
                 const isHttps = ['443','8443'].includes(port);
-                const color = isHttps ? 'badge-green' : isHttp ? 'badge-http' : 'badge-muted';
+                const color = isHttps ? 'var(--green)' : isHttp ? 'var(--blue)' : 'var(--muted)';
                 return `<div class="ep-pill">
-                    <span class="badge ${color} text-xs">${_esc(ep.name)}</span>
-                    <span class="font-mono text-xs" style="color:var(--muted)">${addr}</span>
+                    <span class="d-flat font-semibold" style="color:${color}">${_esc(ep.name)}</span>
+                    <span class="font-mono text-xs" style="color:var(--muted)">${_esc(addr)}</span>
                 </div>`;
             }).join('');
             _applyEntrypointsVisibility();
