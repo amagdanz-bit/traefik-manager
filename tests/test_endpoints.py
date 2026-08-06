@@ -164,17 +164,18 @@ def test_leaving_expose_by_default_on_does_not_write_the_key(client):
     assert 'exposedByDefault' not in (parsed['providers']['docker'] or {}), raw
 
 
-def _cs_lapi_stub(monkeypatch, capi_count, local_ip):
-    """LAPI with capi_count CAPI decisions and one local decision that sorts last.
+def _cs_lapi_stub(monkeypatch, capi_count, local_ip, local_origin='crowdsec'):
+    """LAPI modelled on crowdsec v1.7.8 pkg/database/decisionfilter.go L82-102.
 
-    Mirrors issue #130: the local decision only exists beyond the paginated cap,
-    so a blind sweep can never reach it.
+    limit and id_gt are honoured; unknown params are silently ignored, which is
+    what made the old page= sweep return the same rows every time. The local
+    decision sorts last by id, so only a cursor walk to the end reaches it.
     """
     import app as tm
-    pool = [{'id': i, 'origin': 'CAPI', 'value': f'10.0.{i // 256}.{i % 256}',
+    pool = [{'id': i + 1, 'origin': 'CAPI', 'value': f'10.0.{i // 256}.{i % 256}',
              'type': 'ban', 'scenario': 'capi', 'until': '2099-01-01T00:00:00Z'}
             for i in range(capi_count)]
-    pool.append({'id': 999999, 'origin': 'crowdsec', 'value': local_ip, 'type': 'ban',
+    pool.append({'id': 999999, 'origin': local_origin, 'value': local_ip, 'type': 'ban',
                  'scenario': 'crowdsecurity/http-probing', 'until': '2099-01-01T00:00:00Z'})
 
     calls = []
@@ -183,15 +184,10 @@ def _cs_lapi_stub(monkeypatch, capi_count, local_ip):
         calls.append(path)
         from urllib.parse import urlparse, parse_qs
         q = parse_qs(urlparse(path).query)
-        limit = int(q.get('limit', ['500'])[0])
-        page = int(q.get('page', ['1'])[0])
-        origins = q.get('origins', [None])[0]
-        rows = pool
-        if origins:
-            wanted = set(origins.split(','))
-            rows = [d for d in pool if d.get('origin') in wanted]
-        start = (page - 1) * limit
-        return rows[start:start + limit]
+        limit = int(q.get('limit', ['100'])[0])
+        id_gt = int(q.get('id_gt', ['0'])[0])
+        rows = sorted((d for d in pool if d['id'] > id_gt), key=lambda d: d['id'])
+        return rows[:limit]
 
     monkeypatch.setattr(tm, '_cs_lapi_url', lambda: 'http://lapi:8080')
     monkeypatch.setattr(tm, '_cs_api_key', lambda: 'key')
@@ -200,24 +196,84 @@ def _cs_lapi_stub(monkeypatch, capi_count, local_ip):
 
 
 def test_local_decisions_survive_the_pagination_cap(client, monkeypatch):
+    """Issue #130: a local decision past the old cap was unreachable."""
     ip = '45.148.10.125'
-    calls = _cs_lapi_stub(monkeypatch, capi_count=5000, local_ip=ip)
+    _cs_lapi_stub(monkeypatch, capi_count=6000, local_ip=ip)
 
     res = client.get('/api/crowdsec/decisions')
     assert res.status_code == 200, res.data
     values = [d['value'] for d in res.get_json()]
-
     assert ip in values, (
-        'A local (origin: crowdsec) decision sitting past the %d-decision cap was '
-        'dropped, so the UI can never find it. See issue #130.' % (500 * 10))
-    assert any('origins=' in c for c in calls), 'no targeted local-origin query was made'
+        'A local decision sitting past the old cap was dropped, so the UI could '
+        'never find it. See issue #130.')
+
+
+def test_manually_added_decisions_are_found(client, monkeypatch):
+    """Bans added through Traefik Manager carry origin "manual"."""
+    ip = '198.51.100.7'
+    _cs_lapi_stub(monkeypatch, capi_count=6000, local_ip=ip, local_origin='manual')
+
+    res = client.get('/api/crowdsec/decisions')
+    values = [d['value'] for d in res.get_json()]
+    assert ip in values, 'a ban added from the UI past the cap was dropped'
+
+
+def test_every_decision_is_returned(client, monkeypatch):
+    """LAPI supports id_gt pagination, so there is no reason to cap at 5000."""
+    _cs_lapi_stub(monkeypatch, capi_count=6000, local_ip='45.148.10.125')
+
+    res = client.get('/api/crowdsec/decisions')
+    assert len(res.get_json()) == 6001, 'the cursor walk stopped short of the full set'
 
 
 def test_local_decisions_are_not_duplicated(client, monkeypatch):
-    ip = '45.148.10.125'
-    _cs_lapi_stub(monkeypatch, capi_count=3, local_ip=ip)
+    """The old page= sweep returned the same rows repeatedly, since LAPI ignores it."""
+    _cs_lapi_stub(monkeypatch, capi_count=3, local_ip='45.148.10.125')
 
     res = client.get('/api/crowdsec/decisions')
     ids = [d['id'] for d in res.get_json()]
-    assert len(ids) == len(set(ids)), 'merging the targeted fetch duplicated decisions'
+    assert len(ids) == len(set(ids)), 'the cursor walk returned a decision twice'
     assert ids.count(999999) == 1
+
+
+def test_geoip_lookup_no_longer_truncates(client, monkeypatch):
+    """The old ips[:2000] cap dropped everything past 2000 and still returned 200.
+
+    With the decisions cap gone a real instance sends 25k+ IPs, so that silent
+    truncation turned the geography map into an undisclosed 8% sample.
+    """
+    import app as tm
+    monkeypatch.setattr(tm, '_geoip_enabled', lambda: True)
+    monkeypatch.setattr(tm, '_geoip_reader', lambda: object())
+    monkeypatch.setattr(tm, '_geoip_lookup',
+                        lambda ip, reader: {'country_code': 'US', 'country': 'United States'})
+
+    ips = ['10.0.%d.%d' % (i // 256, i % 256) for i in range(2500)]
+    res = client.post('/api/geoip/lookup', json={'ips': ips},
+                      headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    assert res.status_code == 200
+    assert len(res.get_json()['results']) == 2500, 'lookups are being silently dropped'
+
+
+def test_geoip_aggregate_returns_counts_and_codes(client, monkeypatch):
+    """Aggregate mode powers the map exactly, without shipping per-IP objects."""
+    import app as tm
+    monkeypatch.setattr(tm, '_geoip_enabled', lambda: True)
+    monkeypatch.setattr(tm, '_geoip_reader', lambda: object())
+
+    def geo(ip, reader):
+        return ({'country_code': 'US', 'country': 'United States'} if ip.startswith('10.')
+                else {'country_code': 'DE', 'country': 'Germany'})
+    monkeypatch.setattr(tm, '_geoip_lookup', geo)
+
+    ips = ['10.0.0.%d' % i for i in range(30)] + ['8.8.8.%d' % i for i in range(12)]
+    res = client.post('/api/geoip/lookup', json={'ips': ips, 'aggregate': True},
+                      headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    body = res.get_json()
+
+    assert body['counts']['US']['count'] == 30
+    assert body['counts']['DE']['count'] == 12
+    assert body['counts']['US']['country'] == 'United States'
+    assert 'results' not in body, 'aggregate mode should not ship per-IP objects'
+    assert body['codes']['10.0.0.5'] == 'US', 'the country filter needs per-IP codes'
+    assert body['codes']['8.8.8.5'] == 'DE'

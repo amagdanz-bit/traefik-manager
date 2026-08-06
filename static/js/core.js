@@ -525,21 +525,53 @@ async function loadGeoStatus(force) {
     return _geoEnabled && _geoAvailable;
 }
 
-async function geoLookup(ips) {
+const GEO_LOOKUP_BATCH = 5000;
+const _geoNames = {};
+
+// Aggregate mode: one pass over every IP returning country counts for the map plus a
+// compact ip -> country code map for the country filter. Roughly a quarter the bytes
+// of per-IP results, and exact rather than a sample.
+async function geoAggregate(ips) {
     if (!_geoEnabled || !_geoAvailable) return {};
     const uniq = [...new Set(ips.filter(Boolean))];
     const need = uniq.filter(ip => !(ip in _geoCache));
-    if (need.length) {
+    const counts = {};
+    for (let i = 0; i < need.length; i += GEO_LOOKUP_BATCH) {
         try {
             const r = await fetch('/api/geoip/lookup', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
-                body: JSON.stringify({ ips: need })
+                body: JSON.stringify({ ips: need.slice(i, i + GEO_LOOKUP_BATCH), aggregate: true })
+            }).then(r => r.json());
+            if (r.available === false) { _geoAvailable = false; break; }
+            Object.entries(r.codes || {}).forEach(([ip, cc]) => { _geoCache[ip] = { country_code: cc }; });
+            Object.entries(r.counts || {}).forEach(([cc, v]) => {
+                const e = counts[cc] || (counts[cc] = { count: 0, country: v.country });
+                e.count += v.count;
+                if (v.country) _geoNames[cc] = v.country;
+            });
+        } catch (_) { break; }
+    }
+    need.forEach(ip => { if (!(ip in _geoCache)) _geoCache[ip] = null; });
+    return counts;
+}
+
+async function geoLookup(ips) {
+    if (!_geoEnabled || !_geoAvailable) return {};
+    const uniq = [...new Set(ips.filter(Boolean))];
+    const need = uniq.filter(ip => !(ip in _geoCache));
+    for (let i = 0; i < need.length; i += GEO_LOOKUP_BATCH) {
+        const batch = need.slice(i, i + GEO_LOOKUP_BATCH);
+        try {
+            const r = await fetch('/api/geoip/lookup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+                body: JSON.stringify({ ips: batch })
             }).then(r => r.json());
             const res = r.results || {};
-            need.forEach(ip => { _geoCache[ip] = res[ip] || null; });
-            if (r.available === false) _geoAvailable = false;
-        } catch(_) {}
+            batch.forEach(ip => { _geoCache[ip] = res[ip] || null; });
+            if (r.available === false) { _geoAvailable = false; break; }
+        } catch(_) { break; }
     }
     const out = {};
     uniq.forEach(ip => { if (_geoCache[ip]) out[ip] = _geoCache[ip]; });
@@ -558,7 +590,7 @@ function _geoCountryCounts(ips) {
         const g = _geoCache[ip];
         if (g && g.country_code) {
             const cc = g.country_code;
-            if (!counts[cc]) counts[cc] = { count: 0, name: g.country_name || cc };
+            if (!counts[cc]) counts[cc] = { count: 0, name: g.country_name || _geoNames[cc] || cc };
             counts[cc].count++;
         }
     });
@@ -628,14 +660,16 @@ function _geoPanelHtml(panelId, countryData, activeCC, onClearAttr) {
     const entries = Object.entries(countryData).sort((a, b) => b[1].count - a[1].count);
     if (!entries.length) return '';
     const max = entries[0][1].count || 1;
+    const total = entries.reduce((n, [, d]) => n + d.count, 0) || 1;
     const top = entries.slice(0, 8).map(([cc, d]) => {
         const w = Math.max(4, Math.round((d.count / max) * 100));
         const sel = activeCC === cc;
         return `<div class="flex items-center gap-2 py-1 cursor-pointer" style="border-bottom:1px solid var(--border);${sel ? 'background:var(--input-bg)' : ''}" onclick="${panelId}_click('${cc}')">
             <span style="font-size:14px;line-height:1;flex-shrink:0">${_flagEmoji(cc)}</span>
             <span class="text-xs truncate" style="color:var(--text);flex:1;min-width:0" title="${_esc(d.name)}">${_esc(d.name)}</span>
-            <div style="width:60px;height:6px;border-radius:3px;background:var(--input-bg);overflow:hidden;flex-shrink:0"><div style="height:100%;border-radius:3px;background:var(--blue);width:${w}%"></div></div>
-            <span class="text-xs font-bold tabular-nums flex-shrink-0" style="color:var(--muted);min-width:28px;text-align:right">${d.count}</span>
+            <div style="width:52px;height:6px;border-radius:3px;background:var(--input-bg);overflow:hidden;flex-shrink:0;margin-left:4px"><div style="height:100%;border-radius:3px;background:var(--blue);width:${w}%"></div></div>
+            <span class="text-xs font-bold tabular-nums flex-shrink-0" style="color:var(--muted);min-width:28px;text-align:right">${d.count.toLocaleString()}</span>
+            <span class="text-xs tabular-nums flex-shrink-0" style="color:var(--muted);opacity:.65;min-width:38px;text-align:right">${(d.count / total * 100).toFixed(1)}%</span>
         </div>`;
     }).join('');
     const activeChip = activeCC ? `<button onclick="${onClearAttr}" class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full" style="background:var(--input-bg);color:var(--blue);border:1px solid var(--border)">${_flagEmoji(activeCC)} ${_esc((countryData[activeCC] || {}).name || activeCC)} <i class="ph-bold ph-x"></i></button>` : '';

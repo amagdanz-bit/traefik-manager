@@ -428,73 +428,59 @@ func (a *App) csPageJSON(ctx context.Context, path string, useJWT bool) ([]json.
 }
 
 const (
-	csPageSize      = 500
-	csMaxPages      = 10
-	csMaxLocalPages = 20
-	csLocalOrigins  = "crowdsec,cscli,console"
+	csPageSize = 1000
+	csMaxPages = 200
 )
 
+// LAPI supports id_gt cursor pagination on /v1/decisions (undocumented, but present
+// since v1.6.0). Unknown params are silently ignored on this endpoint, which is why
+// the old page= sweep returned the same rows ten times.
 func (a *App) crowdsecDecisionsHandler(w http.ResponseWriter, r *http.Request) {
 	if a.cfg.CrowdSecLAPIURL == "" {
 		jsonError(w, "CROWDSEC_LAPI_URL not configured", http.StatusNotFound)
 		return
 	}
 	now := time.Now().UTC()
-	seen := map[float64]bool{}
-	var all []json.RawMessage
+	all := []json.RawMessage{}
+	cursor := int64(0)
 
-	collect := func(query string, maxPages int, required bool) error {
-		for page := 1; page <= maxPages; page++ {
-			path := fmt.Sprintf("/v1/decisions?limit=%d&page=%d", csPageSize, page)
-			if query != "" {
-				path += "&" + query
+	for page := 0; page < csMaxPages; page++ {
+		path := fmt.Sprintf("/v1/decisions?limit=%d&id_gt=%d", csPageSize, cursor)
+		chunk, err := a.csPageJSON(r.Context(), path, false)
+		if err != nil {
+			if page == 0 {
+				jsonError(w, "crowdsec unavailable: "+err.Error(), http.StatusBadGateway)
+				return
 			}
-			chunk, err := a.csPageJSON(r.Context(), path, false)
-			if err != nil {
-				if page == 1 && required {
-					return err
-				}
-				return nil
-			}
-			if len(chunk) == 0 {
-				return nil
-			}
-			for _, raw := range chunk {
-				var d struct {
-					ID    float64 `json:"id"`
-					Until string  `json:"until"`
-				}
-				if err := json.Unmarshal(raw, &d); err == nil {
-					if d.Until != "" {
-						if exp, perr := time.Parse(time.RFC3339, d.Until); perr == nil && exp.Before(now) {
-							continue
-						}
-					}
-					if d.ID != 0 {
-						if seen[d.ID] {
-							continue
-						}
-						seen[d.ID] = true
-					}
-				}
-				all = append(all, raw)
-			}
-			if len(chunk) < csPageSize {
-				return nil
-			}
+			break
 		}
-		return nil
+		if len(chunk) == 0 {
+			break
+		}
+		maxID := cursor
+		for _, raw := range chunk {
+			var d struct {
+				ID    int64  `json:"id"`
+				Until string `json:"until"`
+			}
+			if err := json.Unmarshal(raw, &d); err == nil {
+				if d.ID > maxID {
+					maxID = d.ID
+				}
+				if d.Until != "" {
+					if exp, perr := time.Parse(time.RFC3339, d.Until); perr == nil && exp.Before(now) {
+						continue
+					}
+				}
+			}
+			all = append(all, raw)
+		}
+		if maxID == cursor || len(chunk) < csPageSize {
+			break
+		}
+		cursor = maxID
 	}
 
-	if err := collect("", csMaxPages, true); err != nil {
-		jsonError(w, "crowdsec unavailable: "+err.Error(), http.StatusBadGateway)
-		return
-	}
-	_ = collect("origins="+csLocalOrigins, csMaxLocalPages, false)
-
-	if all == nil {
-		all = []json.RawMessage{}
-	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(all)
 }
@@ -504,7 +490,7 @@ func (a *App) crowdsecAlertsHandler(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "CROWDSEC_LAPI_URL not configured", http.StatusNotFound)
 		return
 	}
-	chunk, err := a.csPageJSON(r.Context(), "/v1/alerts?limit=200", true)
+	chunk, err := a.csPageJSON(r.Context(), "/v1/alerts?limit=0&with_decisions=false", true)
 	if err != nil {
 		jsonError(w, "crowdsec unavailable: "+err.Error(), http.StatusBadGateway)
 		return

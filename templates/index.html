@@ -63,7 +63,8 @@
         html[data-tm-pref="system"] .tm-theme-icon[data-pref="system"],
         html:not([data-tm-pref]) .tm-theme-icon[data-pref="dark"] { display: inline; }
         .tab-optional { display: none; }
-        .tm-geo-map { width: 100%; }
+        .tm-geo-map { width: 100%; min-width: 0; overflow: hidden; }
+        .tm-geo-map svg { width: 100%; height: auto; display: block; max-width: 100%; }
         .tm-geo-grid { display: grid; gap: 16px; grid-template-columns: minmax(0,2fr) minmax(0,1fr); align-items: start; }
         @media (max-width: 640px) { .tm-geo-grid { grid-template-columns: 1fr; } }
         .tm-worldmap { width: 100%; height: auto; display: block; }

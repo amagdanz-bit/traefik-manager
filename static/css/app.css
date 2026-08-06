@@ -1127,3 +1127,12 @@ html.tm-modern .sc-sec[data-sc-sec="log"] > [id^="staticPanel-"] > div:first-chi
 .detail-panel-form { display: flex; flex-direction: column; }
 .detail-panel-form > div:nth-child(2) { flex: 1; overflow-y: auto; }
 .detail-panel-foot { flex-shrink: 0; border-top: 1px solid var(--border); background: var(--card); position: sticky; bottom: 0; }
+.cs-skeleton { height: 30px; border-radius: 6px; background: linear-gradient(90deg, var(--input-bg) 25%, var(--border) 50%, var(--input-bg) 75%); background-size: 200% 100%; animation: cs-shimmer 1.4s ease-in-out infinite; }
+@keyframes cs-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.cs-panel-grid { display: grid; gap: 12px; grid-template-columns: minmax(0,1fr); }
+.cs-panel-grid > div { min-width: 0; }
+@media (min-width: 900px) { .cs-panel-grid { grid-template-columns: minmax(0,1fr) minmax(0,1fr); } }
+.cs-bars { display: flex; align-items: flex-end; gap: 2px; height: 96px; overflow: hidden; }
+.cs-bar-col { flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: flex-end; }
+.cs-bar { width: 100%; border-radius: 2px 2px 0 0; background: var(--blue); opacity: .75; transition: opacity .12s; }
+.cs-bar-col:hover .cs-bar { opacity: 1; }

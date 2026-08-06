@@ -25,9 +25,7 @@ async function refreshCrowdSecTab() {
     }
     if (notCfgEl) notCfgEl.style.setProperty('display', 'none', 'important');
     if (!decEl) return;
-    const spinner = `<div class="text-center py-8" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-3xl block mb-2 animate-spin opacity-40"></i><p class="text-xs">Loading...</p></div>`;
-    decEl.innerHTML = spinner;
-    if (altEl) altEl.innerHTML = spinner;
+    _renderCsLoading('Fetching decisions and alerts...');
     try {
         const [decRes, altRes] = await Promise.all([
             agentFetch('/api/crowdsec/decisions'),
@@ -66,9 +64,11 @@ async function refreshCrowdSecTab() {
                 ..._csDecisions.map(d => (d.value || '').split('/')[0]),
                 ..._csAlerts.map(a => a.source && a.source.ip),
             ].filter(Boolean);
-            await geoLookup(ips);
+            if (ips.length > 4000) _csSetLoadingMsg(`Locating ${ips.length.toLocaleString()} addresses...`);
+            await geoAggregate(ips);
         }
         _renderCsStats(_csDecisions, _csAlerts, _csLapiOnline, statsEl);
+        _csRenderStatsPanels(_csDecisions, _csAlerts);
         _csApplyFilters();
         if (altEl && !altRes.ok) {
             const hint = altErr ? _esc(altErr) : 'Alerts unavailable - bouncer key may lack read:alerts permission, or set CROWDSEC_MACHINE_ID / CROWDSEC_MACHINE_PASSWORD';
@@ -204,18 +204,55 @@ async function submitCsBan() {
     }
 }
 
+const CS_STAT_CARDS = [
+    { label: 'Total Alerts',     icon: 'ph-shield-slash' },
+    { label: 'Active Decisions', icon: 'ph-crosshair-simple' },
+    { label: 'LAPI Status',      icon: 'ph-pulse' },
+];
+
+function _renderCsLoading(msg) {
+    const statsEl = document.getElementById('crowdsecStats');
+    if (statsEl) {
+        statsEl.innerHTML = CS_STAT_CARDS.map(s => `
+            <div class="rounded-xl p-4" style="background:var(--card);border:1px solid var(--border)">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wide" style="color:var(--muted)">${s.label}</span>
+                    <i class="ph-bold ${s.icon} text-base" style="color:var(--muted);opacity:0.35"></i>
+                </div>
+                <div class="cs-skeleton"></div>
+            </div>`).join('');
+    }
+    const panel = document.getElementById('csGeoPanel');
+    if (panel) panel.innerHTML = '';
+    const extra = document.getElementById('csStatsPanels');
+    if (extra) extra.innerHTML = '';
+    _csSetLoadingMsg(msg);
+}
+
+function _csSetLoadingMsg(msg) {
+    const html = `<div class="text-center py-10" style="color:var(--muted)">
+        <i class="ph-light ph-spinner-gap text-3xl block mb-2 animate-spin opacity-40"></i>
+        <p class="text-xs">${_esc(msg || 'Loading...')}</p></div>`;
+    const decEl = document.getElementById('csDecisionsTable');
+    const altEl = document.getElementById('csAlertsTable');
+    if (decEl) decEl.innerHTML = html;
+    if (altEl) altEl.innerHTML = html;
+}
+
 function _renderCsStats(decisions, alerts, lapiOnline, el) {
     if (!el) return;
-    const bans     = decisions.filter(d => d.type === 'ban').length;
-    const captchas = decisions.filter(d => d.type === 'captcha').length;
-    const bypasses = decisions.filter(d => d.type === 'bypass').length;
+    const byType = {};
+    decisions.forEach(d => { const t = d.type || 'other'; byType[t] = (byType[t] || 0) + 1; });
+    const breakdown = Object.entries(byType).sort((a, b) => b[1] - a[1])
+        .map(([t, n]) => `${n.toLocaleString()} ${_esc(t)}`).join(' \u00b7 ');
+
     const stats = [
-        { label: 'Total Alerts',     value: alerts.length,    color: 'var(--blue)',   icon: 'ph-shield-slash' },
-        { label: 'Active Decisions', value: decisions.length, color: 'var(--red)',    icon: 'ph-crosshair-simple' },
-        { label: 'LAPI Status',      value: lapiOnline ? 'Online' : 'Offline', color: lapiOnline ? 'var(--green)' : 'var(--red)', icon: 'ph-pulse', isStatus: true },
-        { label: 'Active Bans',      value: bans,             color: 'var(--red)',    icon: 'ph-prohibit' },
-        { label: 'Captchas',         value: captchas,         color: 'var(--yellow)', icon: 'ph-puzzle-piece' },
-        { label: 'Bypasses',         value: bypasses,         color: 'var(--green)',  icon: 'ph-check-circle' },
+        { label: 'Total Alerts', value: alerts.length.toLocaleString(), sub: '',
+          color: 'var(--blue)', icon: 'ph-shield-slash', on: alerts.length > 0 },
+        { label: 'Active Decisions', value: decisions.length.toLocaleString(), sub: breakdown,
+          color: 'var(--red)', icon: 'ph-crosshair-simple', on: decisions.length > 0 },
+        { label: 'LAPI Status', value: lapiOnline ? 'Online' : 'Offline', sub: '',
+          color: lapiOnline ? 'var(--green)' : 'var(--red)', icon: 'ph-pulse', on: true },
     ];
     el.innerHTML = stats.map(s => `
         <div class="rounded-xl p-4" style="background:var(--card);border:1px solid var(--border)">
@@ -223,8 +260,76 @@ function _renderCsStats(decisions, alerts, lapiOnline, el) {
                 <span class="text-xs font-semibold uppercase tracking-wide" style="color:var(--muted)">${s.label}</span>
                 <i class="ph-bold ${s.icon} text-base" style="color:${s.color};opacity:0.7"></i>
             </div>
-            <div class="text-2xl font-bold" style="color:${(s.isStatus || s.value > 0) ? s.color : 'var(--muted)'}">${s.value}</div>
+            <div class="text-2xl font-bold" style="color:${s.on ? s.color : 'var(--muted)'}">${s.value}</div>
+            ${s.sub ? `<div class="text-xs mt-1 truncate" style="color:var(--muted)" title="${_esc(s.sub)}">${s.sub}</div>` : ''}
         </div>`).join('');
+}
+
+function _csTopList(title, icon, entries, colour) {
+    if (!entries.length) return '';
+    const total = entries.reduce((n, e) => n + e[1], 0) || 1;
+    const max = entries[0][1] || 1;
+    const rows = entries.slice(0, 8).map(([label, n]) => {
+        const w = Math.max(4, Math.round((n / max) * 100));
+        return `<div class="flex items-center gap-2 py-1" style="border-bottom:1px solid var(--border)">
+            <span class="text-xs truncate" style="color:var(--text);flex:1;min-width:0" title="${_esc(label)}">${_esc(label)}</span>
+            <div style="width:60px;height:6px;border-radius:3px;background:var(--input-bg);overflow:hidden;flex-shrink:0"><div style="height:100%;border-radius:3px;background:${colour};width:${w}%"></div></div>
+            <span class="text-xs font-bold tabular-nums flex-shrink-0" style="color:var(--muted);min-width:44px;text-align:right">${n.toLocaleString()}</span>
+            <span class="text-xs tabular-nums flex-shrink-0" style="color:var(--muted);opacity:.65;min-width:38px;text-align:right">${(n / total * 100).toFixed(1)}%</span>
+        </div>`;
+    }).join('');
+    return `<div class="rounded-xl p-4" style="background:var(--card);border:1px solid var(--border)">
+        <div class="text-xs font-semibold uppercase tracking-wide mb-3" style="color:var(--muted)"><i class="ph-bold ${icon} mr-1"></i>${title}</div>
+        ${rows}
+    </div>`;
+}
+
+function _csActivityHtml(alerts) {
+    const stamps = alerts.map(a => Date.parse(a.start_at || a.created_at)).filter(t => !isNaN(t));
+    if (stamps.length < 2) return '';
+    const min = Math.min(...stamps), max = Math.max(...stamps);
+    const spanH = (max - min) / 3600000;
+    const byDay = spanH > 48;
+    let bucketMs = byDay ? 86400000 : 3600000;
+    const MAX_BUCKETS = 72;
+    while ((max - min) / bucketMs > MAX_BUCKETS) bucketMs *= 2;
+    const buckets = new Map();
+    stamps.forEach(t => {
+        const k = Math.floor(t / bucketMs) * bucketMs;
+        buckets.set(k, (buckets.get(k) || 0) + 1);
+    });
+    const keys = [];
+    for (let k = Math.floor(min / bucketMs) * bucketMs; k <= max; k += bucketMs) keys.push(k);
+    const peak = Math.max(...buckets.values()) || 1;
+    const bars = keys.map(k => {
+        const n = buckets.get(k) || 0;
+        const h = Math.round((n / peak) * 100);
+        const when = new Date(k).toLocaleString(undefined,
+            byDay ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', hour: 'numeric' });
+        return `<div class="cs-bar-col" title="${_esc(when)}: ${n} alert${n === 1 ? '' : 's'}">
+            <div class="cs-bar" style="height:${Math.max(h, n ? 3 : 0)}%"></div></div>`;
+    }).join('');
+    const fmt = t => new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `<div class="rounded-xl p-4" style="background:var(--card);border:1px solid var(--border)">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-semibold uppercase tracking-wide" style="color:var(--muted)"><i class="ph-bold ph-chart-bar mr-1"></i>Alert Activity</span>
+            <span class="text-xs" style="color:var(--muted)">per ${byDay ? 'day' : 'hour'}</span>
+        </div>
+        <div class="cs-bars">${bars}</div>
+        <div class="flex items-center justify-between text-xs mt-1" style="color:var(--muted)">
+            <span>${fmt(min)}</span><span>peak ${peak.toLocaleString()}</span><span>${fmt(max)}</span>
+        </div>
+    </div>`;
+}
+
+function _csRenderStatsPanels(decisions, alerts) {
+    const el = document.getElementById('csStatsPanels');
+    if (!el) return;
+    const scen = {};
+    decisions.forEach(d => { const k = d.scenario || 'unknown'; scen[k] = (scen[k] || 0) + 1; });
+    const top = Object.entries(scen).sort((a, b) => b[1] - a[1]);
+    const parts = [_csActivityHtml(alerts), _csTopList('Top Scenarios', 'ph-list-magnifying-glass', top, 'var(--purple)')].filter(Boolean);
+    el.innerHTML = parts.length ? `<div class="cs-panel-grid mb-3">${parts.join('')}</div>` : '';
 }
 
 function _renderCsDecisions(allFiltered, el) {
@@ -293,11 +398,12 @@ function _renderCsAlerts(alerts, el) {
     }
     const geoOn = _geoEnabled && _geoAvailable;
     const rows = alerts.map(a => {
-        const ts  = a.startAt ? new Date(a.startAt).toLocaleString() : '-';
+        const when = a.start_at || a.created_at;
+        const ts  = when ? new Date(when).toLocaleString() : '-';
         const rawIp = (a.source && a.source.ip) ? a.source.ip : '';
         const ip  = rawIp ? _esc(rawIp) : '-';
         const scenario = _esc(a.scenario || '-');
-        const decisions = (a.decisions || []).length;
+        const blocked = a.remediation === true || (a.decisions || []).length > 0;
         const g = _geoCache[rawIp];
         const geoCell = geoOn ? `<td class="px-3 py-2 text-xs">${g && g.country_code ? _geoChip(g.country_code, g.country_name) : '<span style="color:var(--muted)">-</span>'}</td>` : '';
         return `<tr style="border-top:1px solid var(--border)">
@@ -305,7 +411,7 @@ function _renderCsAlerts(alerts, el) {
             <td class="px-3 py-2 font-mono text-xs" style="color:var(--text)">${ip}</td>
             ${geoCell}
             <td class="px-3 py-2 text-xs" style="color:var(--muted)">${scenario}</td>
-            <td class="px-3 py-2 text-xs text-center"><span class="badge badge-muted">${decisions}</span></td>
+            <td class="px-3 py-2 text-xs text-center">${blocked ? '<i class="ph-bold ph-shield-check" style="color:var(--green)" title="A decision was issued"></i>' : '<span style="color:var(--muted)">-</span>'}</td>
         </tr>`;
     }).join('');
     el.innerHTML = `<table class="w-full text-left" style="border-collapse:collapse">
@@ -314,7 +420,7 @@ function _renderCsAlerts(alerts, el) {
             <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Source IP</th>
             ${geoOn ? '<th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Country</th>' : ''}
             <th class="px-3 py-2 text-xs font-semibold" style="color:var(--muted)">Scenario</th>
-            <th class="px-3 py-2 text-xs font-semibold text-center" style="color:var(--muted)">Decisions</th>
+            <th class="px-3 py-2 text-xs font-semibold text-center" style="color:var(--muted)">Blocked</th>
         </tr></thead>
         <tbody>${rows}</tbody>
     </table>`;
@@ -334,6 +440,6 @@ async function csUnban(id) {
 function _geoChip(cc, name) {
     if (!cc) return '';
     const flag = _flagEmoji(cc);
-    const label = name || cc;
-    return `<span class="inline-flex items-center gap-1 text-xs" style="color:var(--muted)" title="${_esc(label)}">${flag ? `<span style="font-size:13px;line-height:1">${flag}</span>` : ''}<span class="font-mono">${_esc(cc)}</span></span>`;
+    const label = name || (typeof _geoNames !== 'undefined' && _geoNames[cc]) || cc;
+    return `<span class="inline-flex items-center gap-1 text-xs" style="color:var(--muted)" title="${_esc(label)}">${flag ? `<span style="font-size:13px;line-height:1">${flag}</span>` : ''}<span>${_esc(label)}</span></span>`;
 }

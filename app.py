@@ -1137,10 +1137,8 @@ def api_version():
 
 
 
-CS_PAGE_SIZE = 500
-CS_MAX_PAGES = 10
-CS_MAX_LOCAL_PAGES = 20
-CS_LOCAL_ORIGINS = ('crowdsec', 'cscli', 'console')
+CS_PAGE_SIZE = 1000
+CS_MAX_PAGES = 200
 
 
 @app.route('/api/crowdsec/decisions')
@@ -1151,31 +1149,20 @@ def api_cs_decisions():
     if not (lapi and key):
         return jsonify({'error': 'CrowdSec not configured'}), 503
     try:
-        def _fetch_pages(query='', max_pages=CS_MAX_PAGES):
-            out = []
-            page = 1
-            while page <= max_pages:
-                sep = '&' if query else ''
-                chunk = _cs_request(
-                    'GET', f'/v1/decisions?limit={CS_PAGE_SIZE}&page={page}{sep}{query}',
-                    lapi=lapi, key=key)
-                if not isinstance(chunk, list):
-                    break
-                out.extend(chunk)
-                if len(chunk) < CS_PAGE_SIZE:
-                    break
-                page += 1
-            return out
-
-        all_decisions = _fetch_pages()
-        try:
-            local = _fetch_pages(f'origins={",".join(CS_LOCAL_ORIGINS)}', CS_MAX_LOCAL_PAGES)
-        except Exception:
-            logger.warning('CrowdSec local-origin decisions fetch failed', exc_info=True)
-            local = []
-        if local:
-            seen = {d.get('id') for d in all_decisions if d.get('id') is not None}
-            all_decisions.extend(d for d in local if d.get('id') not in seen)
+        all_decisions = []
+        cursor = 0
+        for _ in range(CS_MAX_PAGES):
+            chunk = _cs_request('GET', f'/v1/decisions?limit={CS_PAGE_SIZE}&id_gt={cursor}',
+                                lapi=lapi, key=key)
+            if not isinstance(chunk, list) or not chunk:
+                break
+            all_decisions.extend(chunk)
+            ids = [d.get('id') for d in chunk if isinstance(d.get('id'), int)]
+            if not ids:
+                break
+            cursor = max(ids)
+            if len(chunk) < CS_PAGE_SIZE:
+                break
         now = datetime.now(timezone.utc)
         active = []
         for d in all_decisions:
@@ -1208,7 +1195,7 @@ def api_cs_alerts():
         else:
             headers = {'X-Api-Key': _cs_api_key(), 'Accept': 'application/json'}
         resp = requests.get(
-            f"{lapi.rstrip('/')}/v1/alerts?limit=200",
+            f"{lapi.rstrip('/')}/v1/alerts?limit=0&with_decisions=false",
             headers=headers,
             timeout=5,
         )
@@ -1869,16 +1856,35 @@ def api_geoip_lookup():
         ips = []
     reader = _geoip_reader()
     available = reader is not None
+    aggregate = bool(data.get('aggregate'))
     results = {}
+    counts = {}
+    codes = {}
     if available:
-        for ip in ips[:2000]:
-            ip = str(ip).strip()
-            if not ip or ip in results:
+        seen = set()
+        for raw in ips:
+            ip = str(raw).strip()
+            if not ip or ip in seen:
                 continue
+            seen.add(ip)
             geo = _geoip_lookup(ip, reader)
-            if geo:
+            if not geo:
+                continue
+            if aggregate:
+                cc = geo.get('country_code')
+                if cc:
+                    entry = counts.setdefault(cc, {'count': 0, 'country': geo.get('country')})
+                    entry['count'] += 1
+                    codes[ip] = cc
+            else:
                 results[ip] = geo
-    return jsonify({'enabled': True, 'available': available, 'results': results})
+    payload = {'enabled': True, 'available': available}
+    if aggregate:
+        payload['counts'] = counts
+        payload['codes'] = codes
+    else:
+        payload['results'] = results
+    return jsonify(payload)
 
 @app.route('/api/geoip/update', methods=['POST'])
 @csrf_protect

@@ -8,16 +8,20 @@ The tab is optional and must be enabled in Settings or during the setup wizard.
 
 ### Stats cards
 
-Six cards at the top of the tab give an at-a-glance summary:
+Three cards at the top of the tab give an at-a-glance summary:
 
 | Card | Description |
 |---|---|
 | **Total Alerts** | Number of alerts from the LAPI |
-| **Active Decisions** | Total active decisions across all types |
+| **Active Decisions** | Total active decisions, with a ban / captcha / bypass breakdown underneath |
 | **LAPI Status** | Online / Offline - whether TM can reach the LAPI |
-| **Active Bans** | Number of IPs currently blocked |
-| **Captchas** | Number of IPs currently served a captcha challenge |
-| **Bypasses** | Number of IPs currently whitelisted from enforcement |
+
+### Activity and scenario panels
+
+Below the cards, two panels summarise what CrowdSec has been doing:
+
+- **Alert Activity** - a bar chart of alerts over time, bucketed per hour or per day depending on the span, with the peak count labelled.
+- **Top Scenarios** - the scenarios behind the active decisions, ranked with counts and percentages.
 
 ### Active Decisions view
 
@@ -51,10 +55,12 @@ Switch to **Recent Alerts** using the toggle next to the search box. The alerts 
 
 | Column | Description |
 |---|---|
-| **Time** | When the alert was created |
+| **Time** | When the alert started |
 | **Source IP** | The IP that triggered the alert |
 | **Scenario** | The scenario that matched |
-| **Decisions** | Number of decisions created from the alert |
+| **Blocked** | Whether the alert resulted in a remediation |
+
+All alerts are fetched - there is no hard limit.
 
 ## Geolocation
 
