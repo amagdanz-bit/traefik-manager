@@ -69,6 +69,7 @@ async function refreshCrowdSecTab() {
         }
         _renderCsStats(_csDecisions, _csAlerts, _csLapiOnline, statsEl);
         _csRenderStatsPanels(_csDecisions, _csAlerts);
+        _csRenderBanRecent();
         _csApplyFilters();
         if (altEl && !altRes.ok) {
             const hint = altErr ? _esc(altErr) : 'Alerts unavailable - bouncer key may lack read:alerts permission, or set CROWDSEC_MACHINE_ID / CROWDSEC_MACHINE_PASSWORD';
@@ -158,12 +159,43 @@ function openCsBanModal() {
     const errEl = document.getElementById('csBanError');
     if (errEl) errEl.style.display = 'none';
     _setCsBanType('ban');
-    document.getElementById('csBanModal').style.display = '';
+    _csRenderBanRecent();
+    document.getElementById('csBanModal').classList.add('open');
+    document.getElementById('csBanBackdrop').classList.add('open');
+    if (!setDetailDockOpen(true)) document.body.style.overflow = 'hidden';
     setTimeout(() => document.getElementById('csBanIp')?.focus(), 50);
 }
 
 function closeCsBanModal() {
-    document.getElementById('csBanModal').style.display = 'none';
+    setDetailDockOpen(false);
+    document.getElementById('csBanModal').classList.remove('open');
+    document.getElementById('csBanBackdrop').classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+function _csRenderBanRecent() {
+    const el = document.getElementById('csBanRecent');
+    if (!el) return;
+    const mine = _csDecisions
+        .filter(d => ['manual', 'cscli'].includes((d.origin || '').toLowerCase()))
+        .sort((a, b) => (b.id || 0) - (a.id || 0));
+    const countEl = document.getElementById('csBanRecentCount');
+    if (countEl) countEl.textContent = mine.length ? mine.length.toLocaleString() : '';
+    if (!mine.length) {
+        el.innerHTML = `<div class="text-center py-6 text-xs" style="color:var(--muted)">No custom decisions yet - decisions you add appear here</div>`;
+        return;
+    }
+    const colour = { ban: 'var(--red)', captcha: 'var(--yellow)', bypass: 'var(--green)' };
+    el.innerHTML = mine.map(d => {
+        const until = d.until ? new Date(d.until).toLocaleString() : (d.duration || '-');
+        return `<div class="flex items-center gap-2 py-1.5" style="border-bottom:1px solid var(--border)">
+            <span class="font-mono text-xs truncate" style="color:var(--text);flex:1;min-width:0" title="${_esc(d.value || '-')}">${_esc(d.value || '-')}</span>
+            <span class="text-xs font-semibold flex-shrink-0" style="color:${colour[d.type] || 'var(--muted)'}">${_esc(d.type || '-')}</span>
+            <span class="text-xs truncate" style="color:var(--muted);max-width:150px" title="${_esc(d.scenario || '')}">${_esc(d.scenario || '')}</span>
+            <span class="text-xs flex-shrink-0 tabular-nums" style="color:var(--muted)" title="Expires">${_esc(String(until))}</span>
+            <button onclick="csUnban(${d.id})" class="btn-icon text-xs flex-shrink-0" title="Unban / delete decision" style="color:var(--red)"><i class="ph-bold ph-trash"></i></button>
+        </div>`;
+    }).join('');
 }
 
 function _setCsBanType(type, btn) {

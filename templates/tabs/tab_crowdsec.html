@@ -64,22 +64,27 @@
 
 </div>
 
-<div id="csBanModal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.5)" onclick="if(event.target===this)closeCsBanModal()">
-    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--card);border:1px solid var(--border);border-radius:12px;width:380px">
-        <div class="flex items-center justify-between px-4 py-3" style="border-bottom:1px solid var(--border)">
-            <span class="font-semibold text-sm">Add Decision</span>
-            <button onclick="closeCsBanModal()" class="btn-icon"><i class="ph-bold ph-x"></i></button>
+<div class="detail-backdrop" id="csBanBackdrop" onclick="closeCsBanModal()"></div>
+<div class="detail-panel detail-panel-form" id="csBanModal">
+    <div class="sticky top-0 z-10 flex items-center justify-between px-6 py-4" style="background:var(--card);border-bottom:1px solid var(--border)">
+        <div class="flex items-center gap-3">
+            <i class="ph-bold ph-crosshair-simple" style="color:var(--blue)"></i>
+            <h2 class="font-bold text-sm" style="color:var(--text)">Add Decision</h2>
         </div>
-        <div class="flex flex-col gap-4 p-4">
+        <button type="button" onclick="closeCsBanModal()" class="btn-icon"><i class="ph-bold ph-x text-base"></i></button>
+    </div>
+
+        <div class="px-6 py-5 space-y-4">
             <div id="csBanError" style="display:none;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--red)" class="flex items-center gap-2">
                 <i class="ph-bold ph-warning-circle flex-shrink-0"></i>
                 <span id="csBanErrorMsg"></span>
             </div>
-            <div class="field">
+            <div>
                 <label>IP / Range</label>
                 <input type="text" id="csBanIp" class="input-field" placeholder="1.2.3.4 or 1.2.3.0/24">
+                <p class="text-xs mt-1" style="color:var(--muted)">Single IP or CIDR range.</p>
             </div>
-            <div class="field">
+            <div>
                 <label>Type</label>
                 <div class="flex gap-1 p-1 rounded-lg" style="background:var(--input-bg);border:1px solid var(--border);width:fit-content">
                     <button onclick="_setCsBanType('ban',this)" id="csBanType-ban" class="proto-btn active-http text-xs px-3 py-1.5">Ban</button>
@@ -87,7 +92,7 @@
                     <button onclick="_setCsBanType('bypass',this)" id="csBanType-bypass" class="proto-btn text-xs px-3 py-1.5">Bypass</button>
                 </div>
             </div>
-            <div class="field">
+            <div>
                 <label>Duration</label>
                 <select id="csBanDuration" class="input-field">
                     <option value="1h">1 hour</option>
@@ -98,11 +103,23 @@
                     <option value="8760h">1 year</option>
                 </select>
             </div>
-            <div class="field">
+            <div>
                 <label>Reason <span style="color:var(--muted);font-weight:normal">(optional)</span></label>
                 <input type="text" id="csBanReason" class="input-field" placeholder="manual ban from Traefik Manager">
+                <p class="text-xs mt-1" style="color:var(--muted)">Stored as the decision scenario.</p>
             </div>
-            <button onclick="submitCsBan()" class="btn-primary w-full mt-1">Add Decision</button>
+
+            <div style="border-top:1px solid var(--border);padding-top:16px">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wide" style="color:var(--muted)"><i class="ph-bold ph-user-gear mr-1"></i>Custom Decisions</span>
+                    <span id="csBanRecentCount" class="text-xs tabular-nums" style="color:var(--muted)"></span>
+                </div>
+                <div id="csBanRecent"></div>
+            </div>
         </div>
+
+    <div class="detail-panel-foot flex justify-end gap-2 px-6 py-4">
+        <button type="button" onclick="closeCsBanModal()" class="btn-secondary">Cancel</button>
+        <button type="button" onclick="submitCsBan()" class="btn-primary">Add Decision</button>
     </div>
 </div>

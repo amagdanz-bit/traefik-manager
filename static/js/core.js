@@ -276,6 +276,7 @@ function _isTyping() {
 function _closeTopModal() {
     const modals = [
         ['tlsOptionsModal', closeTlsOptionModal],
+        ['csBanModal', window.closeCsBanModal],
         ['appModal', closeModal],
         ['mwModal', closeMwModal],
         ['settingsModal', closeSettingsModal],

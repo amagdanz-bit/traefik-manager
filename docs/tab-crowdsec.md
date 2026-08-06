@@ -40,12 +40,14 @@ Use the **All / Ban / Captcha / Bypass** type filter and the search box to narro
 
 #### Adding a manual decision
 
-Click **+ Add Decision** to open the decision form:
+Click **+ Add Decision** to open the decision panel:
 
 - **IP / Range** - single IP or CIDR (e.g. `1.2.3.4` or `10.0.0.0/8`)
 - **Type** - Ban, Captcha, or Bypass
 - **Duration** - 1h, 4h, 24h, 7 days, 30 days, or 1 year
 - **Reason** - optional label stored as the decision scenario
+
+Below the form, **Custom Decisions** lists every decision added by hand (from this UI or `cscli`), each with its own unban button.
 
 Manual decisions require the bouncer key to have write permissions on the LAPI.
 
