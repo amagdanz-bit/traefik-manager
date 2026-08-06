@@ -1578,13 +1578,17 @@ function openTrustedIpsHelper() {
     document.getElementById('tipSrcCloudflare').checked = true;
     document.getElementById('tipSrcPrivate').checked = false;
     document.getElementById('tipApplyBtn').disabled = true;
-    modal.style.display = 'flex';
+    modal.classList.add('open');
+    document.getElementById('trustedIpsBackdrop').classList.add('open');
+    if (!setDetailDockOpen(true)) document.body.style.overflow = 'hidden';
     _tipInspect();
 }
 
 function closeTrustedIpsModal() {
-    const m = document.getElementById('trustedIpsModal');
-    if (m) m.style.display = 'none';
+    setDetailDockOpen(false);
+    document.getElementById('trustedIpsModal').classList.remove('open');
+    document.getElementById('trustedIpsBackdrop').classList.remove('open');
+    document.body.style.overflow = '';
 }
 
 async function _tipInspect() {

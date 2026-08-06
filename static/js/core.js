@@ -277,6 +277,7 @@ function _closeTopModal() {
         ['tlsOptionsModal', closeTlsOptionModal],
         ['csBanModal', window.closeCsBanModal],
         ['pluginForm', window.closePluginForm],
+        ['trustedIpsModal', window.closeTrustedIpsModal],
         ['appModal', closeModal],
         ['mwModal', closeMwModal],
         ['settingsModal', closeSettingsModal],
