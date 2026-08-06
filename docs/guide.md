@@ -66,7 +66,7 @@ These tabs are always visible. They let you read and write your Traefik dynamic 
 | [Middlewares](tab-middlewares.md) | Create and manage middlewares with built-in templates |
 | [Services](tab-services.md) | Read-only view of all services across every provider |
 
-**Multiple config files** - mount several Traefik dynamic config files using `CONFIG_DIR` or `CONFIG_PATHS`. A dropdown in the route/middleware modals lets you choose which file each entry is saved to. See [Environment Variables](env-vars.md) for setup.
+**Multiple config files** - mount several Traefik dynamic config files using `CONFIG_DIR` or `CONFIG_PATHS`. A dropdown in the route/middleware forms lets you choose which file each entry is saved to. See [Environment Variables](env-vars.md) for setup.
 
 ---
 
@@ -75,10 +75,14 @@ These tabs are always visible. They let you read and write your Traefik dynamic 
 Edit your Traefik static config (`traefik.yml`) directly from the UI - no SSH or file editor needed. Changes are staged and backed up automatically; a one-click restart applies them via your configured restart method.
 
 **What you can manage:**
-- Entrypoints - add, edit, and remove
-- Certificate resolvers - ACME/Let's Encrypt configuration
-- Plugins - install and configure Traefik plugins
+- Entrypoints - ports, redirects, trusted IPs, PROXY protocol, TLS defaults, middleware chains, timeouts
+- Certificate resolvers - ACME challenges, custom CA, key type, EAB, DNS propagation
+- Providers - Docker and File toggles, other providers via templates, throttle duration
+- Plugins (remote and local), API and dashboard, logging with rotation and access-log filters
+- Observability (ping, Prometheus, OTLP tracing) and system options (servers transport, rule syntax)
 - Raw YAML editor (Monaco/VS Code engine) for anything else
+
+Works identically for [remote agents](agent.md#static-config-editing) - the sections read and write the active agent's own `traefik.yml`.
 
 **Setup required** - this feature needs two things configured:
 
@@ -110,14 +114,6 @@ Every change writes a timestamped backup first, and any of them can be restored 
 ## Visualizations
 
 Optional tabs - toggle on in **Settings - Interface - Tabs** or during the setup wizard. No extra mounts needed.
-
-The whole interface has two layouts, chosen under **Settings - Interface - Layout**: **Classic**, the top tab row with a centered page, and **Modern**, a collapsible side navigation with full-width content that fits as many card columns as your screen allows. The choice follows you across browsers like the other interface settings; the collapse state is remembered per device. Modern uses the side navigation from tablet width (768px) upward, so foldables and tablets get it too, and collapsing it leaves only a 60px icon rail. On phones the same navigation slides in as a drawer from a button in the top bar, so every tab is one tap away with its label and count rather than hidden behind a horizontal scroll. Classic keeps its top tab row on phones.
-
-The top bar fits itself to the window. It measures the space it actually has and moves whatever does not fit into a compact menu behind a **...** button, keeping the most useful controls in the bar. Because it measures rather than guessing from a breakpoint, it adapts to whichever buttons your install shows, and the same behaviour applies on phones, so there is no separate hamburger drawer.
-
-Modern also replaces every card in the app with a single redesigned card - routes, middlewares, services, certificates, TLS profiles, plugins, and each provider tab all use it. Coloured badges and pill shapes are gone: what used to be a badge is now either a small glyph on the title line (a padlock for TLS, an open amber padlock without it, a cube for provider-managed routes, a pause for disabled ones) or plain text in the footer. Values such as hosts, backend targets, and module paths each get a copy button on hover, and the actions for a card - **More**, **Edit**, an enable/disable toggle, delete - live in a rail that fades in on hover in the card's top right. Clicking anywhere else on a card opens its detail panel. Classic keeps the card design it has always had.
-
-The detail panels changed in **both** layouts, since they are one shared component: the protocol label, router and service status, TLS and passthrough, entry points, middlewares, provider, and the per-provider tag are all plain coloured text rather than pills, with a status dot wherever live state is reported.
 
 | Tab                           | Description                                                                    |
 | -------------------------------| --------------------------------------------------------------------------------|

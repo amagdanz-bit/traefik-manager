@@ -71,7 +71,7 @@ Click the pencil icon on any route card, or open the detail panel and click **Ed
 Saving only rewrites the parts of the route the form owns: the rule, entry points, service reference, middlewares and TLS on the router, and the backends, `passHostHeader` and the insecure-TLS transport on the service. When the form manages them, backends, sticky sessions, health checks and router `priority` are written too - see [Multiple backends and load balancing](#multiple-backends-and-load-balancing). Anything else you have written by hand is preserved, including your own `serversTransport`. An existing route also keeps the service name it already points at, rather than being renamed to `<name>-service`.
 
 ::: warning Advanced service types
-If a router points at a `weighted`, `mirroring` or `failover` service instead of a `loadBalancer`, that service is left untouched, so editing the target field in the modal has no effect on it. Edit those services directly in the config file.
+If a router points at a `weighted`, `mirroring` or `failover` service instead of a `loadBalancer`, that service is left untouched, so editing the target field in the route form has no effect on it. Edit those services directly in the config file.
 :::
 
 ## Security headers preset
@@ -118,7 +118,7 @@ It shares the same `<service>-transport` as [Skip TLS Verification](#creating-a-
 
 Streaming works best **without response buffering** - if a `buffering` or `compress` middleware is attached to the route, the form warns you to remove it. Entry-point `respondingTimeouts` are global and static, so they are not changed here; adjust them in the [Static Config editor](./static) if long transcodes still cut off.
 
-Like the headers preset, streaming is managed only through the route modal for local HTTP routes; API, agent and other saves leave the transport untouched.
+Like the headers preset, streaming is managed only through the route form for local HTTP routes; API, agent and other saves leave the transport untouched.
 
 ## Multiple backends and load balancing
 
@@ -144,7 +144,7 @@ The mobile app and older cached pages post only a single target. Saving from one
 
 Several routers can point at the same service - a native Traefik pattern, useful when the same backend needs different middlewares per hostname (an internal name with no auth and an external one behind Authelia, for example) or when one edge Traefik fans multiple domains into the same downstream instance (#125).
 
-Switch the **Backend** toggle in the route modal to **Existing service** and pick any service from your config files. The route then writes only a router with `service: <name>`; the service block is never created, modified, or deleted by that route. The picker lists file-provider services for the active server across all config files.
+Switch the **Backend** toggle in the route form to **Existing service** and pick any service from your config files. The route then writes only a router with `service: <name>`; the service block is never created, modified, or deleted by that route. The picker lists file-provider services for the active server across all config files.
 
 Behavior worth knowing:
 

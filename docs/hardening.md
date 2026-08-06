@@ -24,7 +24,7 @@ Traefik added an entry point option (**Traefik 3.6.20 / 3.7.6 or newer**) that c
 | `delete` | Silently strip any request header whose name contains an underscore. **Recommended.** |
 | `reject` | Reject any request carrying an underscore header with `400 Bad Request`.              |
 
-**In Traefik Manager:** Settings - Static Config - Entry Points - edit the entry point that handles your external HTTPS traffic - set **Underscore Headers** to `Delete` (or `Reject`). Traefik Manager writes the option to whichever entry point you edit and only offers it when the running Traefik version supports it.
+**In Traefik Manager:** Static Config tab - Entrypoints - edit the entry point that handles your external HTTPS traffic - set **Underscore Headers** to `Delete` (or `Reject`). Traefik Manager writes the option to whichever entry point you edit and only offers it when the running Traefik version supports it.
 
 The entry point name is whatever you called it - `websecure`, `https`, `web`, etc. Using `websecure` as an example, it writes:
 

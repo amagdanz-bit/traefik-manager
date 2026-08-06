@@ -73,7 +73,7 @@ If you manage multiple Traefik dynamic config files, use **Config Directory Path
 2. Set **Config Directory Path** to `/app/config/traefik`
 3. Leave the **Dynamic Config File** field empty
 
-All `.yml` files in that directory will be loaded. A file picker appears in the Add/Edit Route and Middleware modals.
+All `.yml` files in that directory will be loaded. A file picker appears in the Add/Edit Route and Middleware forms.
 
 ---
 
@@ -94,7 +94,7 @@ Mount `traefik.yml` read-write if you want to use the Static Config editor. Read
 
 ## Static config editor
 
-The Static Config tab lets you edit `traefik.yml` directly from the UI - entrypoints, certificate resolvers, plugins, providers, API settings, and log level. After saving, click **Restart Traefik** to apply the changes via your configured restart method.
+The Static Config tab lets you edit `traefik.yml` directly from the UI - entrypoints, certificate resolvers, plugins, providers, API settings, logging, observability, and system options. After saving, click **Restart Traefik** to apply the changes via your configured restart method.
 
 ### Requirements
 

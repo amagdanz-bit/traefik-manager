@@ -1,8 +1,10 @@
 # Static Config Editor
 
-The **Static Config** editor lets you view and edit Traefik's static configuration (`traefik.yml`) directly from the Traefik Manager UI. Access it via **Settings → Static Config**. Changes are staged and backed up before saving; a banner then prompts you to restart Traefik with one click, using whichever restart method you configure.
+The **Static Config** tab lets you view and edit Traefik's static configuration (`traefik.yml`) directly from the Traefik Manager UI. It is an optional tab, off by default - enable it under **Settings → Interface** once the file is available. Changes are staged and backed up before saving; a banner then prompts you to restart Traefik with one click, using whichever restart method you configure.
 
-The editor is only visible when `STATIC_CONFIG_PATH` is set and the file exists.
+The tab toggle only appears when `STATIC_CONFIG_PATH` is set and the file exists. In the Modern layout the sections tile into responsive columns; in Classic they appear as sub-tabs.
+
+Everything on this page also works for [remote agents](agent.md#static-config-editing): with an agent selected in the server switcher, the same section editors read and write the agent's own `traefik.yml`, with the agent's backup and restart flow.
 
 ---
 
@@ -25,14 +27,14 @@ Traefik's static configuration controls settings that cannot be changed at runti
 | -----------------------| ------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Entrypoints           | Add, edit, and remove entrypoints - port, protocol, optional HTTP-to-HTTPS redirect, the [Underscore Headers](hardening.md#header-alias-spoofing-underscore-headers) strategy (Traefik 3.6.20 / 3.7.6+), trusted IPs for forwarded headers (`forwardedHeaders.trustedIPs` / `insecure`, one CIDR per line), PROXY protocol trust (`proxyProtocol.trustedIPs` / `insecure`), an entrypoint-wide middleware chain (`http.middlewares`), TLS-by-default (`http.tls` with cert resolver and TLS options), `asDefault`, and responding timeouts (read / write / idle). Edits merge into the existing entrypoint, preserving keys the form does not manage. |
 | Certificate Resolvers | ACME email, storage path, DNS / HTTP / TLS challenge type, custom CA server, key type, external account binding (EAB), and DNS propagation controls (check resolvers, delay, disable checks). Edits merge into the existing resolver, preserving keys the form does not manage. |
-| Plugins               | Install and remove experimental plugins; view installed plugins                                                                                      |
+| Plugins               | Remote plugins (module + version) and local plugins from the `plugins-local` directory. The [Plugins tab](tab-plugins.md) offers the richer install flow. |
 | API                   | Enable or disable the Traefik API and Dashboard, insecure mode, and debug mode                                                                       |
 | Logging               | Traefik log: level, text/JSON format, optional log file with rotation (max size, backups, age, compression). Access log: file path, CLF/JSON format, buffering, status-code and min-duration filters, retry-only mode, and header keep/redact. Edits merge, preserving keys the form does not manage. |
 | Observability         | Ping health endpoint, Prometheus metrics with entrypoint / router / service label toggles, and OTLP tracing (service name, sample rate, collector endpoint). Other metrics backends configured in YAML are left untouched. |
-| Plugins               | Remote plugins (module + version) and local plugins from the `plugins-local` directory. Providers section also sets the providers throttle duration. |
 | System                | Traefik version check, anonymous usage statistics, the default rule syntax (v3 / v2 compatibility), and servers transport defaults - backend TLS verification skip, root CAs, max idle connections, forwarding timeouts. |
-| Providers             | Enable and configure Docker and File providers via dedicated toggles; add other provider types via the **+ Provider** button which opens a template editor |
-| Advanced              | Full raw YAML editor (Monaco) - for anything not covered by the form sections                                                                        |
+| Providers             | Enable and configure Docker and File providers via dedicated toggles, set the providers throttle duration, and add other provider types via the **+ Provider** button which opens a template editor |
+
+Anything the sections do not cover is reachable through the **raw YAML editor** - the code button in the tab's toolbar opens `traefik.yml` in Monaco. Section edits and raw edits share the same staged buffer, so they never overwrite each other, and keys the forms do not manage always survive a save.
 
 ::: warning API section
 Disabling the Traefik API from the API section will prevent Traefik Manager from reading routes, services, and middleware. Keep it enabled while using TM.
@@ -53,10 +55,10 @@ Clicking the edit button on an existing provider opens the same editor with its 
 
 ### Pending changes and saving
 
-1. Edit any value in any section - a yellow **Pending changes** banner appears.
-2. Click **Apply** - TM validates the YAML, backs up the current file, then writes the new one.
-3. The banner changes to **Restart required to apply changes** with a **Restart** button.
-4. Click **Restart** - TM triggers the configured restart method. A full-screen overlay shows while Traefik is down and dismisses automatically once it is back.
+1. Edit any value in any section - an **Unsaved changes** bar appears; nothing is written to `traefik.yml` until you save.
+2. Click **Save** - TM validates the YAML, backs up the current file, then writes the new one. **Discard** reloads from disk instead.
+3. The bar changes to **Saved - Traefik is still running the previous config** with a **Restart Traefik** button.
+4. Click it - TM triggers the configured restart method. A full-screen overlay shows while Traefik restarts and dismisses automatically once it is back (for agents, once the agent is reachable again).
 
 Multiple edits in one session only require a single restart.
 
