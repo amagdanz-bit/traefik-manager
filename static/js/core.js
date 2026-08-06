@@ -75,6 +75,43 @@ function _detailDockActive() {
         && window.matchMedia('(min-width: 1440px)').matches;
 }
 
+function _initDetailPanelSizers() {
+    document.querySelectorAll('.detail-panel').forEach(panel => {
+        if (panel.querySelector('.detail-panel-sizer')) return;
+        const grip = document.createElement('div');
+        grip.className = 'detail-panel-sizer';
+        grip.title = 'Drag to resize - double-click to reset';
+        panel.appendChild(grip);
+        let dragging = false;
+        const reset = () => { panel.style.width = ''; panel.style.maxWidth = ''; };
+        grip.addEventListener('pointerdown', e => {
+            dragging = true;
+            grip.classList.add('dragging');
+            grip.setPointerCapture(e.pointerId);
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+        });
+        grip.addEventListener('pointermove', e => {
+            if (!dragging) return;
+            const w = Math.min(Math.max(Math.round(window.innerWidth - e.clientX), 380), Math.round(window.innerWidth * 0.96));
+            panel.style.width = w + 'px';
+            panel.style.maxWidth = w + 'px';
+        });
+        const end = () => {
+            if (!dragging) return;
+            dragging = false;
+            grip.classList.remove('dragging');
+            document.body.style.userSelect = '';
+        };
+        grip.addEventListener('pointerup', end);
+        grip.addEventListener('pointercancel', end);
+        grip.addEventListener('dblclick', reset);
+        new MutationObserver(() => {
+            if (!panel.classList.contains('open')) reset();
+        }).observe(panel, { attributes: true, attributeFilter: ['class'] });
+    });
+}
+
 function setDetailDockOpen(on) {
     const active = _detailDockActive();
     document.documentElement.classList.toggle('tm-detail-open', on && active);

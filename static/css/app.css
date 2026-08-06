@@ -1125,6 +1125,10 @@ html.tm-modern .sc-sec[data-sc-sec="api"] > [id^="staticPanel-"] > div:first-chi
 html.tm-modern .sc-sec[data-sc-sec="log"] > [id^="staticPanel-"] > div:first-child > * + * { margin-top: 0; }
 .nav-more-menu .nav-btn-primary { color: var(--blue) !important; }
 .agent-srv-label { font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 20px; background: rgba(36,161,222,0.12); border: 1px solid rgba(36,161,222,0.25); color: var(--blue); }
+.detail-panel-sizer { position: absolute; top: 0; left: 0; bottom: 0; width: 6px; cursor: ew-resize; z-index: 30; touch-action: none; }
+.detail-panel-sizer::after { content: ''; position: absolute; inset: 0; background: var(--blue); opacity: 0; transition: opacity .15s; }
+.detail-panel-sizer:hover::after, .detail-panel-sizer.dragging::after { opacity: .45; }
+@media (max-width: 640px) { .detail-panel-sizer { display: none; } }
 html.tm-modern .agent-srv-label { font-size: 1rem; font-weight: 700; letter-spacing: -0.025em; padding: 0; border-radius: 0; background: none; border: none; }
 .detail-panel-form { display: flex; flex-direction: column; }
 .detail-panel-form > div:nth-child(2) { flex: 1; overflow-y: auto; }

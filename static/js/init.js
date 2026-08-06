@@ -157,6 +157,7 @@ placeStatCards();
 
 watchTabBarForSideNav();
 buildSideNav();
+_initDetailPanelSizers();
 
 (() => {
     const nav = document.querySelector('nav');
