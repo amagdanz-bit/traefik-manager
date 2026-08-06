@@ -35,7 +35,7 @@ async function capture(theme) {
     await shot('middlewares-cards');
     await js(`toggleMwView()`); await sleep(700); await shot('middlewares-list'); await js(`toggleMwView()`); await sleep(400);
     await js(`openMwModal()`); await sleep(900); await shot('middlewares-add');
-    await js(`document.getElementById('mwModal').style.display = 'none'`);
+    await js(`closeMwModal()`); await sleep(500);
 
     await tab('live', 2500);
     await shot('services-cards');
@@ -59,13 +59,16 @@ async function capture(theme) {
     await js(`switchSettingsPanel('auth')`); await sleep(900); await shot('settings-auth-password');
     await js(`switchAuthTab('apikeys', document.getElementById('auth-tab-apikeys'))`); await sleep(700); await shot('settings-auth-apikeys');
     await js(`switchAuthTab('oidc', document.getElementById('auth-tab-oidc'))`); await sleep(700); await shot('settings-auth-oidc');
-    await js(`switchSettingsPanel('static'); openStaticSettingsPanel()`); await sleep(1600); await shot('settings-static-config');
     await js(`switchSettingsPanel('backups'); loadBackups()`); await sleep(1200); await shot('settings-backups');
     await js(`switchSettingsPanel('system')`); await sleep(900); await shot('settings-system');
     await js(`switchSettingsPanel('routes')`); await sleep(900); await shot('settings-routes');
     await js(`switchSettingsPanel('connection')`); await sleep(900); await shot('settings-connection');
     await js(`switchSettingsPanel('about')`); await sleep(1200); await shot('settings-about');
     await js(`closeSettingsModal()`);
+
+    await js(`if (typeof _visibleTabsCache !== 'undefined' && !_visibleTabsCache.static) toggleTabVisibility('static')`); await sleep(800);
+    await tab('static', 2500);
+    await shot('static-config');
 
     await tab('dashboard', 3000);
     const row = await page.$('.rm-route-link');
