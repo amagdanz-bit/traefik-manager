@@ -1,21 +1,20 @@
-<div id="appModal" class="modal-overlay" style="display:none">
-    <div class="modal-box modal-box-route">
-        <form id="routeForm" action="{{ url_for('save_entry') }}" method="POST" onsubmit="saveRouteAjax(event)">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <input type="hidden" name="isEdit" id="isEdit" value="false">
-            <input type="hidden" name="originalId" id="originalId" value="">
-            <input type="hidden" name="protocol" id="protocolHidden" value="http">
-            <input type="hidden" name="configFile" id="configFile" value="">
-
-            <div class="flex items-center justify-between px-5 py-4" style="border-bottom:1px solid var(--border)">
-                <div class="flex items-center gap-2">
+<div class="detail-backdrop" id="appModalBackdrop" onclick="closeModal()"></div>
+<div class="detail-panel" id="appModal">
+        <form id="routeForm" class="detail-panel-form" style="height:100%" action="{{ url_for('save_entry') }}" method="POST" onsubmit="saveRouteAjax(event)">
+            <div class="sticky top-0 z-10 flex items-center justify-between px-6 py-4" style="background:var(--card);border-bottom:1px solid var(--border)">
+                <div class="flex items-center gap-3">
                     <i class="ph-bold ph-layout" style="color:var(--blue)"></i>
-                    <h3 class="font-bold text-sm" style="color:var(--text)" id="modalTitle">Add Route</h3>
+                    <h2 class="font-bold text-sm" style="color:var(--text)" id="modalTitle">Add Route</h2>
                 </div>
-                <button type="button" onclick="closeModal()" class="btn-icon"><i class="ph-bold ph-x text-sm"></i></button>
+                <button type="button" onclick="closeModal()" class="btn-icon"><i class="ph-bold ph-x text-base"></i></button>
             </div>
 
-            <div class="px-5 py-4 space-y-4">
+            <div class="px-6 py-5 space-y-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="isEdit" id="isEdit" value="false">
+                <input type="hidden" name="originalId" id="originalId" value="">
+                <input type="hidden" name="protocol" id="protocolHidden" value="http">
+                <input type="hidden" name="configFile" id="configFile" value="">
                 <div id="configFileSelectWrap" {% if not multi_config and not config_dir_set %}style="display:none"{% endif %}>
                     <label>Config File</label>
                     <select id="configFileSelect" class="input-field" onchange="onRouteConfigFileChange(this)">
@@ -384,10 +383,9 @@
                 </div>
             </div>
 
-            <div class="flex justify-end gap-2 px-5 py-4" style="border-top:1px solid var(--border)">
+            <div class="detail-panel-foot flex justify-end gap-2 px-6 py-4">
                 <button type="button" onclick="closeModal()" class="btn-secondary">Cancel</button>
                 <button type="submit" class="btn-primary">Save Route</button>
             </div>
         </form>
-    </div>
 </div>

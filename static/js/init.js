@@ -10,11 +10,6 @@ _tmAdoptLocalPrefs();
 _tmSyncViewIcons();
 document.addEventListener('mousedown', e => { _backdropMd = e.target; });
 
-['appModal'].forEach(id => {
-    const el = document.getElementById(id);
-    el.addEventListener('click', function(e) { _onBackdropClick(e, () => this.style.display = 'none'); });
-});
-
 document.addEventListener('click', () => _closeRouteMenu());
 
 document.addEventListener('click', e => {

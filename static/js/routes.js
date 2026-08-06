@@ -412,10 +412,21 @@ async function openModal() {
         _populateConfigFileSelect('route'),
         _loadAgentResolversIntoSelects()
     ]);
-    document.getElementById('appModal').style.display = 'flex';
+    _openRoutePanel();
 }
 
-function closeModal() { document.getElementById('appModal').style.display = 'none'; }
+function _openRoutePanel() {
+    document.getElementById('appModal').classList.add('open');
+    document.getElementById('appModalBackdrop').classList.add('open');
+    if (!setDetailDockOpen(true)) document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+    setDetailDockOpen(false);
+    document.getElementById('appModal').classList.remove('open');
+    document.getElementById('appModalBackdrop').classList.remove('open');
+    document.body.style.overflow = '';
+}
 
 function _updateRouteModalForAgent(rebuildBody) {
     const domainCol  = document.getElementById('routeDomainCol');
@@ -1578,7 +1589,7 @@ async function handleEdit(btn) {
         document.getElementById('configFile').value = app.configFile;
     }
     await _loadAgentResolversIntoSelects();
-    document.getElementById('appModal').style.display = 'flex';
+    _openRoutePanel();
 }
 let _routeViewMode = tmPref('routeViewMode');
 let _bulkMode = false;
