@@ -837,8 +837,8 @@ function openPluginForm(idx = -1) {
         if (title) title.textContent = 'Edit Plugin';
         if (addSection) addSection.style.display = 'none';
         if (editSection) editSection.style.display = 'block';
-        form.style.display = 'block';
-        document.getElementById('pluginFormName').focus();
+        _openPluginPanel();
+        setTimeout(() => document.getElementById('pluginFormName')?.focus(), 50);
     } else {
         _pluginEditName = null;
         if (title) title.textContent = 'Add Plugin';
@@ -846,7 +846,7 @@ function openPluginForm(idx = -1) {
         if (editSection) editSection.style.display = 'none';
         const rb = document.getElementById('pluginRestartBanner');
         if (rb) rb.style.display = 'none';
-        form.style.display = 'block';
+        _openPluginPanel();
         _populateConfigFileSelect('pluginMw').then(() => {
             const sel = document.getElementById('pluginMwFileSelect');
             if (sel && !sel.value) {
@@ -861,9 +861,17 @@ function openPluginForm(idx = -1) {
     }
 }
 
+function _openPluginPanel() {
+    document.getElementById('pluginForm').classList.add('open');
+    document.getElementById('pluginFormBackdrop').classList.add('open');
+    if (!setDetailDockOpen(true)) document.body.style.overflow = 'hidden';
+}
+
 function closePluginForm() {
-    const form = document.getElementById('pluginForm');
-    if (form) form.style.display = 'none';
+    setDetailDockOpen(false);
+    document.getElementById('pluginForm').classList.remove('open');
+    document.getElementById('pluginFormBackdrop').classList.remove('open');
+    document.body.style.overflow = '';
     _pluginEditName = null;
 }
 

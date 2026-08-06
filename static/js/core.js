@@ -276,6 +276,7 @@ function _closeTopModal() {
     const modals = [
         ['tlsOptionsModal', closeTlsOptionModal],
         ['csBanModal', window.closeCsBanModal],
+        ['pluginForm', window.closePluginForm],
         ['appModal', closeModal],
         ['mwModal', closeMwModal],
         ['settingsModal', closeSettingsModal],

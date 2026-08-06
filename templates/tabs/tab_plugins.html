@@ -15,10 +15,36 @@
         </div>
     </div>
 
-    <div id="pluginForm" style="display:none;margin-bottom:16px">
-        <div class="card p-4">
-            <p id="pluginFormTitle" class="text-sm font-semibold mb-3" style="color:var(--text)">Add Plugin</p>
+    <div id="pluginRestartBanner" style="display:none;margin-bottom:16px">
+        <div class="rounded-xl p-4 flex items-start gap-3" style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.3)">
+            <i class="ph-bold ph-warning-circle text-base shrink-0 mt-0.5" style="color:var(--yellow)"></i>
+            <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold mb-0.5" style="color:var(--text)">Restart Traefik to activate</p>
+                <p id="pluginRestartBannerDetail" class="text-xs" style="color:var(--muted)"></p>
+            </div>
+            <button onclick="triggerTraefikRestart();document.getElementById('pluginRestartBanner').style.display='none'" class="btn-primary text-xs shrink-0">Restart now</button>
+        </div>
+    </div>
 
+    <div id="pluginsContent">
+        <div class="text-center py-16" style="color:var(--muted)">
+            <i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i>
+            <p>Loading plugins...</p>
+        </div>
+    </div>
+</div>
+
+<div class="detail-backdrop" id="pluginFormBackdrop" onclick="closePluginForm()"></div>
+<div class="detail-panel detail-panel-form" id="pluginForm">
+    <div class="sticky top-0 z-10 flex items-center justify-between px-6 py-4" style="background:var(--card);border-bottom:1px solid var(--border)">
+        <div class="flex items-center gap-3">
+            <i class="ph-bold ph-puzzle-piece" style="color:var(--blue)"></i>
+            <h2 class="font-bold text-sm" style="color:var(--text)" id="pluginFormTitle">Add Plugin</h2>
+        </div>
+        <button type="button" onclick="closePluginForm()" class="btn-icon"><i class="ph-bold ph-x text-base"></i></button>
+    </div>
+
+        <div class="px-6 py-5 space-y-4">
             <div id="pluginFormAdd">
                 <div class="rounded-lg mb-3" style="background:rgba(168,85,247,0.07);border:1px solid rgba(168,85,247,0.2)">
                     <button onclick="const b=this.parentElement.querySelector('.plugin-warn-body');b.classList.toggle('hidden');this.querySelector('i.caret').classList.toggle('ph-caret-down');this.querySelector('i.caret').classList.toggle('ph-caret-right')" class="w-full px-4 py-2.5 flex items-center gap-2 text-left" style="background:none;border:none;cursor:pointer">
@@ -43,14 +69,14 @@
                     <select id="pluginMwFileSelect" class="input-field text-xs" onchange="onPluginMwFileChange(this)"></select>
                     <input type="text" id="pluginMwNewFileName" class="input-field text-xs mt-2" placeholder="plugin-middlewares.yml" style="display:none">
                 </div>
-                <p class="text-xs mb-3 flex items-center gap-1.5" style="color:var(--yellow)">
+                <p class="text-xs flex items-center gap-1.5" style="color:var(--yellow)">
                     <i class="ph-bold ph-warning-circle text-sm"></i>
                     Edit the middleware before saving - replace all placeholder values and any <code style="font-family:monospace;background:rgba(234,179,8,0.15);padding:1px 4px;border-radius:3px">&#123;&#123; &#125;&#125;</code> template blocks with real values or Traefik will crash
                 </p>
             </div>
 
             <div id="pluginFormEdit" style="display:none">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                <div class="space-y-4">
                     <div>
                         <label class="text-xs font-semibold mb-1 block" style="color:var(--muted)">Name</label>
                         <input type="text" id="pluginFormName" class="input-field text-xs" placeholder="myPlugin">
@@ -65,29 +91,10 @@
                     </div>
                 </div>
             </div>
-
-            <div class="flex gap-2 justify-end">
-                <button onclick="closePluginForm()" class="btn-secondary text-xs">Cancel</button>
-                <button onclick="savePlugin()" class="btn-primary text-xs">Save</button>
-            </div>
         </div>
-    </div>
 
-    <div id="pluginRestartBanner" style="display:none;margin-bottom:16px">
-        <div class="rounded-xl p-4 flex items-start gap-3" style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.3)">
-            <i class="ph-bold ph-warning-circle text-base shrink-0 mt-0.5" style="color:var(--yellow)"></i>
-            <div class="flex-1 min-w-0">
-                <p class="text-sm font-semibold mb-0.5" style="color:var(--text)">Restart Traefik to activate</p>
-                <p id="pluginRestartBannerDetail" class="text-xs" style="color:var(--muted)"></p>
-            </div>
-            <button onclick="triggerTraefikRestart();document.getElementById('pluginRestartBanner').style.display='none'" class="btn-primary text-xs shrink-0">Restart now</button>
-        </div>
-    </div>
-
-    <div id="pluginsContent">
-        <div class="text-center py-16" style="color:var(--muted)">
-            <i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i>
-            <p>Loading plugins...</p>
-        </div>
+    <div class="detail-panel-foot flex justify-end gap-2 px-6 py-4">
+        <button type="button" onclick="closePluginForm()" class="btn-secondary">Cancel</button>
+        <button type="button" onclick="savePlugin()" class="btn-primary">Save</button>
     </div>
 </div>
