@@ -536,8 +536,8 @@ function closeStaticForm(section) {
 
 function _resetStaticForm(section) {
     if (section === 'entrypoints') {
-        ['sfEpName','sfEpAddr','sfEpRedirect'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
-        const h3 = document.getElementById('sfEpHttp3'); if (h3) h3.checked = false;
+        ['sfEpName','sfEpAddr','sfEpRedirect','sfEpTrustedIps','sfEpProxyIps'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+        ['sfEpHttp3','sfEpFwdInsecure','sfEpProxyInsecure'].forEach(id => { const e = document.getElementById(id); if (e) e.checked = false; });
     } else if (section === 'resolvers') {
         ['sfResName','sfResEmail','sfResProvider'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
         const st = document.getElementById('sfResStorage'); if (st) st.value = '/acme.json';
@@ -563,6 +563,14 @@ function _prefillStaticForm(section, name) {
         const h3chk = document.getElementById('sfEpHttp3'); if (h3chk) h3chk.checked = !!ep.http3;
         const uhsSel = document.getElementById('sfEpUnderscore');
         if (uhsSel) uhsSel.value = ep.http?.underscoreHeadersStrategy || '';
+        const fh = ep.forwardedHeaders || {};
+        const pp = ep.proxyProtocol || {};
+        const tipsEl = document.getElementById('sfEpTrustedIps');
+        if (tipsEl) tipsEl.value = Array.isArray(fh.trustedIPs) ? fh.trustedIPs.join('\n') : '';
+        const ppEl = document.getElementById('sfEpProxyIps');
+        if (ppEl) ppEl.value = Array.isArray(pp.trustedIPs) ? pp.trustedIPs.join('\n') : '';
+        const fiEl = document.getElementById('sfEpFwdInsecure'); if (fiEl) fiEl.checked = !!fh.insecure;
+        const piEl = document.getElementById('sfEpProxyInsecure'); if (piEl) piEl.checked = !!pp.insecure;
     } else if (section === 'resolvers') {
         const acme = ((d.certificatesResolvers || {})[name] || {}).acme || {};
         document.getElementById('sfResName').value    = name;
@@ -620,7 +628,11 @@ async function submitStaticSection(section) {
     let name, payload;
     if (section === 'entrypoints') {
         name    = document.getElementById('sfEpName').value.trim();
-        payload = { address: document.getElementById('sfEpAddr').value.trim(), redirect_to: document.getElementById('sfEpRedirect').value.trim(), http3: document.getElementById('sfEpHttp3')?.checked || false, underscore_headers: document.getElementById('sfEpUnderscore')?.value || '' };
+        payload = { address: document.getElementById('sfEpAddr').value.trim(), redirect_to: document.getElementById('sfEpRedirect').value.trim(), http3: document.getElementById('sfEpHttp3')?.checked || false, underscore_headers: document.getElementById('sfEpUnderscore')?.value || '',
+            trusted_ips: document.getElementById('sfEpTrustedIps')?.value || '',
+            forwarded_insecure: document.getElementById('sfEpFwdInsecure')?.checked || false,
+            proxy_trusted_ips: document.getElementById('sfEpProxyIps')?.value || '',
+            proxy_insecure: document.getElementById('sfEpProxyInsecure')?.checked || false };
     } else if (section === 'resolvers') {
         name    = document.getElementById('sfResName').value.trim();
         payload = { email: document.getElementById('sfResEmail').value.trim(), storage: document.getElementById('sfResStorage').value.trim(), challenge_type: document.getElementById('sfResChallenge').value, provider: document.getElementById('sfResProvider').value.trim(), http_entrypoint: document.getElementById('sfResHttpEp').value.trim() };
@@ -1164,6 +1176,28 @@ function _buildStaticClassicHTML() {
                     <option value="reject">Reject - 400 on underscore headers</option>
                 </select>
                 <p class="text-xs mt-1" style="color:var(--muted)">Stops underscore header aliases (e.g. <code class="font-mono">X_Auth_User</code>) from bypassing forwardAuth. <code class="font-mono">Delete</code> recommended. <a href="https://traefik-manager.xyzlab.dev/hardening.html" target="_blank" style="color:var(--blue)">Learn more</a></p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs block mb-1" style="color:var(--muted)">Trusted IPs - forwarded headers <span style="font-weight:400">(optional)</span></label>
+                    <textarea id="sfEpTrustedIps" class="input-field text-sm font-mono" rows="3" placeholder="173.245.48.0/20&#10;10.0.0.0/8" style="resize:vertical"></textarea>
+                    <p class="text-xs mt-1" style="color:var(--muted)">IPs/CIDRs allowed to set <code class="font-mono">X-Forwarded-*</code>, one per line. The <i class="ph-bold ph-shield-check"></i> helper above can bulk-add Cloudflare ranges.</p>
+                </div>
+                <div>
+                    <label class="text-xs block mb-1" style="color:var(--muted)">Trusted IPs - PROXY protocol <span style="font-weight:400">(optional)</span></label>
+                    <textarea id="sfEpProxyIps" class="input-field text-sm font-mono" rows="3" placeholder="192.168.1.10/32" style="resize:vertical"></textarea>
+                    <p class="text-xs mt-1" style="color:var(--muted)">Enables PROXY protocol from these load balancers, one per line.</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="sfEpFwdInsecure" class="rounded" style="accent-color:var(--red)">
+                <span class="text-xs" style="color:var(--text)">Trust forwarded headers from everyone</span>
+                <span class="text-xs" style="color:var(--red)">- insecure, lets any client forge its IP</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="sfEpProxyInsecure" class="rounded" style="accent-color:var(--red)">
+                <span class="text-xs" style="color:var(--text)">Accept PROXY protocol from everyone</span>
+                <span class="text-xs" style="color:var(--red)">- insecure, testing only</span>
             </div>
             <div class="flex gap-2 justify-end pt-1">
                 <button onclick="closeStaticForm('entrypoints')" class="btn-secondary text-xs">Cancel</button>

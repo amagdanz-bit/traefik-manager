@@ -1598,6 +1598,37 @@ def api_static_section_update():
                     ep['http3'] = {}
                 else:
                     ep.pop('http3', None)
+                fwd_ips = _parse_cidr_input(payload.get('trusted_ips'))
+                pp_ips  = _parse_cidr_input(payload.get('proxy_trusted_ips'))
+                bad = [c for c in fwd_ips + pp_ips if not _is_valid_cidr(c)]
+                if bad:
+                    return jsonify({'error': 'Invalid IP/CIDR: ' + ', '.join(bad)}), 400
+                fh = ep.get('forwardedHeaders') if isinstance(ep.get('forwardedHeaders'), dict) else {}
+                if fwd_ips:
+                    fh['trustedIPs'] = fwd_ips
+                else:
+                    fh.pop('trustedIPs', None)
+                if payload.get('forwarded_insecure'):
+                    fh['insecure'] = True
+                else:
+                    fh.pop('insecure', None)
+                if fh:
+                    ep['forwardedHeaders'] = fh
+                else:
+                    ep.pop('forwardedHeaders', None)
+                pp = ep.get('proxyProtocol') if isinstance(ep.get('proxyProtocol'), dict) else {}
+                if pp_ips:
+                    pp['trustedIPs'] = pp_ips
+                else:
+                    pp.pop('trustedIPs', None)
+                if payload.get('proxy_insecure'):
+                    pp['insecure'] = True
+                else:
+                    pp.pop('insecure', None)
+                if pp:
+                    ep['proxyProtocol'] = pp
+                else:
+                    ep.pop('proxyProtocol', None)
                 eps[name] = ep
         elif section == 'resolvers':
             resolvers = config.setdefault('certificatesResolvers', {})
