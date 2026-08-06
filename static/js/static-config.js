@@ -381,20 +381,28 @@ async function _waitForReconnect(immediate = false) {
         const btn = document.getElementById('traefikRestartManualReload');
         if (btn) btn.style.display = 'inline-block';
     }, 8000);
+    const agentId = _activeAgent ? _activeAgent.id : null;
+    const healthOk = async () => {
+        const r = await fetch(agentId ? `/api/agents/${encodeURIComponent(agentId)}/health` : '/api/health',
+            { signal: AbortSignal.timeout(agentId ? 6000 : 3000) });
+        if (!r.ok) return false;
+        if (!agentId) return true;
+        const d = await r.json();
+        return d.ok === true;
+    };
     if (!immediate) {
         await new Promise(r => setTimeout(r, 1500));
         let wentDown = false;
         for (let i = 0; i < 8 && !wentDown; i++) {
             await new Promise(r => setTimeout(r, 1000));
-            try { await fetch('/api/health', { signal: AbortSignal.timeout(1000) }); }
+            try { if (!await healthOk()) wentDown = true; }
             catch(e) { wentDown = true; }
         }
     }
     while (true) {
         await new Promise(r => setTimeout(r, 1500));
         try {
-            const r = await fetch('/api/health', { signal: AbortSignal.timeout(3000) });
-            if (r.ok) { location.reload(); return; }
+            if (await healthOk()) { location.reload(); return; }
         } catch(e) {}
     }
 }
