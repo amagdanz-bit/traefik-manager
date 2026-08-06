@@ -45,7 +45,7 @@
 }
 
 body { background: var(--bg); color: var(--text); overflow-x: hidden; display: flex; flex-direction: column; }
-main { overflow-x: hidden; flex: 1 0 auto; }
+main { overflow-x: hidden; flex: 1 0 auto; width: 100%; }
 body > footer { flex-shrink: 0; }
 
 .tab-content { display: none; }
@@ -952,7 +952,7 @@ html.tm-modern #tabBar { display: none; }
 @media (min-width: 768px) {
     html.tm-modern nav.sticky { position: sticky !important; top: 0; z-index: 45; }
     html.tm-modern .max-w-7xl { max-width: none; }
-    html.tm-modern main { margin-left: var(--side-nav-w, 232px); transition: margin-left 0.15s ease, margin-right 0.3s cubic-bezier(0.4,0,0.2,1); }
+    html.tm-modern main { margin-left: var(--side-nav-w, 232px); margin-right: 0; width: auto; align-self: stretch; transition: margin-left 0.15s ease, margin-right 0.3s cubic-bezier(0.4,0,0.2,1); }
     @media (min-width: 1440px) {
         html.tm-modern .detail-panel { top: var(--tm-nav-h, 54px); max-width: 680px; }
         html.tm-modern .detail-panel.open { box-shadow: none; }
