@@ -968,10 +968,26 @@ function _renderStaticLog(logData, accessLogData) {
     const log = logData || {};
     const sel = document.getElementById('sfLogLevel');
     if (sel) sel.value = (log.level || 'ERROR').toUpperCase();
+    const lfm = document.getElementById('sfLogFormat'); if (lfm) lfm.value = log.format === 'json' ? 'json' : '';
+    const lfile = document.getElementById('sfLogFile'); if (lfile) lfile.value = log.filePath || '';
+    const rot = document.getElementById('logRotationRow'); if (rot) rot.style.display = log.filePath ? '' : 'none';
+    [['sfLogMaxSize', 'maxSize'], ['sfLogMaxBackups', 'maxBackups'], ['sfLogMaxAge', 'maxAge']].forEach(([id, k]) => {
+        const e = document.getElementById(id);
+        if (e) e.value = log[k] !== undefined && log[k] !== null ? String(log[k]) : '';
+    });
+    const lc = document.getElementById('sfLogCompress'); if (lc) lc.checked = !!log.compress;
     const hasAL = accessLogData !== undefined && accessLogData !== null;
     _setStaticToggle('accessLog', hasAL);
+    const al = accessLogData || {};
     const inp = document.getElementById('sfAccessLogPath');
-    if (inp) inp.value = (accessLogData || {}).filePath || '';
+    if (inp) inp.value = al.filePath || '';
+    const afm = document.getElementById('sfALFormat'); if (afm) afm.value = al.format === 'json' ? 'json' : '';
+    const abuf = document.getElementById('sfALBuffering'); if (abuf) abuf.value = al.bufferingSize !== undefined && al.bufferingSize !== null ? String(al.bufferingSize) : '';
+    const filt = al.filters || {};
+    const asc = document.getElementById('sfALStatusCodes'); if (asc) asc.value = Array.isArray(filt.statusCodes) ? filt.statusCodes.join(', ') : '';
+    const amd = document.getElementById('sfALMinDuration'); if (amd) amd.value = filt.minDuration !== undefined && filt.minDuration !== null ? String(filt.minDuration) : '';
+    const art = document.getElementById('sfALRetry'); if (art) art.checked = !!filt.retryAttempts;
+    const ahm = document.getElementById('sfALHeadersMode'); if (ahm) ahm.value = ((al.fields || {}).headers || {}).defaultMode || '';
     const row = document.getElementById('accessLogPathRow');
     if (row) row.style.display = hasAL ? '' : 'none';
 }
@@ -1094,8 +1110,20 @@ async function saveStaticSingleSection(section) {
     } else if (section === 'log') {
         data = {
             level: document.getElementById('sfLogLevel')?.value || 'ERROR',
+            log_format: document.getElementById('sfLogFormat')?.value || '',
+            log_file: document.getElementById('sfLogFile')?.value.trim() || '',
+            log_max_size: document.getElementById('sfLogMaxSize')?.value.trim() || '',
+            log_max_backups: document.getElementById('sfLogMaxBackups')?.value.trim() || '',
+            log_max_age: document.getElementById('sfLogMaxAge')?.value.trim() || '',
+            log_compress: document.getElementById('sfLogCompress')?.checked || false,
             accessLog: _staticToggleState('accessLog'),
             accessLogPath: document.getElementById('sfAccessLogPath')?.value.trim() || '',
+            al_format: document.getElementById('sfALFormat')?.value || '',
+            al_buffering: document.getElementById('sfALBuffering')?.value.trim() || '',
+            al_status_codes: document.getElementById('sfALStatusCodes')?.value || '',
+            al_min_duration: document.getElementById('sfALMinDuration')?.value.trim() || '',
+            al_retry: document.getElementById('sfALRetry')?.checked || false,
+            al_headers_mode: document.getElementById('sfALHeadersMode')?.value || '',
         };
     } else if (section === 'providers') {
         data = {
@@ -1425,22 +1453,84 @@ function _buildStaticClassicHTML() {
 
     <div id="staticPanel-log" style="display:none">
         <div class="px-4 py-4 space-y-3">
-            <div>
-                <label class="text-xs block mb-1" style="color:var(--muted)">Log Level</label>
-                <select id="sfLogLevel" class="input-field text-sm">
-                    <option value="DEBUG">DEBUG</option>
-                    <option value="INFO">INFO</option>
-                    <option value="WARN">WARN</option>
-                    <option value="ERROR" selected>ERROR</option>
-                </select>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs block mb-1" style="color:var(--muted)">Log Level</label>
+                    <select id="sfLogLevel" class="input-field text-sm">
+                        <option value="DEBUG">DEBUG</option>
+                        <option value="INFO">INFO</option>
+                        <option value="WARN">WARN</option>
+                        <option value="ERROR" selected>ERROR</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs block mb-1" style="color:var(--muted)">Log Format</label>
+                    <select id="sfLogFormat" class="input-field text-sm">
+                        <option value="">Text (default)</option>
+                        <option value="json">JSON</option>
+                    </select>
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="text-xs block mb-1" style="color:var(--muted)">Traefik log file <span style="font-weight:400">(leave empty for stdout)</span></label>
+                    <input id="sfLogFile" type="text" class="input-field text-sm" placeholder="/var/log/traefik/traefik.log" oninput="document.getElementById('logRotationRow').style.display = this.value.trim() ? '' : 'none'">
+                </div>
+            </div>
+            <div id="logRotationRow" style="display:none">
+                <label class="text-xs block mb-1" style="color:var(--muted)">Rotation <span style="font-weight:400">(optional)</span></label>
+                <div class="grid grid-cols-3 gap-3">
+                    <input id="sfLogMaxSize" type="text" class="input-field text-sm" placeholder="max size (MB)">
+                    <input id="sfLogMaxBackups" type="text" class="input-field text-sm" placeholder="max backups">
+                    <input id="sfLogMaxAge" type="text" class="input-field text-sm" placeholder="max age (days)">
+                </div>
+                <div class="flex items-center gap-2 mt-2">
+                    <input type="checkbox" id="sfLogCompress" class="rounded" style="accent-color:var(--blue)">
+                    <span class="text-xs" style="color:var(--text)">Compress rotated files</span>
+                </div>
             </div>
             <div class="tab-toggle-row" onclick="onAccessLogToggle()">
                 <span class="flex items-center gap-2 text-sm"><i class="ph-bold ph-file-text" style="color:var(--muted)"></i> Access Log</span>
                 <div class="toggle-switch" id="staticT-accessLog"><div class="toggle-knob"></div></div>
             </div>
-            <div id="accessLogPathRow" style="display:none">
-                <label class="text-xs block mb-1" style="color:var(--muted)">Log File Path <span style="font-weight:400">(leave empty for stdout)</span></label>
-                <input id="sfAccessLogPath" type="text" class="input-field text-sm" placeholder="/var/log/traefik/access.log">
+            <div id="accessLogPathRow" style="display:none" class="space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs block mb-1" style="color:var(--muted)">Access log file <span style="font-weight:400">(empty = stdout)</span></label>
+                        <input id="sfAccessLogPath" type="text" class="input-field text-sm" placeholder="/var/log/traefik/access.log">
+                    </div>
+                    <div>
+                        <label class="text-xs block mb-1" style="color:var(--muted)">Format</label>
+                        <select id="sfALFormat" class="input-field text-sm">
+                            <option value="">CLF (default)</option>
+                            <option value="json">JSON</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs block mb-1" style="color:var(--muted)">Status code filter <span style="font-weight:400">(optional)</span></label>
+                        <input id="sfALStatusCodes" type="text" class="input-field text-sm font-mono" placeholder="400-499, 500">
+                        <p class="text-xs mt-1" style="color:var(--muted)">Only log these responses, comma separated codes or ranges.</p>
+                    </div>
+                    <div>
+                        <label class="text-xs block mb-1" style="color:var(--muted)">Min duration filter <span style="font-weight:400">(optional)</span></label>
+                        <input id="sfALMinDuration" type="text" class="input-field text-sm" placeholder="e.g. 200ms">
+                        <p class="text-xs mt-1" style="color:var(--muted)">Only log requests slower than this.</p>
+                    </div>
+                    <div>
+                        <label class="text-xs block mb-1" style="color:var(--muted)">Buffering <span style="font-weight:400">(lines, optional)</span></label>
+                        <input id="sfALBuffering" type="text" class="input-field text-sm" placeholder="e.g. 100">
+                    </div>
+                    <div>
+                        <label class="text-xs block mb-1" style="color:var(--muted)">Headers</label>
+                        <select id="sfALHeadersMode" class="input-field text-sm">
+                            <option value="">Drop (default)</option>
+                            <option value="keep">Keep</option>
+                            <option value="redact">Redact</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="sfALRetry" class="rounded" style="accent-color:var(--blue)">
+                    <span class="text-xs" style="color:var(--text)">Only log retry attempts</span>
+                </div>
             </div>
             <div class="flex justify-end pt-1 sc-save" data-sc-save="log" style="display:none">
                 <button onclick="saveStaticSingleSection('log')" class="btn-primary text-xs">Save Changes</button>

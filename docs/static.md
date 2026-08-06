@@ -27,7 +27,7 @@ Traefik's static configuration controls settings that cannot be changed at runti
 | Certificate Resolvers | ACME email, storage path, DNS / HTTP / TLS challenge type, custom CA server, key type, external account binding (EAB), and DNS propagation controls (check resolvers, delay, disable checks). Edits merge into the existing resolver, preserving keys the form does not manage. |
 | Plugins               | Install and remove experimental plugins; view installed plugins                                                                                      |
 | API                   | Enable or disable the Traefik API and Dashboard, insecure mode, and debug mode                                                                       |
-| Logging               | Set the log level (DEBUG / INFO / WARN / ERROR) and toggle access logging with an optional file path                                                 |
+| Logging               | Traefik log: level, text/JSON format, optional log file with rotation (max size, backups, age, compression). Access log: file path, CLF/JSON format, buffering, status-code and min-duration filters, retry-only mode, and header keep/redact. Edits merge, preserving keys the form does not manage. |
 | Providers             | Enable and configure Docker and File providers via dedicated toggles; add other provider types via the **+ Provider** button which opens a template editor |
 | Advanced              | Full raw YAML editor (Monaco) - for anything not covered by the form sections                                                                        |
 

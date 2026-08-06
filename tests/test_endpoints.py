@@ -366,3 +366,52 @@ def test_entrypoint_edit_preserves_unmanaged_keys(client):
     ep = res.get_json()['parsed']['entryPoints']['web']
     assert ep['reusePort'] is True
     assert ep['http2']['maxConcurrentStreams'] == 250
+
+
+LOG_BASE = {'level': 'ERROR', 'log_format': '', 'log_file': '', 'log_max_size': '',
+            'log_max_backups': '', 'log_max_age': '', 'log_compress': False,
+            'accessLog': False, 'accessLogPath': '', 'al_format': '', 'al_buffering': '',
+            'al_status_codes': '', 'al_min_duration': '', 'al_retry': False, 'al_headers_mode': ''}
+
+
+def test_log_editor_writes_file_rotation_and_access_filters(client):
+    res = _static_section(client, 'log:\n  level: ERROR\n', 'log', 'set', '', dict(LOG_BASE, **{
+        'level': 'INFO', 'log_format': 'json', 'log_file': '/logs/traefik.log',
+        'log_max_size': '50', 'log_max_backups': '3', 'log_compress': True,
+        'accessLog': True, 'accessLogPath': '/logs/access.log', 'al_format': 'json',
+        'al_buffering': '100', 'al_status_codes': '400-499, 500', 'al_min_duration': '200ms',
+        'al_headers_mode': 'keep',
+    }))
+    assert res.status_code == 200, res.data
+    parsed = res.get_json()['parsed']
+    log = parsed['log']
+    assert log == {'level': 'INFO', 'format': 'json', 'filePath': '/logs/traefik.log',
+                   'maxSize': 50, 'maxBackups': 3, 'compress': True}
+    al = parsed['accessLog']
+    assert al['filePath'] == '/logs/access.log' and al['format'] == 'json'
+    assert al['bufferingSize'] == 100
+    assert al['filters'] == {'statusCodes': ['400-499', '500'], 'minDuration': '200ms'}
+    assert al['fields'] == {'headers': {'defaultMode': 'keep'}}
+
+
+def test_log_edit_preserves_unmanaged_keys(client):
+    raw = ("log:\n  level: INFO\n  noColor: true\n"
+           "accessLog:\n  filePath: /logs/a.log\n  addInternals: true\n"
+           "  fields:\n    names:\n      StartUTC: drop\n")
+    res = _static_section(client, raw, 'log', 'set', '', dict(LOG_BASE, **{
+        'level': 'DEBUG', 'accessLog': True, 'accessLogPath': '/logs/a.log',
+    }))
+    assert res.status_code == 200, res.data
+    parsed = res.get_json()['parsed']
+    assert parsed['log']['noColor'] is True, 'unmanaged log keys must survive'
+    assert parsed['accessLog']['addInternals'] is True
+    assert parsed['accessLog']['fields']['names'] == {'StartUTC': 'drop'}, 'per-field names must survive'
+
+
+def test_log_editor_rejects_bad_values(client):
+    assert _static_section(client, '', 'log', 'set', '', dict(LOG_BASE,
+        log_file='/l.log', log_max_size='big')).status_code == 400
+    assert _static_section(client, '', 'log', 'set', '', dict(LOG_BASE,
+        accessLog=True, al_status_codes='4xx')).status_code == 400
+    assert _static_section(client, '', 'log', 'set', '', dict(LOG_BASE,
+        accessLog=True, al_min_duration='fast')).status_code == 400

@@ -1773,14 +1773,95 @@ def api_static_section_update():
             else:
                 config.pop('api', None)
         elif section == 'log' and action == 'set':
+            log_blk = config.get('log') if isinstance(config.get('log'), dict) else {}
             level = str(payload.get('level', 'ERROR')).upper()
             if level and level != 'ERROR':
-                config['log'] = {'level': level}
+                log_blk['level'] = level
+            else:
+                log_blk.pop('level', None)
+            if str(payload.get('log_format', '')).strip() == 'json':
+                log_blk['format'] = 'json'
+            else:
+                log_blk.pop('format', None)
+            log_file = str(payload.get('log_file', '')).strip()
+            if log_file:
+                log_blk['filePath'] = log_file
+            else:
+                log_blk.pop('filePath', None)
+            for yaml_key, pay_key in (('maxSize', 'log_max_size'), ('maxBackups', 'log_max_backups'), ('maxAge', 'log_max_age')):
+                v = str(payload.get(pay_key, '')).strip()
+                if v and log_file:
+                    if not v.isdigit():
+                        return jsonify({'error': f'Rotation {yaml_key} must be a whole number, got {v!r}'}), 400
+                    log_blk[yaml_key] = int(v)
+                else:
+                    log_blk.pop(yaml_key, None)
+            if payload.get('log_compress') and log_file:
+                log_blk['compress'] = True
+            else:
+                log_blk.pop('compress', None)
+            if log_blk:
+                config['log'] = log_blk
             else:
                 config.pop('log', None)
             if payload.get('accessLog'):
+                al = config.get('accessLog') if isinstance(config.get('accessLog'), dict) else {}
                 al_path = str(payload.get('accessLogPath', '')).strip()
-                config['accessLog'] = {'filePath': al_path} if al_path else {}
+                if al_path:
+                    al['filePath'] = al_path
+                else:
+                    al.pop('filePath', None)
+                if str(payload.get('al_format', '')).strip() == 'json':
+                    al['format'] = 'json'
+                else:
+                    al.pop('format', None)
+                buf = str(payload.get('al_buffering', '')).strip()
+                if buf:
+                    if not buf.isdigit():
+                        return jsonify({'error': f'Buffering must be a whole number of lines, got {buf!r}'}), 400
+                    al['bufferingSize'] = int(buf)
+                else:
+                    al.pop('bufferingSize', None)
+                filters = al.get('filters') if isinstance(al.get('filters'), dict) else {}
+                codes = [c for c in re.split(r'[\s,]+', str(payload.get('al_status_codes', ''))) if c]
+                if codes:
+                    bad_codes = [c for c in codes if not re.match(r'^\d{3}(-\d{3})?$', c)]
+                    if bad_codes:
+                        return jsonify({'error': 'Invalid status code filter: ' + ', '.join(bad_codes)}), 400
+                    filters['statusCodes'] = codes
+                else:
+                    filters.pop('statusCodes', None)
+                if payload.get('al_retry'):
+                    filters['retryAttempts'] = True
+                else:
+                    filters.pop('retryAttempts', None)
+                min_dur = str(payload.get('al_min_duration', '')).strip()
+                if min_dur:
+                    if not _is_valid_duration(min_dur):
+                        return jsonify({'error': f'Invalid min duration: {min_dur!r} - use forms like 200ms, 1s'}), 400
+                    filters['minDuration'] = int(min_dur) if min_dur.isdigit() else min_dur
+                else:
+                    filters.pop('minDuration', None)
+                if filters:
+                    al['filters'] = filters
+                else:
+                    al.pop('filters', None)
+                hdr_mode = str(payload.get('al_headers_mode', '')).strip()
+                fields = al.get('fields') if isinstance(al.get('fields'), dict) else {}
+                hdrs = fields.get('headers') if isinstance(fields.get('headers'), dict) else {}
+                if hdr_mode in ('keep', 'redact'):
+                    hdrs['defaultMode'] = hdr_mode
+                else:
+                    hdrs.pop('defaultMode', None)
+                if hdrs:
+                    fields['headers'] = hdrs
+                else:
+                    fields.pop('headers', None)
+                if fields:
+                    al['fields'] = fields
+                else:
+                    al.pop('fields', None)
+                config['accessLog'] = al
             else:
                 config.pop('accessLog', None)
         elif section == 'providers' and action == 'set':
