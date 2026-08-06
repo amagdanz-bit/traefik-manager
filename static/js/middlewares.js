@@ -32,7 +32,7 @@ function openMwModal() {
     const mwCfHid = document.getElementById('mwConfigFile');
     const newMwInput = document.getElementById('newMwFileName');
     if (newMwInput) { newMwInput.style.display = 'none'; newMwInput.value = ''; }
-    _populateConfigFileSelect('mw').then(() => { modal.style.display = 'flex'; });
+    _populateConfigFileSelect('mw').then(() => { _openMwPanel(); });
     const mwTplSel = document.getElementById('mwTemplate');
     if (mwTplSel) mwTplSel.value = '';
     setMwProtocol('http');
@@ -44,7 +44,18 @@ function openMwModal() {
     _loadCustomMwTemplates();
 }
 
-function closeMwModal() { document.getElementById('mwModal').style.display = 'none'; }
+function _openMwPanel() {
+    document.getElementById('mwModal').classList.add('open');
+    document.getElementById('mwBackdrop').classList.add('open');
+    if (!setDetailDockOpen(true)) document.body.style.overflow = 'hidden';
+}
+
+function closeMwModal() {
+    setDetailDockOpen(false);
+    document.getElementById('mwModal').classList.remove('open');
+    document.getElementById('mwBackdrop').classList.remove('open');
+    document.body.style.overflow = '';
+}
 
 function togglePwVis(inputId, btn) {
     const el = document.getElementById(inputId);
@@ -540,7 +551,7 @@ async function handleMwEdit(btn) {
         if (cfSel) cfSel.value = mw.configFile;
         document.getElementById('mwConfigFile').value = mw.configFile;
     }
-    document.getElementById('mwModal').style.display = 'flex';
+    _openMwPanel();
     _initMwMonaco(mw.yaml.trim());
     _loadCustomMwTemplates();
 }

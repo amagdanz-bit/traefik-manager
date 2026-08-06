@@ -1,20 +1,19 @@
-<div id="mwModal" class="modal-overlay" style="display:none">
-    <div class="modal-box modal-box-mw">
-        <form id="mwForm" action="{{ url_for('save_middleware') }}" method="POST" onsubmit="saveMwAjax(event)">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <input type="hidden" name="isMwEdit" id="isMwEdit" value="false">
-            <input type="hidden" name="originalMwId" id="originalMwId" value="">
-            <input type="hidden" name="configFile" id="mwConfigFile" value="">
-
-            <div class="flex items-center justify-between px-5 py-4" style="border-bottom:1px solid var(--border)">
-                <div class="flex items-center gap-2">
+<div class="detail-backdrop" id="mwBackdrop" onclick="closeMwModal()"></div>
+<div class="detail-panel" id="mwModal">
+        <form id="mwForm" class="detail-panel-form" style="height:100%" action="{{ url_for('save_middleware') }}" method="POST" onsubmit="saveMwAjax(event)">
+            <div class="sticky top-0 z-10 flex items-center justify-between px-6 py-4" style="background:var(--card);border-bottom:1px solid var(--border)">
+                <div class="flex items-center gap-3">
                     <i class="ph-bold ph-plugs-connected" style="color:var(--purple)"></i>
-                    <h3 class="font-bold text-sm" style="color:var(--text)" id="mwModalTitle">Add Middleware</h3>
+                    <h2 class="font-bold text-sm" style="color:var(--text)" id="mwModalTitle">Add Middleware</h2>
                 </div>
-                <button type="button" onclick="closeMwModal()" class="btn-icon"><i class="ph-bold ph-x text-sm"></i></button>
+                <button type="button" onclick="closeMwModal()" class="btn-icon"><i class="ph-bold ph-x text-base"></i></button>
             </div>
 
-            <div class="px-5 py-4 space-y-4">
+            <div class="px-6 py-5 space-y-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="isMwEdit" id="isMwEdit" value="false">
+                <input type="hidden" name="originalMwId" id="originalMwId" value="">
+                <input type="hidden" name="configFile" id="mwConfigFile" value="">
                 <div id="mwConfigFileSelectWrap" {% if not multi_config and not config_dir_set %}style="display:none"{% endif %}>
                     <label>Config File</label>
                     <select id="mwConfigFileSelect" class="input-field" onchange="onMwConfigFileChange(this)">
@@ -478,10 +477,9 @@ X-Forwarded-Name: name</textarea>
                 </div>
             </div>
 
-            <div class="flex justify-end gap-2 px-5 py-4" style="border-top:1px solid var(--border)">
+            <div class="detail-panel-foot flex justify-end gap-2 px-6 py-4">
                 <button type="button" onclick="closeMwModal()" class="btn-secondary">Cancel</button>
                 <button type="submit" class="btn-primary">Save Middleware</button>
             </div>
         </form>
-    </div>
 </div>
