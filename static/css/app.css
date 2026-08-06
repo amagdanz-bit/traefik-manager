@@ -388,7 +388,7 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); 
 /* Detail panel */
 .detail-panel {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 60;
-    width: 100%; max-width: 680px;
+    width: 100%; max-width: 760px;
     background: var(--bg);
     border-left: 1px solid var(--border);
     box-shadow: none;
@@ -953,10 +953,10 @@ html.tm-modern #tabBar { display: none; }
     html.tm-modern .max-w-7xl { max-width: none; }
     html.tm-modern main { margin-left: var(--side-nav-w, 232px); transition: margin-left 0.15s ease, margin-right 0.3s cubic-bezier(0.4,0,0.2,1); }
     @media (min-width: 1440px) {
-        html.tm-modern .detail-panel { top: var(--tm-nav-h, 54px); max-width: 560px; }
+        html.tm-modern .detail-panel { top: var(--tm-nav-h, 54px); max-width: 680px; }
         html.tm-modern .detail-panel.open { box-shadow: none; }
         html.tm-modern .detail-backdrop { display: none !important; }
-        html.tm-modern.tm-detail-open main { margin-right: 560px; }
+        html.tm-modern.tm-detail-open main { margin-right: 680px; }
     }
     html.tm-modern { --side-nav-w: 232px; }
     html.tm-modern.tm-nav-collapsed { --side-nav-w: 60px; }
