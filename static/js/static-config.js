@@ -466,9 +466,9 @@ function switchStaticSection(section) {
     const hdrAddBtn = document.getElementById('staticHdrAddBtn');
     if (hdrIcon)  hdrIcon.style.color = sectionColors[section] || 'var(--blue)';
     if (hdrLabel) hdrLabel.textContent = sectionLabels[section] || 'Add';
-    const isSingleBlock = ['api','log'].includes(section);
+    const isSingleBlock = ['api','log','observability','system'].includes(section);
     if (hdrAddBtn) hdrAddBtn.style.display = isSingleBlock ? 'none' : '';
-    ['entrypoints','resolvers','plugins','api','log','providers'].forEach(s => {
+    ['entrypoints','resolvers','plugins','api','log','observability','system','providers'].forEach(s => {
         const panel = document.getElementById('staticPanel-' + s);
         const btn   = document.getElementById('ssnBtn-' + s);
         if (panel) panel.style.display = s === section ? '' : 'none';
@@ -912,7 +912,50 @@ function _renderStaticSections(parsed) {
     _renderStaticPlugins((_staticParsedData.experimental || {}).plugins || {});
     _renderStaticApi(_staticParsedData.api);
     _renderStaticLog(_staticParsedData.log, _staticParsedData.accessLog);
+    _renderStaticObservability(_staticParsedData.metrics, _staticParsedData.tracing, _staticParsedData.ping);
+    _renderStaticSystem(_staticParsedData['global'], _staticParsedData.core);
     _renderStaticProviders(_staticParsedData.providers);
+}
+
+function onPromToggle() {
+    staticToggle('promEnabled');
+    const fields = document.getElementById('promFields');
+    if (fields) fields.style.display = _staticToggleState('promEnabled') ? '' : 'none';
+}
+
+function onTraceToggle() {
+    staticToggle('traceEnabled');
+    const fields = document.getElementById('traceFields');
+    if (fields) fields.style.display = _staticToggleState('traceEnabled') ? '' : 'none';
+}
+
+function _renderStaticObservability(metrics, tracing, ping) {
+    _setStaticToggle('pingEnabled', ping !== undefined && ping !== null);
+    const prom = (metrics || {}).prometheus;
+    const hasProm = prom !== undefined && prom !== null;
+    _setStaticToggle('promEnabled', hasProm);
+    const pf = document.getElementById('promFields');
+    if (pf) pf.style.display = hasProm ? '' : 'none';
+    const p = prom || {};
+    _setStaticToggle('promEpLabels', p.addEntryPointsLabels !== false);
+    _setStaticToggle('promRouterLabels', !!p.addRoutersLabels);
+    _setStaticToggle('promSvcLabels', p.addServicesLabels !== false);
+    const hasTrace = tracing !== undefined && tracing !== null;
+    _setStaticToggle('traceEnabled', hasTrace);
+    const tf = document.getElementById('traceFields');
+    if (tf) tf.style.display = hasTrace ? '' : 'none';
+    const t = tracing || {};
+    const ts = document.getElementById('sfTraceService'); if (ts) ts.value = t.serviceName || '';
+    const tr = document.getElementById('sfTraceSample'); if (tr) tr.value = t.sampleRate !== undefined && t.sampleRate !== null ? String(t.sampleRate) : '';
+    const te = document.getElementById('sfTraceEndpoint'); if (te) te.value = t.otlp?.http?.endpoint || '';
+}
+
+function _renderStaticSystem(globalData, coreData) {
+    const g = globalData || {};
+    _setStaticToggle('checkNewVersion', g.checkNewVersion !== false);
+    _setStaticToggle('sendUsage', !!g.sendAnonymousUsage);
+    const rs = document.getElementById('sfRuleSyntax');
+    if (rs) rs.value = (coreData || {}).defaultRuleSyntax === 'v2' ? 'v2' : '';
 }
 
 function staticToggle(id) {
@@ -1125,6 +1168,24 @@ async function saveStaticSingleSection(section) {
             al_retry: document.getElementById('sfALRetry')?.checked || false,
             al_headers_mode: document.getElementById('sfALHeadersMode')?.value || '',
         };
+    } else if (section === 'observability') {
+        data = {
+            ping: _staticToggleState('pingEnabled'),
+            prometheus: _staticToggleState('promEnabled'),
+            prom_ep_labels: _staticToggleState('promEpLabels'),
+            prom_router_labels: _staticToggleState('promRouterLabels'),
+            prom_svc_labels: _staticToggleState('promSvcLabels'),
+            tracing: _staticToggleState('traceEnabled'),
+            trace_service: document.getElementById('sfTraceService')?.value.trim() || '',
+            trace_sample: document.getElementById('sfTraceSample')?.value.trim() || '',
+            trace_endpoint: document.getElementById('sfTraceEndpoint')?.value.trim() || '',
+        };
+    } else if (section === 'system') {
+        data = {
+            check_new_version: _staticToggleState('checkNewVersion'),
+            send_usage: _staticToggleState('sendUsage'),
+            rule_syntax: document.getElementById('sfRuleSyntax')?.value || '',
+        };
     } else if (section === 'providers') {
         data = {
             docker: _staticToggleState('dockerEnabled'),
@@ -1156,11 +1217,13 @@ function _scSectionHead(key, label, icon, color, countId, addLabel) {
 }
 
 const SC_SECTIONS = [
-    ['entrypoints', 'Entrypoints',           'ph-door-open',    'var(--blue)',   'staticEpCount',       'Entrypoint'],
-    ['resolvers',   'Certificate resolvers', 'ph-certificate',  'var(--green)',  'staticResolverCount', 'Resolver'],
-    ['providers',   'Providers',             'ph-cloud',        'var(--teal)',   null,                  'Provider'],
-    ['api',         'API and dashboard',     'ph-gauge',        'var(--orange)', null,                  null],
-    ['log',         'Logging',               'ph-scroll',       '#ca8a04',       null,                  null],
+    ['entrypoints',   'Entrypoints',           'ph-door-open',   'var(--blue)',   'staticEpCount',       'Entrypoint'],
+    ['resolvers',     'Certificate resolvers', 'ph-certificate', 'var(--green)',  'staticResolverCount', 'Resolver'],
+    ['providers',     'Providers',             'ph-cloud',       'var(--teal)',   null,                  'Provider'],
+    ['api',           'API and dashboard',     'ph-gauge',       'var(--orange)', null,                  null],
+    ['log',           'Logging',               'ph-scroll',      '#ca8a04',       null,                  null],
+    ['observability', 'Observability',         'ph-heartbeat',   'var(--green)',  null,                  null],
+    ['system',        'System',                'ph-gear-six',    'var(--muted)',  null,                  null],
 ];
 
 function _buildStaticOnePage() {
@@ -1206,6 +1269,14 @@ function _buildStaticClassicHTML() {
             <button onclick="switchStaticSection('log')" id="ssnBtn-log" class="auth-sub-tab">
                 <i class="ph-bold ph-scroll" style="color:#ca8a04"></i>
                 Logging
+            </button>
+            <button onclick="switchStaticSection('observability')" id="ssnBtn-observability" class="auth-sub-tab">
+                <i class="ph-bold ph-heartbeat" style="color:var(--green)"></i>
+                Observability
+            </button>
+            <button onclick="switchStaticSection('system')" id="ssnBtn-system" class="auth-sub-tab">
+                <i class="ph-bold ph-gear-six" style="color:var(--muted)"></i>
+                System
             </button>
             <button onclick="switchStaticSection('providers')" id="ssnBtn-providers" class="auth-sub-tab">
                 <i class="ph-bold ph-cloud" style="color:var(--teal)"></i>
@@ -1534,6 +1605,80 @@ function _buildStaticClassicHTML() {
             </div>
             <div class="flex justify-end pt-1 sc-save" data-sc-save="log" style="display:none">
                 <button onclick="saveStaticSingleSection('log')" class="btn-primary text-xs">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="staticPanel-observability" style="display:none">
+        <div class="px-4 py-4 space-y-3">
+            <div class="tab-toggle-row" onclick="staticToggle('pingEnabled')">
+                <span class="flex items-center gap-2 text-sm"><i class="ph-bold ph-heartbeat" style="color:var(--green)"></i> Ping endpoint <span class="text-xs" style="color:var(--muted)">/ping health check</span></span>
+                <div class="toggle-switch" id="staticT-pingEnabled"><div class="toggle-knob"></div></div>
+            </div>
+            <div class="tab-toggle-row" onclick="onPromToggle()">
+                <span class="flex items-center gap-2 text-sm"><i class="ph-bold ph-chart-line" style="color:var(--orange)"></i> Prometheus metrics <span class="text-xs" style="color:var(--muted)">/metrics</span></span>
+                <div class="toggle-switch" id="staticT-promEnabled"><div class="toggle-knob"></div></div>
+            </div>
+            <div id="promFields" class="space-y-2" style="display:none">
+                <div class="tab-toggle-row" onclick="staticToggle('promEpLabels')">
+                    <span class="text-sm" style="color:var(--muted)">Entrypoint labels</span>
+                    <div class="toggle-switch" id="staticT-promEpLabels"><div class="toggle-knob"></div></div>
+                </div>
+                <div class="tab-toggle-row" onclick="staticToggle('promRouterLabels')">
+                    <span class="text-sm" style="color:var(--muted)">Router labels</span>
+                    <div class="toggle-switch" id="staticT-promRouterLabels"><div class="toggle-knob"></div></div>
+                </div>
+                <div class="tab-toggle-row" onclick="staticToggle('promSvcLabels')">
+                    <span class="text-sm" style="color:var(--muted)">Service labels</span>
+                    <div class="toggle-switch" id="staticT-promSvcLabels"><div class="toggle-knob"></div></div>
+                </div>
+            </div>
+            <div class="tab-toggle-row" onclick="onTraceToggle()">
+                <span class="flex items-center gap-2 text-sm"><i class="ph-bold ph-waveform" style="color:var(--purple)"></i> Tracing <span class="text-xs" style="color:var(--muted)">OTLP</span></span>
+                <div class="toggle-switch" id="staticT-traceEnabled"><div class="toggle-knob"></div></div>
+            </div>
+            <div id="traceFields" style="display:none">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs block mb-1" style="color:var(--muted)">Service name <span style="font-weight:400">(optional)</span></label>
+                        <input id="sfTraceService" type="text" class="input-field text-sm" placeholder="traefik">
+                    </div>
+                    <div>
+                        <label class="text-xs block mb-1" style="color:var(--muted)">Sample rate <span style="font-weight:400">(0 to 1, optional)</span></label>
+                        <input id="sfTraceSample" type="text" class="input-field text-sm" placeholder="1.0">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="text-xs block mb-1" style="color:var(--muted)">OTLP HTTP endpoint <span style="font-weight:400">(optional, default localhost:4318)</span></label>
+                        <input id="sfTraceEndpoint" type="text" class="input-field text-sm" placeholder="http://collector:4318/v1/traces">
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end pt-1 sc-save" data-sc-save="observability" style="display:none">
+                <button onclick="saveStaticSingleSection('observability')" class="btn-primary text-xs">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="staticPanel-system" style="display:none">
+        <div class="px-4 py-4 space-y-3">
+            <div class="tab-toggle-row" onclick="staticToggle('checkNewVersion')">
+                <span class="flex items-center gap-2 text-sm"><i class="ph-bold ph-arrows-clockwise" style="color:var(--blue)"></i> Check for new Traefik versions</span>
+                <div class="toggle-switch" id="staticT-checkNewVersion"><div class="toggle-knob"></div></div>
+            </div>
+            <div class="tab-toggle-row" onclick="staticToggle('sendUsage')">
+                <span class="flex items-center gap-2 text-sm"><i class="ph-bold ph-chart-pie-slice" style="color:var(--muted)"></i> Send anonymous usage statistics</span>
+                <div class="toggle-switch" id="staticT-sendUsage"><div class="toggle-knob"></div></div>
+            </div>
+            <div>
+                <label class="text-xs block mb-1" style="color:var(--muted)">Default rule syntax</label>
+                <select id="sfRuleSyntax" class="input-field text-sm">
+                    <option value="">v3 (default)</option>
+                    <option value="v2">v2 (compatibility)</option>
+                </select>
+                <p class="text-xs mt-1" style="color:var(--muted)">Only change this while migrating rules written for Traefik v2.</p>
+            </div>
+            <div class="flex justify-end pt-1 sc-save" data-sc-save="system" style="display:none">
+                <button onclick="saveStaticSingleSection('system')" class="btn-primary text-xs">Save Changes</button>
             </div>
         </div>
     </div>

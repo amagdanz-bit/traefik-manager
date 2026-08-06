@@ -1910,6 +1910,94 @@ def api_static_section_update():
                 providers[name] = prov_cfg
             if not providers:
                 config.pop('providers', None)
+        elif section == 'observability' and action == 'set':
+            if payload.get('ping'):
+                if not isinstance(config.get('ping'), dict):
+                    config['ping'] = {}
+            else:
+                config.pop('ping', None)
+            metrics = config.get('metrics') if isinstance(config.get('metrics'), dict) else {}
+            if payload.get('prometheus'):
+                prom = metrics.get('prometheus') if isinstance(metrics.get('prometheus'), dict) else {}
+                if payload.get('prom_ep_labels', True):
+                    prom.pop('addEntryPointsLabels', None)
+                else:
+                    prom['addEntryPointsLabels'] = False
+                if payload.get('prom_router_labels'):
+                    prom['addRoutersLabels'] = True
+                else:
+                    prom.pop('addRoutersLabels', None)
+                if payload.get('prom_svc_labels', True):
+                    prom.pop('addServicesLabels', None)
+                else:
+                    prom['addServicesLabels'] = False
+                metrics['prometheus'] = prom
+            else:
+                metrics.pop('prometheus', None)
+            if metrics:
+                config['metrics'] = metrics
+            else:
+                config.pop('metrics', None)
+            if payload.get('tracing'):
+                tr_blk = config.get('tracing') if isinstance(config.get('tracing'), dict) else {}
+                svc = str(payload.get('trace_service', '')).strip()
+                if svc:
+                    tr_blk['serviceName'] = svc
+                else:
+                    tr_blk.pop('serviceName', None)
+                sr = str(payload.get('trace_sample', '')).strip()
+                if sr:
+                    try:
+                        srf = float(sr)
+                        if not 0 <= srf <= 1:
+                            raise ValueError
+                    except ValueError:
+                        return jsonify({'error': f'Sample rate must be a number between 0 and 1, got {sr!r}'}), 400
+                    tr_blk['sampleRate'] = srf
+                else:
+                    tr_blk.pop('sampleRate', None)
+                ep_url = str(payload.get('trace_endpoint', '')).strip()
+                otlp = tr_blk.get('otlp') if isinstance(tr_blk.get('otlp'), dict) else {}
+                if ep_url:
+                    oh = otlp.get('http') if isinstance(otlp.get('http'), dict) else {}
+                    oh['endpoint'] = ep_url
+                    otlp['http'] = oh
+                else:
+                    oh = otlp.get('http') if isinstance(otlp.get('http'), dict) else None
+                    if oh is not None:
+                        oh.pop('endpoint', None)
+                        if not oh:
+                            otlp.pop('http', None)
+                if otlp:
+                    tr_blk['otlp'] = otlp
+                else:
+                    tr_blk.pop('otlp', None)
+                config['tracing'] = tr_blk
+            else:
+                config.pop('tracing', None)
+        elif section == 'system' and action == 'set':
+            g_blk = config.get('global') if isinstance(config.get('global'), dict) else {}
+            if payload.get('check_new_version', True):
+                g_blk.pop('checkNewVersion', None)
+            else:
+                g_blk['checkNewVersion'] = False
+            if payload.get('send_usage'):
+                g_blk['sendAnonymousUsage'] = True
+            else:
+                g_blk.pop('sendAnonymousUsage', None)
+            if g_blk:
+                config['global'] = g_blk
+            else:
+                config.pop('global', None)
+            core_blk = config.get('core') if isinstance(config.get('core'), dict) else {}
+            if str(payload.get('rule_syntax', '')).strip() == 'v2':
+                core_blk['defaultRuleSyntax'] = 'v2'
+            else:
+                core_blk.pop('defaultRuleSyntax', None)
+            if core_blk:
+                config['core'] = core_blk
+            else:
+                config.pop('core', None)
         else:
             return jsonify({'error': f'Unknown section: {section!r}'}), 400
         stream = StringIO()

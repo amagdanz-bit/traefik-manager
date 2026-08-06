@@ -1098,11 +1098,15 @@ html.tm-modern #staticOtherProvidersList > div { margin-left: 0 !important; marg
 html.tm-modern .sc-sec .tab-toggle-row { border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 11px 14px; }
 html.tm-modern .sc-sec .tab-toggle-row:hover { border-color: var(--muted); }
 html.tm-modern .sc-sec[data-sc-sec="api"] > [id^="staticPanel-"] > div:first-child,
-html.tm-modern .sc-sec[data-sc-sec="log"] > [id^="staticPanel-"] > div:first-child { display: grid; gap: 12px; align-items: start; }
+html.tm-modern .sc-sec[data-sc-sec="log"] > [id^="staticPanel-"] > div:first-child,
+html.tm-modern .sc-sec[data-sc-sec="observability"] > [id^="staticPanel-"] > div:first-child,
+html.tm-modern .sc-sec[data-sc-sec="system"] > [id^="staticPanel-"] > div:first-child { display: grid; gap: 12px; align-items: start; }
 html.tm-modern .sc-sec[data-sc-sec="api"] > [id^="staticPanel-"] > div:first-child > .mb-3,
 html.tm-modern .sc-sec[data-sc-sec="log"] > [id^="staticPanel-"] > div:first-child > .mb-3,
 html.tm-modern .sc-sec[data-sc-sec="api"] > [id^="staticPanel-"] > div:first-child > .flex.justify-end,
-html.tm-modern .sc-sec[data-sc-sec="log"] > [id^="staticPanel-"] > div:first-child > .flex.justify-end { grid-column: 1 / -1; margin-bottom: 0; }
+html.tm-modern .sc-sec[data-sc-sec="log"] > [id^="staticPanel-"] > div:first-child > .flex.justify-end,
+html.tm-modern .sc-sec[data-sc-sec="observability"] > [id^="staticPanel-"] > div:first-child > .flex.justify-end,
+html.tm-modern .sc-sec[data-sc-sec="system"] > [id^="staticPanel-"] > div:first-child > .flex.justify-end { grid-column: 1 / -1; margin-bottom: 0; }
 html.tm-modern .sc-sec[data-sc-sec="providers"] .sc-provider-card,
 html.tm-modern .sc-sec[data-sc-sec="providers"] > [id^="staticPanel-"] > div:first-child > div > .rounded-lg { max-width: 640px; }
 html.tm-modern #tab-static { container-type: inline-size; container-name: sc; }
@@ -1110,7 +1114,9 @@ html.tm-modern #staticSettingsContent { display: grid; gap: 22px 20px; align-ite
 html.tm-modern .sc-sec { margin-bottom: 0; min-width: 0; }
 html.tm-modern .sc-sec .tm-card-grid,
 html.tm-modern .sc-sec[data-sc-sec="api"] > [id^="staticPanel-"] > div:first-child,
-html.tm-modern .sc-sec[data-sc-sec="log"] > [id^="staticPanel-"] > div:first-child { grid-template-columns: minmax(0, 1fr); }
+html.tm-modern .sc-sec[data-sc-sec="log"] > [id^="staticPanel-"] > div:first-child,
+html.tm-modern .sc-sec[data-sc-sec="observability"] > [id^="staticPanel-"] > div:first-child,
+html.tm-modern .sc-sec[data-sc-sec="system"] > [id^="staticPanel-"] > div:first-child { grid-template-columns: minmax(0, 1fr); }
 html.tm-modern .sc-sec[data-sc-sec="providers"] .sc-provider-card,
 html.tm-modern .sc-sec[data-sc-sec="providers"] > [id^="staticPanel-"] > div:first-child > div > .rounded-lg { max-width: none; }
 @container sc (min-width: 700px)  { html.tm-modern #staticSettingsContent { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

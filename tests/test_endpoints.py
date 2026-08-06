@@ -415,3 +415,48 @@ def test_log_editor_rejects_bad_values(client):
         accessLog=True, al_status_codes='4xx')).status_code == 400
     assert _static_section(client, '', 'log', 'set', '', dict(LOG_BASE,
         accessLog=True, al_min_duration='fast')).status_code == 400
+
+
+OBS_BASE = {'ping': False, 'prometheus': False, 'prom_ep_labels': True, 'prom_router_labels': False,
+            'prom_svc_labels': True, 'tracing': False, 'trace_service': '', 'trace_sample': '',
+            'trace_endpoint': ''}
+
+
+def test_observability_editor_writes_ping_prometheus_and_tracing(client):
+    res = _static_section(client, '', 'observability', 'set', '', dict(OBS_BASE, **{
+        'ping': True, 'prometheus': True, 'prom_router_labels': True, 'prom_svc_labels': False,
+        'tracing': True, 'trace_service': 'edge', 'trace_sample': '0.5',
+        'trace_endpoint': 'http://collector:4318/v1/traces',
+    }))
+    assert res.status_code == 200, res.data
+    parsed = res.get_json()['parsed']
+    assert parsed['ping'] == {}
+    assert parsed['metrics']['prometheus'] == {'addRoutersLabels': True, 'addServicesLabels': False}
+    assert parsed['tracing'] == {'serviceName': 'edge', 'sampleRate': 0.5,
+                                 'otlp': {'http': {'endpoint': 'http://collector:4318/v1/traces'}}}
+
+
+def test_observability_preserves_other_metrics_backends(client):
+    raw = "metrics:\n  datadog:\n    address: dd:8125\n  prometheus: {}\n"
+    res = _static_section(client, raw, 'observability', 'set', '',
+                          dict(OBS_BASE, prometheus=False))
+    assert res.status_code == 200, res.data
+    parsed = res.get_json()['parsed']
+    assert parsed['metrics'] == {'datadog': {'address': 'dd:8125'}}, \
+        'disabling prometheus must not touch other metrics backends'
+    bad = _static_section(client, '', 'observability', 'set', '',
+                          dict(OBS_BASE, tracing=True, trace_sample='5'))
+    assert bad.status_code == 400
+
+
+def test_system_editor_writes_global_and_core(client):
+    res = _static_section(client, '', 'system', 'set', '', {
+        'check_new_version': False, 'send_usage': True, 'rule_syntax': 'v2'})
+    assert res.status_code == 200, res.data
+    parsed = res.get_json()['parsed']
+    assert parsed['global'] == {'checkNewVersion': False, 'sendAnonymousUsage': True}
+    assert parsed['core'] == {'defaultRuleSyntax': 'v2'}
+    back = _static_section(client, res.get_json()['raw'], 'system', 'set', '', {
+        'check_new_version': True, 'send_usage': False, 'rule_syntax': ''})
+    parsed2 = back.get_json()['parsed']
+    assert 'global' not in parsed2 and 'core' not in parsed2, 'defaults must remove the blocks'
