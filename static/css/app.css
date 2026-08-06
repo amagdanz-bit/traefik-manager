@@ -1093,6 +1093,8 @@ html.tm-modern .sc-count { margin-left: 0; }
 html.tm-modern .sc-sec-rule { flex: 1; height: 1px; background: var(--border); }
 html.tm-modern .sc-sec [id^="staticPanel-"] { display: block !important; }
 html.tm-modern .sc-sec > [id^="staticPanel-"] > div:first-child { padding: 0 !important; }
+html.tm-modern .sc-sec[data-sc-sec="providers"] > [id^="staticPanel-"] > .px-4 { padding: 0 !important; }
+html.tm-modern #staticOtherProvidersList > div { margin-left: 0 !important; margin-right: 0 !important; }
 html.tm-modern .sc-sec .tab-toggle-row { border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 11px 14px; }
 html.tm-modern .sc-sec .tab-toggle-row:hover { border-color: var(--muted); }
 html.tm-modern .sc-sec[data-sc-sec="api"] > [id^="staticPanel-"] > div:first-child,
