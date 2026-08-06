@@ -536,10 +536,13 @@ function closeStaticForm(section) {
 
 function _resetStaticForm(section) {
     if (section === 'entrypoints') {
-        ['sfEpName','sfEpAddr','sfEpRedirect','sfEpTrustedIps','sfEpProxyIps'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
-        ['sfEpHttp3','sfEpFwdInsecure','sfEpProxyInsecure'].forEach(id => { const e = document.getElementById(id); if (e) e.checked = false; });
+        ['sfEpName','sfEpAddr','sfEpRedirect','sfEpTrustedIps','sfEpProxyIps','sfEpMiddlewares','sfEpTlsResolver','sfEpTlsOptions','sfEpReadTimeout','sfEpWriteTimeout','sfEpIdleTimeout'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+        ['sfEpHttp3','sfEpFwdInsecure','sfEpProxyInsecure','sfEpTlsEnabled','sfEpAsDefault'].forEach(id => { const e = document.getElementById(id); if (e) e.checked = false; });
+        const tlsRow = document.getElementById('sfEpTlsRow'); if (tlsRow) tlsRow.style.display = 'none';
     } else if (section === 'resolvers') {
-        ['sfResName','sfResEmail','sfResProvider'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+        ['sfResName','sfResEmail','sfResProvider','sfResCaServer','sfResEabKid','sfResEabHmac','sfResDnsResolvers','sfResDnsDelay'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+        const kt = document.getElementById('sfResKeyType'); if (kt) kt.value = '';
+        const nc = document.getElementById('sfResDnsNoCheck'); if (nc) nc.checked = false;
         const st = document.getElementById('sfResStorage'); if (st) st.value = '/acme.json';
         const ch = document.getElementById('sfResChallenge'); if (ch) ch.value = 'dnsChallenge';
         onStaticChallengeChange();
@@ -571,6 +574,20 @@ function _prefillStaticForm(section, name) {
         if (ppEl) ppEl.value = Array.isArray(pp.trustedIPs) ? pp.trustedIPs.join('\n') : '';
         const fiEl = document.getElementById('sfEpFwdInsecure'); if (fiEl) fiEl.checked = !!fh.insecure;
         const piEl = document.getElementById('sfEpProxyInsecure'); if (piEl) piEl.checked = !!pp.insecure;
+        const mwEl = document.getElementById('sfEpMiddlewares');
+        if (mwEl) mwEl.value = Array.isArray(ep.http?.middlewares) ? ep.http.middlewares.join(', ') : '';
+        const tlsOn = ep.http && ep.http.tls !== undefined && ep.http.tls !== null;
+        const tlsChk = document.getElementById('sfEpTlsEnabled'); if (tlsChk) tlsChk.checked = tlsOn;
+        const tlsRow = document.getElementById('sfEpTlsRow'); if (tlsRow) tlsRow.style.display = tlsOn ? '' : 'none';
+        const tlsObj = (tlsOn && typeof ep.http.tls === 'object') ? ep.http.tls : {};
+        const trEl = document.getElementById('sfEpTlsResolver'); if (trEl) trEl.value = tlsObj.certResolver || '';
+        const toEl = document.getElementById('sfEpTlsOptions'); if (toEl) toEl.value = tlsObj.options || '';
+        const adEl = document.getElementById('sfEpAsDefault'); if (adEl) adEl.checked = !!ep.asDefault;
+        const rts = ep.transport?.respondingTimeouts || {};
+        [['sfEpReadTimeout','readTimeout'],['sfEpWriteTimeout','writeTimeout'],['sfEpIdleTimeout','idleTimeout']].forEach(([id, k]) => {
+            const e = document.getElementById(id);
+            if (e) e.value = rts[k] !== undefined && rts[k] !== null ? String(rts[k]) : '';
+        });
     } else if (section === 'resolvers') {
         const acme = ((d.certificatesResolvers || {})[name] || {}).acme || {};
         document.getElementById('sfResName').value    = name;
@@ -580,6 +597,15 @@ function _prefillStaticForm(section, name) {
         document.getElementById('sfResChallenge').value = ct;
         document.getElementById('sfResProvider').value  = (acme.dnsChallenge || {}).provider || '';
         document.getElementById('sfResHttpEp').value    = (acme.httpChallenge || {}).entryPoint || 'web';
+        document.getElementById('sfResCaServer').value  = acme.caServer || '';
+        const ktEl = document.getElementById('sfResKeyType'); if (ktEl) ktEl.value = acme.keyType || '';
+        document.getElementById('sfResEabKid').value  = (acme.eab || {}).kid || '';
+        document.getElementById('sfResEabHmac').value = (acme.eab || {}).hmacEncoded || '';
+        const dns = acme.dnsChallenge || {};
+        document.getElementById('sfResDnsResolvers').value = Array.isArray(dns.resolvers) ? dns.resolvers.join('\n') : '';
+        const prop = dns.propagation || {};
+        document.getElementById('sfResDnsDelay').value = prop.delayBeforeChecks !== undefined && prop.delayBeforeChecks !== null ? String(prop.delayBeforeChecks) : '';
+        const ncEl = document.getElementById('sfResDnsNoCheck'); if (ncEl) ncEl.checked = !!prop.disableChecks;
         onStaticChallengeChange();
     } else if (section === 'plugins') {
         const p = ((d.experimental || {}).plugins || {})[name] || {};
@@ -602,8 +628,10 @@ function onStaticChallengeChange() {
     const ct   = document.getElementById('sfResChallenge')?.value;
     const dns  = document.getElementById('sfResDnsRow');
     const http = document.getElementById('sfResHttpRow');
+    const adv  = document.getElementById('sfResDnsAdvanced');
     if (dns)  dns.style.display  = ct === 'dnsChallenge'  ? '' : 'none';
     if (http) http.style.display = ct === 'httpChallenge' ? '' : 'none';
+    if (adv)  adv.style.display  = ct === 'dnsChallenge'  ? '' : 'none';
 }
 
 async function _applyStaticSectionChange(body) {
@@ -632,10 +660,25 @@ async function submitStaticSection(section) {
             trusted_ips: document.getElementById('sfEpTrustedIps')?.value || '',
             forwarded_insecure: document.getElementById('sfEpFwdInsecure')?.checked || false,
             proxy_trusted_ips: document.getElementById('sfEpProxyIps')?.value || '',
-            proxy_insecure: document.getElementById('sfEpProxyInsecure')?.checked || false };
+            proxy_insecure: document.getElementById('sfEpProxyInsecure')?.checked || false,
+            middlewares: document.getElementById('sfEpMiddlewares')?.value || '',
+            tls_enabled: document.getElementById('sfEpTlsEnabled')?.checked || false,
+            tls_cert_resolver: document.getElementById('sfEpTlsResolver')?.value.trim() || '',
+            tls_options: document.getElementById('sfEpTlsOptions')?.value.trim() || '',
+            as_default: document.getElementById('sfEpAsDefault')?.checked || false,
+            read_timeout: document.getElementById('sfEpReadTimeout')?.value.trim() || '',
+            write_timeout: document.getElementById('sfEpWriteTimeout')?.value.trim() || '',
+            idle_timeout: document.getElementById('sfEpIdleTimeout')?.value.trim() || '' };
     } else if (section === 'resolvers') {
         name    = document.getElementById('sfResName').value.trim();
-        payload = { email: document.getElementById('sfResEmail').value.trim(), storage: document.getElementById('sfResStorage').value.trim(), challenge_type: document.getElementById('sfResChallenge').value, provider: document.getElementById('sfResProvider').value.trim(), http_entrypoint: document.getElementById('sfResHttpEp').value.trim() };
+        payload = { email: document.getElementById('sfResEmail').value.trim(), storage: document.getElementById('sfResStorage').value.trim(), challenge_type: document.getElementById('sfResChallenge').value, provider: document.getElementById('sfResProvider').value.trim(), http_entrypoint: document.getElementById('sfResHttpEp').value.trim(),
+            ca_server: document.getElementById('sfResCaServer')?.value.trim() || '',
+            key_type: document.getElementById('sfResKeyType')?.value || '',
+            eab_kid: document.getElementById('sfResEabKid')?.value.trim() || '',
+            eab_hmac: document.getElementById('sfResEabHmac')?.value.trim() || '',
+            dns_resolvers: document.getElementById('sfResDnsResolvers')?.value || '',
+            dns_delay: document.getElementById('sfResDnsDelay')?.value.trim() || '',
+            dns_disable_checks: document.getElementById('sfResDnsNoCheck')?.checked || false };
     } else if (section === 'plugins') {
         name    = document.getElementById('sfPluginName').value.trim();
         payload = { moduleName: document.getElementById('sfPluginModule').value.trim(), version: document.getElementById('sfPluginVersion').value.trim() };
@@ -1199,6 +1242,39 @@ function _buildStaticClassicHTML() {
                 <span class="text-xs" style="color:var(--text)">Accept PROXY protocol from everyone</span>
                 <span class="text-xs" style="color:var(--red)">- insecure, testing only</span>
             </div>
+            <div>
+                <label class="text-xs block mb-1" style="color:var(--muted)">Middleware chain <span style="font-weight:400">(optional)</span></label>
+                <input id="sfEpMiddlewares" type="text" class="input-field text-sm font-mono" placeholder="secure-headers@file, rate-limit@file">
+                <p class="text-xs mt-1" style="color:var(--muted)">Prepended to every router on this entrypoint, comma separated, provider suffix included.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="sfEpTlsEnabled" class="rounded" style="accent-color:var(--blue)" onchange="document.getElementById('sfEpTlsRow').style.display = this.checked ? '' : 'none'">
+                <span class="text-xs" style="color:var(--text)">TLS on every router</span>
+                <span class="text-xs" style="color:var(--muted)">- adds <code class="font-mono">http.tls</code> so routers here get TLS by default</span>
+            </div>
+            <div id="sfEpTlsRow" class="grid grid-cols-1 sm:grid-cols-2 gap-3" style="display:none">
+                <div>
+                    <label class="text-xs block mb-1" style="color:var(--muted)">Default cert resolver <span style="font-weight:400">(optional)</span></label>
+                    <input id="sfEpTlsResolver" type="text" class="input-field text-sm" placeholder="cloudflare">
+                </div>
+                <div>
+                    <label class="text-xs block mb-1" style="color:var(--muted)">Default TLS options <span style="font-weight:400">(optional)</span></label>
+                    <input id="sfEpTlsOptions" type="text" class="input-field text-sm" placeholder="modern@file">
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="sfEpAsDefault" class="rounded" style="accent-color:var(--blue)">
+                <span class="text-xs" style="color:var(--text)">Default entrypoint</span>
+                <span class="text-xs" style="color:var(--muted)">- used by routers that list no entrypoints</span>
+            </div>
+            <div>
+                <label class="text-xs block mb-1" style="color:var(--muted)">Responding timeouts <span style="font-weight:400">(optional, e.g. 60s, 1m30s, 0 = unlimited)</span></label>
+                <div class="grid grid-cols-3 gap-3">
+                    <input id="sfEpReadTimeout" type="text" class="input-field text-sm" placeholder="read (60s)">
+                    <input id="sfEpWriteTimeout" type="text" class="input-field text-sm" placeholder="write (0)">
+                    <input id="sfEpIdleTimeout" type="text" class="input-field text-sm" placeholder="idle (180s)">
+                </div>
+            </div>
             <div class="flex gap-2 justify-end pt-1">
                 <button onclick="closeStaticForm('entrypoints')" class="btn-secondary text-xs">Cancel</button>
                 <button onclick="submitStaticSection('entrypoints')" class="btn-primary text-xs" id="sfEpBtn">Add Entrypoint</button>
@@ -1238,6 +1314,45 @@ function _buildStaticClassicHTML() {
                 <div id="sfResHttpRow" style="display:none">
                     <label class="text-xs block mb-1" style="color:var(--muted)">HTTP Entrypoint</label>
                     <input id="sfResHttpEp" type="text" class="input-field text-sm" placeholder="web" value="web">
+                </div>
+                <div>
+                    <label class="text-xs block mb-1" style="color:var(--muted)">CA server <span style="font-weight:400">(optional)</span></label>
+                    <input id="sfResCaServer" type="text" class="input-field text-sm" placeholder="default: Let's Encrypt production">
+                </div>
+                <div>
+                    <label class="text-xs block mb-1" style="color:var(--muted)">Key type <span style="font-weight:400">(optional)</span></label>
+                    <select id="sfResKeyType" class="input-field text-sm">
+                        <option value="">Default (RSA4096)</option>
+                        <option value="EC256">EC256</option>
+                        <option value="EC384">EC384</option>
+                        <option value="RSA2048">RSA2048</option>
+                        <option value="RSA3072">RSA3072</option>
+                        <option value="RSA4096">RSA4096</option>
+                        <option value="RSA8192">RSA8192</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs block mb-1" style="color:var(--muted)">EAB key ID <span style="font-weight:400">(optional)</span></label>
+                    <input id="sfResEabKid" type="text" class="input-field text-sm" placeholder="for CAs requiring external account binding">
+                </div>
+                <div>
+                    <label class="text-xs block mb-1" style="color:var(--muted)">EAB HMAC <span style="font-weight:400">(optional)</span></label>
+                    <input id="sfResEabHmac" type="text" class="input-field text-sm" placeholder="base64-encoded HMAC key">
+                </div>
+            </div>
+            <div id="sfResDnsAdvanced" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs block mb-1" style="color:var(--muted)">DNS check resolvers <span style="font-weight:400">(optional)</span></label>
+                    <textarea id="sfResDnsResolvers" class="input-field text-sm font-mono" rows="2" placeholder="1.1.1.1:53&#10;8.8.8.8:53" style="resize:vertical"></textarea>
+                    <p class="text-xs mt-1" style="color:var(--muted)">Used to verify the DNS record before requesting the certificate, one per line.</p>
+                </div>
+                <div>
+                    <label class="text-xs block mb-1" style="color:var(--muted)">Propagation delay <span style="font-weight:400">(optional)</span></label>
+                    <input id="sfResDnsDelay" type="text" class="input-field text-sm" placeholder="e.g. 30s">
+                    <div class="flex items-center gap-2 mt-2">
+                        <input type="checkbox" id="sfResDnsNoCheck" class="rounded" style="accent-color:var(--blue)">
+                        <span class="text-xs" style="color:var(--text)">Disable propagation checks</span>
+                    </div>
                 </div>
             </div>
             <div class="flex gap-2 justify-end pt-1">

@@ -277,3 +277,92 @@ def test_geoip_aggregate_returns_counts_and_codes(client, monkeypatch):
     assert 'results' not in body, 'aggregate mode should not ship per-IP objects'
     assert body['codes']['10.0.0.5'] == 'US', 'the country filter needs per-IP codes'
     assert body['codes']['8.8.8.5'] == 'DE'
+
+
+def _static_section(client, raw, section, action, name, data, old_name=None):
+    import json
+    res = client.post('/api/static/section',
+                      data=json.dumps({'action': action, 'section': section, 'name': name,
+                                       'old_name': old_name or name, 'data': data, 'current_raw': raw}),
+                      content_type='application/json',
+                      headers={'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'})
+    return res
+
+
+RESOLVER_RAW = """certificatesResolvers:
+  cf:
+    acme:
+      email: a@b.co
+      storage: /acme.json
+      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+      preferredChain: ISRG Root X1
+      eab:
+        kid: k1
+        hmacEncoded: h1
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - 1.1.1.1:53
+"""
+
+
+def test_resolver_edit_preserves_keys_the_form_does_not_manage(client):
+    res = _static_section(client, RESOLVER_RAW, 'resolvers', 'edit', 'cf', {
+        'email': 'new@b.co', 'storage': '/acme.json', 'challenge_type': 'dnsChallenge',
+        'provider': 'cloudflare', 'http_entrypoint': '',
+        'ca_server': 'https://acme-staging-v02.api.letsencrypt.org/directory',
+        'key_type': '', 'eab_kid': 'k1', 'eab_hmac': 'h1',
+        'dns_resolvers': '1.1.1.1:53', 'dns_delay': '', 'dns_disable_checks': False,
+    })
+    assert res.status_code == 200, res.data
+    acme = res.get_json()['parsed']['certificatesResolvers']['cf']['acme']
+    assert acme['email'] == 'new@b.co'
+    assert acme['preferredChain'] == 'ISRG Root X1', 'unmanaged keys must survive a form edit'
+    assert acme['caServer'].endswith('/directory')
+    assert acme['eab'] == {'kid': 'k1', 'hmacEncoded': 'h1'}
+    assert acme['dnsChallenge']['resolvers'] == ['1.1.1.1:53']
+
+
+EP_BASE = {'address': ':443', 'redirect_to': '', 'http3': False, 'underscore_headers': '',
+           'trusted_ips': '', 'forwarded_insecure': False, 'proxy_trusted_ips': '',
+           'proxy_insecure': False, 'middlewares': '', 'tls_enabled': False,
+           'tls_cert_resolver': '', 'tls_options': '', 'as_default': False,
+           'read_timeout': '', 'write_timeout': '', 'idle_timeout': ''}
+
+
+def test_entrypoint_form_writes_trust_tls_and_timeouts(client):
+    raw = "entryPoints:\n  websecure:\n    address: ':443'\n"
+    res = _static_section(client, raw, 'entrypoints', 'edit', 'websecure', dict(EP_BASE, **{
+        'trusted_ips': '173.245.48.0/20\n10.0.0.0/8',
+        'middlewares': 'secure@file, rl@file',
+        'tls_enabled': True, 'tls_cert_resolver': 'cf',
+        'as_default': True, 'read_timeout': '60s', 'idle_timeout': '180',
+    }))
+    assert res.status_code == 200, res.data
+    ep = res.get_json()['parsed']['entryPoints']['websecure']
+    assert ep['forwardedHeaders']['trustedIPs'] == ['173.245.48.0/20', '10.0.0.0/8']
+    assert ep['http']['middlewares'] == ['secure@file', 'rl@file']
+    assert ep['http']['tls']['certResolver'] == 'cf'
+    assert ep['asDefault'] is True
+    assert ep['transport']['respondingTimeouts']['readTimeout'] == '60s'
+    assert ep['transport']['respondingTimeouts']['idleTimeout'] == 180
+
+
+def test_entrypoint_rejects_bad_cidr_and_duration(client):
+    raw = "entryPoints:\n  web:\n    address: ':80'\n"
+    bad_ip = _static_section(client, raw, 'entrypoints', 'edit', 'web',
+                             dict(EP_BASE, trusted_ips='not-an-ip'))
+    assert bad_ip.status_code == 400
+    bad_dur = _static_section(client, raw, 'entrypoints', 'edit', 'web',
+                              dict(EP_BASE, read_timeout='banana'))
+    assert bad_dur.status_code == 400
+
+
+def test_entrypoint_edit_preserves_unmanaged_keys(client):
+    raw = ("entryPoints:\n  web:\n    address: ':80'\n"
+           "    reusePort: true\n    http2:\n      maxConcurrentStreams: 250\n")
+    res = _static_section(client, raw, 'entrypoints', 'edit', 'web', dict(EP_BASE, address=':80'))
+    assert res.status_code == 200, res.data
+    ep = res.get_json()['parsed']['entryPoints']['web']
+    assert ep['reusePort'] is True
+    assert ep['http2']['maxConcurrentStreams'] == 250

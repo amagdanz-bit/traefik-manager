@@ -1590,6 +1590,26 @@ def api_static_section_update():
                     http_blk['underscoreHeadersStrategy'] = uhs
                 else:
                     http_blk.pop('underscoreHeadersStrategy', None)
+                mws = [m for m in re.split(r'[\s,]+', str(payload.get('middlewares', ''))) if m]
+                if mws:
+                    http_blk['middlewares'] = mws
+                else:
+                    http_blk.pop('middlewares', None)
+                if payload.get('tls_enabled'):
+                    tls_blk = http_blk.get('tls') if isinstance(http_blk.get('tls'), dict) else {}
+                    cr = str(payload.get('tls_cert_resolver', '')).strip()
+                    if cr:
+                        tls_blk['certResolver'] = cr
+                    else:
+                        tls_blk.pop('certResolver', None)
+                    topt = str(payload.get('tls_options', '')).strip()
+                    if topt:
+                        tls_blk['options'] = topt
+                    else:
+                        tls_blk.pop('options', None)
+                    http_blk['tls'] = tls_blk
+                else:
+                    http_blk.pop('tls', None)
                 if http_blk:
                     ep['http'] = http_blk
                 else:
@@ -1598,6 +1618,28 @@ def api_static_section_update():
                     ep['http3'] = {}
                 else:
                     ep.pop('http3', None)
+                if payload.get('as_default'):
+                    ep['asDefault'] = True
+                else:
+                    ep.pop('asDefault', None)
+                tr  = ep.get('transport') if isinstance(ep.get('transport'), dict) else {}
+                rts = tr.get('respondingTimeouts') if isinstance(tr.get('respondingTimeouts'), dict) else {}
+                for yaml_key, pay_key in (('readTimeout', 'read_timeout'), ('writeTimeout', 'write_timeout'), ('idleTimeout', 'idle_timeout')):
+                    v = str(payload.get(pay_key, '')).strip()
+                    if v:
+                        if not _is_valid_duration(v):
+                            return jsonify({'error': f'Invalid duration for {yaml_key}: {v!r} - use forms like 30, 30s, 1m30s'}), 400
+                        rts[yaml_key] = int(v) if v.isdigit() else v
+                    else:
+                        rts.pop(yaml_key, None)
+                if rts:
+                    tr['respondingTimeouts'] = rts
+                else:
+                    tr.pop('respondingTimeouts', None)
+                if tr:
+                    ep['transport'] = tr
+                else:
+                    ep.pop('transport', None)
                 fwd_ips = _parse_cidr_input(payload.get('trusted_ips'))
                 pp_ips  = _parse_cidr_input(payload.get('proxy_trusted_ips'))
                 bad = [c for c in fwd_ips + pp_ips if not _is_valid_cidr(c)]
@@ -1636,16 +1678,72 @@ def api_static_section_update():
                 resolvers.pop(name, None)
             else:
                 if action == 'edit' and old_name != name:
-                    resolvers.pop(old_name, None)
-                ct   = payload.get('challenge_type', 'dnsChallenge')
-                acme = {'email': payload.get('email', ''), 'storage': payload.get('storage', '/acme.json')}
-                if ct == 'dnsChallenge':
-                    acme['dnsChallenge'] = {'provider': payload.get('provider', '')}
-                elif ct == 'httpChallenge':
-                    acme['httpChallenge'] = {'entryPoint': payload.get('http_entrypoint', 'web')}
+                    existing_res = resolvers.pop(old_name, None)
                 else:
-                    acme['tlsChallenge'] = {}
-                resolvers[name] = {'acme': acme}
+                    existing_res = resolvers.get(name)
+                if not isinstance(existing_res, dict):
+                    existing_res = {}
+                acme = existing_res.get('acme') if isinstance(existing_res.get('acme'), dict) else {}
+                acme['email']   = payload.get('email', '')
+                acme['storage'] = payload.get('storage', '/acme.json')
+                ct = payload.get('challenge_type', 'dnsChallenge')
+                if ct == 'dnsChallenge':
+                    dns = acme.get('dnsChallenge') if isinstance(acme.get('dnsChallenge'), dict) else {}
+                    dns['provider'] = payload.get('provider', '')
+                    dns_res = [r for r in re.split(r'[\s,]+', str(payload.get('dns_resolvers', ''))) if r]
+                    if dns_res:
+                        dns['resolvers'] = dns_res
+                    else:
+                        dns.pop('resolvers', None)
+                    prop  = dns.get('propagation') if isinstance(dns.get('propagation'), dict) else {}
+                    delay = str(payload.get('dns_delay', '')).strip()
+                    if delay:
+                        if not _is_valid_duration(delay):
+                            return jsonify({'error': f'Invalid propagation delay: {delay!r} - use forms like 30, 30s, 2m'}), 400
+                        prop['delayBeforeChecks'] = int(delay) if delay.isdigit() else delay
+                    else:
+                        prop.pop('delayBeforeChecks', None)
+                    if payload.get('dns_disable_checks'):
+                        prop['disableChecks'] = True
+                    else:
+                        prop.pop('disableChecks', None)
+                    if prop:
+                        dns['propagation'] = prop
+                    else:
+                        dns.pop('propagation', None)
+                    acme['dnsChallenge'] = dns
+                    acme.pop('httpChallenge', None)
+                    acme.pop('tlsChallenge', None)
+                elif ct == 'httpChallenge':
+                    http_ch = acme.get('httpChallenge') if isinstance(acme.get('httpChallenge'), dict) else {}
+                    http_ch['entryPoint'] = payload.get('http_entrypoint', 'web')
+                    acme['httpChallenge'] = http_ch
+                    acme.pop('dnsChallenge', None)
+                    acme.pop('tlsChallenge', None)
+                else:
+                    acme.setdefault('tlsChallenge', {})
+                    acme.pop('dnsChallenge', None)
+                    acme.pop('httpChallenge', None)
+                ca = str(payload.get('ca_server', '')).strip()
+                if ca:
+                    acme['caServer'] = ca
+                else:
+                    acme.pop('caServer', None)
+                kt = str(payload.get('key_type', '')).strip()
+                if kt:
+                    acme['keyType'] = kt
+                else:
+                    acme.pop('keyType', None)
+                eab_kid  = str(payload.get('eab_kid', '')).strip()
+                eab_hmac = str(payload.get('eab_hmac', '')).strip()
+                if eab_kid and eab_hmac:
+                    acme['eab'] = {'kid': eab_kid, 'hmacEncoded': eab_hmac}
+                elif eab_kid or eab_hmac:
+                    return jsonify({'error': 'EAB needs both the key ID and the HMAC'}), 400
+                else:
+                    acme.pop('eab', None)
+                existing_res['acme'] = acme
+                resolvers[name] = existing_res
         elif section == 'plugins':
             plugins = config.setdefault('experimental', {}).setdefault('plugins', {})
             if action == 'remove':
@@ -1761,6 +1859,14 @@ _CLOUDFLARE_IPS_V6 = [
 _PRIVATE_IP_RANGES = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', 'fc00::/7']
 
 
+
+
+_DURATION_RE = re.compile(r'^(\d+(\.\d+)?(ns|us|µs|ms|s|m|h))+$')
+
+
+def _is_valid_duration(v: str) -> bool:
+    v = str(v).strip()
+    return bool(v) and (v.isdigit() or bool(_DURATION_RE.match(v)))
 
 
 def _is_valid_cidr(cidr: str) -> bool:
