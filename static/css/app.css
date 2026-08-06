@@ -1112,6 +1112,7 @@ html.tm-modern .sc-sec[data-sc-sec="providers"] .sc-provider-card,
 html.tm-modern .sc-sec[data-sc-sec="providers"] > [id^="staticPanel-"] > div:first-child > div > .rounded-lg { max-width: 640px; }
 html.tm-modern #tab-static { container-type: inline-size; container-name: sc; }
 html.tm-modern #staticSettingsContent { display: grid; gap: 22px 20px; align-items: start; grid-template-columns: 1fr; }
+html.tm-modern #staticSettingsContent > .text-center { grid-column: 1 / -1; justify-self: center; width: 100%; }
 html.tm-modern .sc-sec { margin-bottom: 0; min-width: 0; }
 html.tm-modern .sc-sec .tm-card-grid,
 html.tm-modern .sc-sec[data-sc-sec="api"] > [id^="staticPanel-"] > div:first-child,
