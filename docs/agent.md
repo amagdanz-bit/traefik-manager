@@ -30,8 +30,8 @@ When a remote agent is active:
 - **Backups** (Settings - Backups) - Shows the agent's local `.bak` backup files. The agent creates a `.bak` automatically before every config write; you can also create a manual backup at any time. In the Git sub-tab you can enable **Use Host Repository** to have the Host push this agent's config to the Host's git repository on a dedicated branch (no agent-side git config needed), or leave the agent autonomous via its `GIT_BACKUP_*` env vars. The Static Config backup sub-tab is not shown for agents.
 - **Logs** - The Logs tab shows the agent's access log when `ACCESS_LOG_PATH` is set on the agent. When installed via the installer script alongside Traefik, this is set automatically.
 - **Certificates** - The Certificates tab shows certs from the agent's `acme.json` when `ACME_JSON_PATH` is set. When installed via the installer script alongside Traefik, this is set automatically.
-- **CrowdSec** - If the agent has `CROWDSEC_LAPI_URL` and `CROWDSEC_API_KEY` configured, the CrowdSec tab shows that server's decisions and alerts.
-- **Settings sidebar** - When an agent is active, only agent-relevant Settings panels are shown: Backups, Route Monitoring tab toggles, Static Config (if configured), System Monitoring tab toggles (Tab Visibility and File Paths only), and Templates. Authentication, Connection, Notifications, and the CrowdSec credentials sub-tab are hidden - they only apply to the Host. CrowdSec on the agent is configured via `CROWDSEC_LAPI_URL` and `CROWDSEC_API_KEY` env vars on the agent itself.
+- **CrowdSec** - If the agent has `CROWDSEC_LAPI_URL` plus a bouncer key, machine credentials, or both, the CrowdSec tab shows that server's attack surface: who is hitting it, from which networks, which scenarios fired, what they were going after, and the bans in force. The Host does not need any access to that CrowdSec instance - every call is proxied through the agent. See [CrowdSec on an agent](#crowdsec-on-an-agent).
+- **Settings sidebar** - When an agent is active, only agent-relevant Settings panels are shown: Backups, Route Monitoring tab toggles, Static Config (if configured), System Monitoring tab toggles (Tab Visibility and File Paths only), and Templates. Authentication, Connection, Notifications, and the CrowdSec credentials sub-tab are hidden - they only apply to the Host. CrowdSec on an agent is configured with env vars on the agent itself, not from the Host UI.
 
 ## Install via installer script
 
@@ -75,6 +75,11 @@ services:
       - RESTART_METHOD=proxy
       - TRAEFIK_CONTAINER=traefik
       - DOCKER_HOST=tcp://socket-proxy:2375
+      # Optional - enable the CrowdSec tab for this server:
+      - CROWDSEC_LAPI_URL=http://crowdsec:8080
+      - CROWDSEC_API_KEY=your-bouncer-api-key
+      - CROWDSEC_MACHINE_ID=traefik-manager
+      - CROWDSEC_MACHINE_PASSWORD=your-machine-password
     volumes:
       - /host/config:/app/config
       - /etc/traefik/traefik.yml:/etc/traefik/traefik.yml
@@ -103,6 +108,53 @@ Two additions to the agent service enable the **Static Config** tab for that ser
 - To restart Traefik after a save, set `RESTART_METHOD` on the agent. `proxy` needs `TRAEFIK_CONTAINER` plus `DOCKER_HOST` pointing at a docker socket proxy (e.g. `tcp://socket-proxy:2375`) with `CONTAINERS=1` and `POST=1`, reachable from the agent's network.
 - Agents get the full section editing experience - entrypoints, cert resolvers, plugins, providers, API/log panels, trusted-IPs helper and the raw YAML editor - identical to the Host.
 - Setting `STATIC_CONFIG_PATH` also enables plugin management in the agent's **Plugins** tab.
+
+## CrowdSec on an agent
+
+Each agent talks to its own CrowdSec LAPI. The Host never connects to it - every request is proxied through the agent - so a CrowdSec that only listens on a private network is fine, and each server shows its own attacks under its own entry in the server switcher.
+
+Point the agent at the LAPI and give it credentials:
+
+```yaml
+services:
+  traefik-manager-agent:
+    environment:
+      - CROWDSEC_LAPI_URL=http://crowdsec:8080
+      - CROWDSEC_API_KEY=your-bouncer-api-key
+      - CROWDSEC_MACHINE_ID=traefik-manager
+      - CROWDSEC_MACHINE_PASSWORD=your-machine-password
+    networks:
+      - traefik-net
+```
+
+### Generating the credentials
+
+Run both on the machine hosting CrowdSec. In Docker, prefix with `docker exec <crowdsec-container>`.
+
+```bash
+cscli bouncers add traefik-manager
+cscli machines add traefik-manager --auto
+cat /etc/crowdsec/local_api_credentials.yaml
+```
+
+The bouncer key is printed once - copy it immediately into `CROWDSEC_API_KEY`. The machine's `login` and `password` come from that credentials file and go into `CROWDSEC_MACHINE_ID` and `CROWDSEC_MACHINE_PASSWORD`. If the machine shows as unvalidated, run `cscli machines validate traefik-manager`.
+
+### What each credential gets you
+
+The two are complementary, not tiered, because CrowdSec accepts each on different endpoints. You can set either one alone and the tab will say plainly what it cannot see:
+
+| Configured | What the CrowdSec tab shows |
+|---|---|
+| Bouncer key only | Bans in force, and the decisions view. No alerts, so no attacking sources, networks, scenarios, paths or tooling |
+| Machine credentials only | The full attack surface from alerts, but no ban state - sources are reported as *unknown* rather than guessed as unbanned |
+| Both | Everything, including unbanning from the UI and adding manual decisions |
+
+### Notes
+
+- The tab is enabled per server. With the agent active, toggle **CrowdSec** under **Settings - Interface**.
+- The agent must be able to reach the LAPI. If CrowdSec runs as a systemd service on the agent's host rather than in Docker, see the `host.docker.internal` and firewall notes under [CrowdSec environment variables](#crowdsec).
+- If the agent cannot reach the LAPI at all, the tab says so rather than reporting zero decisions as fact.
+- Escape a `$` in the machine password as `$$` in `docker-compose.yml`.
 
 ## Install via binary
 
