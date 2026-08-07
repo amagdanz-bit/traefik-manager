@@ -22,10 +22,57 @@ function setLogLines(n) {
     refreshLogs();
 }
 
-async function refreshLogs() {
+let _lgAutoTimer = null;
+
+function _lgAutoOn() { return typeof tmPref === 'function' && tmPref('logsAutoRefresh') === true; }
+
+function _lgAutoInterval() { return _currentLogLines >= 500 ? 30000 : 10000; }
+
+function _lgTabLive() {
+    const t = document.getElementById('tab-logs');
+    return !!(t && t.classList.contains('active')) && !document.hidden;
+}
+
+function _lgAutoPaint() {
+    const btn = document.getElementById('logAutoBtn');
+    if (!btn) return;
+    const on = _lgAutoOn();
+    btn.classList.toggle('active-http', on);
+    btn.innerHTML = '<i class="ph-bold ' + (on ? 'ph-pause' : 'ph-play') + '"></i>';
+    btn.title = on ? 'Auto refresh every ' + (_lgAutoInterval() / 1000) + 's - click to pause' : 'Auto refresh off - click to start';
+}
+
+function _lgAutoSync() {
+    clearInterval(_lgAutoTimer);
+    _lgAutoTimer = null;
+    _lgAutoPaint();
+    if (!_lgAutoOn() || !_lgTabLive()) return;
+    _lgAutoTimer = setInterval(() => {
+        if (!_lgTabLive()) { _lgAutoSync(); return; }
+        const el = document.activeElement;
+        if (el && (el.id === 'logSearch' || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
+        refreshLogs(true);
+    }, _lgAutoInterval());
+}
+
+function toggleLogAutoRefresh() {
+    if (typeof tmSetPref === 'function') tmSetPref('logsAutoRefresh', !_lgAutoOn());
+    _lgAutoSync();
+}
+
+function _lgScrollEl() {
+    const c = document.getElementById('logsContent');
+    if (!c) return null;
+    return [...c.querySelectorAll('div')].find(d => d.scrollHeight > d.clientHeight + 4 && getComputedStyle(d).overflowY === 'auto') || null;
+}
+
+document.addEventListener('visibilitychange', () => { if (typeof _lgAutoSync === 'function') _lgAutoSync(); });
+
+async function refreshLogs(silent) {
     const container = document.getElementById('logsContent');
     const stats = document.getElementById('logStats');
-    container.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i><p>Loading logs...</p></div>`;
+    const keepScroll = silent ? (_lgScrollEl() || {}).scrollTop || 0 : 0;
+    if (!silent) container.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i><p>Loading logs...</p></div>`;
     try {
         const res = await agentFetch(`/api/traefik/logs?lines=${_currentLogLines}`).then(r => r.json());
         if (res.error) {
@@ -54,6 +101,11 @@ async function refreshLogs() {
         }
         _lgBind();
         renderLogs();
+        _lgAutoSync();
+        if (keepScroll) {
+            const sc = _lgScrollEl();
+            if (sc) sc.scrollTop = keepScroll;
+        }
     } catch (err) {
         if (stats) stats.style.display = 'none';
         _lgLoadError = (err && err.message) ? String(err.message) : 'unknown error';
@@ -196,6 +248,12 @@ function _lgHeroMs(v) {
     return { n: (v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '') || '0'), u: 'ms' };
 }
 
+function _lgSpanOf(entries) {
+    const t = entries.map(_lgTime).filter(v => v != null);
+    if (t.length < 2) return null;
+    return Math.max(...t) - Math.min(...t);
+}
+
 function _lgSpanTxt(ms) {
     const s = Math.max(0, Math.round(ms / 1000));
     if (s < 60) return s + 's';
@@ -238,12 +296,15 @@ function _lgStatusClass(s) {
 }
 
 function _lgStatusMatch(s, spec) {
+    if (spec === 'errors') return s >= 400;
     if (/^[1-5]xx$/.test(spec)) return _lgStatusClass(s) === spec;
     if (spec === 'other') return _lgStatusClass(s) === 'other';
     return String(s) === spec;
 }
 
 function _lgStatusName(s) { return s ? (HTTP_STATUS[s] || '') : 'tunnel'; }
+
+function _lgHeldOpen(e) { return e.status === 101 || e.status === 0; }
 
 const LG_IP_GLYPH = {
     'public':     ['ph-bold ph-globe', 'public'],
@@ -270,12 +331,18 @@ function _lgFacetHit(k, v, e) {
         case 'service':  return e.service === v;
         case 'router':   return e.router === v;
         case 'provider': return _lgProvider(e.service || e.router) === v;
-        case 'dur':      return _lgDurBand(e.durMs) === v;
+        case 'dur':      if (e.durMs == null) return false;
+                         return v === 'held' ? _lgHeldOpen(e) : (!_lgHeldOpen(e) && _lgDurBand(e.durMs) === v);
     }
     return true;
 }
 
 function _lgActiveFacets() { return Object.keys(_logFacet).filter(k => _logFacet[k]); }
+
+function _lgSelected() {
+    const box = document.getElementById('logSearch');
+    return !!(_lgActiveFacets().length || _logCountryFilter || (box && box.value));
+}
 
 function _lgMatch(e) {
     const keys = _lgActiveFacets();
@@ -284,13 +351,18 @@ function _lgMatch(e) {
     return keys.every(k => _lgFacetHit(k, _logFacet[k], e));
 }
 
-function _lgHeal(entries) {
-    _lgActiveFacets().forEach(k => {
-        if (!entries.some(e => _lgFacetHit(k, _logFacet[k], e))) _logFacet[k] = '';
-    });
-}
+function _lgErrStatus(e4, e5) { return (e4 && e5) ? 'errors' : (e5 ? '5xx' : '4xx'); }
 
 function _lgClearFacets() { Object.keys(_logFacet).forEach(k => { _logFacet[k] = ''; }); }
+
+function clearLogFilters() {
+    _lgClearFacets();
+    _logCountryFilter = '';
+    const box = document.getElementById('logSearch');
+    if (box) box.value = '';
+    renderLogs();
+}
+
 
 function _lgGo(spec) {
     const p = {};
@@ -318,13 +390,11 @@ function _lgGo(spec) {
         if (LG_LINE_STEPS.indexOf(n) >= 0 && n !== _currentLogLines) { setLogLines(n); return; }
         return;
     }
-    let touched = false;
-    Object.keys(_logFacet).forEach(k => {
-        if (!(k in p)) return;
-        _logFacet[k] = (_logFacet[k] === p[k]) ? '' : p[k];
-        touched = true;
-    });
-    if (touched) renderLogs();
+    const keys = Object.keys(p).filter(k => k in _logFacet);
+    if (!keys.length) return;
+    const same = keys.every(k => _logFacet[k] === p[k]);
+    keys.forEach(k => { _logFacet[k] = same ? '' : p[k]; });
+    renderLogs();
 }
 
 function _lgBind() {
@@ -370,10 +440,12 @@ function filterLogs() {
 }
 
 function _lgFlag(f) {
-    const tag = f.tag === 'span';
+    const dead = !f.go;
+    const tag = f.tag === 'span' || dead;
     return (tag ? '<span' : '<button type="button"')
-        + ' class="sig-flag ' + f.cls + (f.extra ? ' ' + f.extra : '') + '"'
-        + ' data-lg="' + _esc(f.go || '') + '" title="' + _esc(f.tip || (f.n + ' ' + f.label)) + '">'
+        + ' class="sig-flag ' + f.cls + (f.extra ? ' ' + f.extra : '') + (dead ? ' lg-static' : '') + '"'
+        + (dead ? '' : ' data-lg="' + _esc(f.go) + '"')
+        + ' title="' + _esc(f.tip || (f.n + ' ' + f.label)) + '">'
         + '<i class="' + f.ic + '"></i>'
         + (f.n === '' ? '' : '<b>' + _sdNum(f.n) + '</b>')
         + (f.label && f.words !== false ? '<span class="sig-fl">' + _esc(f.label) + '</span>' : '')
@@ -381,8 +453,9 @@ function _lgFlag(f) {
 }
 
 function _lgProv(p) {
-    return '<button type="button" class="sig-prov' + (p.cls ? ' ' + p.cls : '') + '"'
-        + ' data-lg="' + _esc(p.go || '') + '" title="' + _esc(p.tip) + '">'
+    const dead = p.n === 0 || !p.go;
+    return '<button type="button" class="sig-prov' + (p.cls ? ' ' + p.cls : '') + (dead ? ' lg-static' : '') + '"'
+        + ' data-lg="' + _esc(dead ? '' : p.go) + '" title="' + _esc(p.tip) + '">'
         + '<i class="' + p.ic + '"></i>' + _esc(p.label)
         + (p.n === '' ? '' : '<b>' + _sdNum(p.n) + '</b>') + '</button>';
 }
@@ -502,7 +575,7 @@ function _lgRankBody(list, opts) {
             cls: o.e5 ? 'd-bad' : 'd-warn',
             ic: o.e5 ? 'ph-fill ph-x-circle' : 'ph-fill ph-warning',
             n: o.err, label: '', words: false,
-            go: _lgSpec(Object.assign({}, opts.facet(o), { status: o.e5 ? '5xx' : '4xx' })),
+            go: _lgSpec(Object.assign({}, opts.facet(o), { status: _lgErrStatus(o.e4, o.e5) })),
             tip: o.err + ' of ' + o.n + ' requests failed'
                 + (o.worst ? ', most often ' + o.worst + ' ' + _lgStatusName(o.worst) : '')
                 + '. Click to filter to just those.'
@@ -546,6 +619,21 @@ function _lgSubOffender(list, label) {
     return s;
 }
 
+function _lgFailFlag(bad, opts) {
+    const anyE5 = bad.some(o => o.e5);
+    const worst = bad[0];
+    const name = opts.name ? opts.name(worst) : worst.key;
+    return _lgFlag({
+        cls: anyE5 ? 'd-bad' : 'd-warn',
+        ic: anyE5 ? 'ph-fill ph-x-circle' : 'ph-fill ph-warning',
+        n: bad.length, label: opts.label,
+        go: _lgSpec(Object.assign({}, opts.facet(worst), { status: _lgErrStatus(worst.e4, worst.e5) })),
+        tip: bad.length + ' ' + (bad.length === 1 ? opts.one : opts.many) + ' ' + opts.verb
+            + '. Click to filter to the ' + _sdNum(worst.err) + ' failing '
+            + (worst.err === 1 ? 'request' : 'requests') + ' on ' + name + '.'
+    });
+}
+
 function renderLogStats(visible, meta) {
     const el = document.getElementById('logStats');
     if (!el) return;
@@ -555,13 +643,12 @@ function renderLogStats(visible, meta) {
     const rows = visible.map(o => o.e).filter(Boolean);
     const total = rows.length;
 
-    const times = rows.map(_lgTime).filter(t => t != null);
-    const tMin = times.length ? Math.min(...times) : null;
-    const tMax = times.length ? Math.max(...times) : null;
-    const spanMs = (tMin != null && tMax != null) ? tMax - tMin : null;
-    const rpm = (spanMs && spanMs > 1000) ? Math.round(total / (spanMs / 60000)) : null;
-
     const scoped = meta.q || _logCountryFilter || _lgActiveFacets().length;
+    const winRows = (meta.all && meta.all.length) ? meta.all : rows;
+    const spanMs = _lgSpanOf(winRows);
+    const rpm = (spanMs && spanMs > 1000) ? Math.round(winRows.length / (spanMs / 60000)) : null;
+    const selSpan = scoped ? _lgSpanOf(rows) : null;
+
     const nextLines = LG_LINE_STEPS.find(n => n > _currentLogLines) || null;
     const scopeTip = 'These numbers summarise the last ' + _sdNum(meta.fetched)
         + ' lines of the access log, not all traffic. The oldest line here is the edge of the fetched window, '
@@ -573,32 +660,44 @@ function renderLogStats(visible, meta) {
     facts.push('<span class="sig-key-item lg-static" title="' + _esc(scopeTip) + '"><i class="ph-bold ph-rows"></i>last<b>'
         + _sdNum(meta.fetched) + '</b>lines</span>');
     if (spanMs != null && spanMs > 0) {
-        facts.push('<span class="sig-key-item lg-static" title="Oldest line to newest line in this window. Earlier requests are not in the fetched tail."><i class="ph-bold ph-clock-countdown"></i>span<b>'
+        facts.push('<span class="sig-key-item lg-static" title="Oldest line to newest line in the fetched window. Filters do not change it, and earlier requests are not in the fetched tail."><i class="ph-bold ph-clock-countdown"></i>span<b>'
             + _lgSpanTxt(spanMs) + '</b></span>');
     }
     if (rpm != null) {
-        facts.push('<span class="sig-key-item lg-static" title="Average request rate across this window."><i class="ph-bold ph-broadcast"></i><b>'
+        facts.push('<span class="sig-key-item lg-static" title="Average request rate across the whole fetched window, not across the current selection."><i class="ph-bold ph-broadcast"></i><b>'
             + _sdNum(rpm) + '</b>req/min</span>');
     }
     facts.push('<span class="sig-key-item lg-static" title="Lines that no access log format matched. They are listed below but excluded from every number here."><i class="ph-bold ph-scroll"></i><b>'
         + _sdNum(meta.unparsed) + '</b>unparsed</span>');
 
+    const dead = meta.facetDead || {};
     const chips = [];
     _lgActiveFacets().forEach(k => {
         const v = _logFacet[k];
-        chips.push('<button type="button" class="sig-key-item sig-key-on" data-lg="' + _esc(_lgSpec({ [k]: v }))
-            + '" title="' + _esc('Showing only ' + k + ' ' + v + '. Click to clear this filter.') + '">'
+        chips.push('<button type="button" class="sig-key-item ' + (dead[k] ? 'sig-key-empty' : 'sig-key-on')
+            + '" data-lg="' + _esc(_lgSpec({ [k]: v }))
+            + '" title="' + _esc(dead[k]
+                ? 'Still filtering on ' + k + ' ' + v + ', but nothing in the current search matches it. Widen the search to bring it back, or click to clear this filter.'
+                : 'Showing only ' + k + ' ' + v + '. Click to clear this filter.') + '">'
             + '<i class="ph-bold ph-funnel"></i>' + _esc(k) + '<b>' + _esc(_sdShort(v)) + '</b></button>');
     });
-    if (chips.length) {
+    if (selSpan != null && selSpan > 0) {
+        chips.push('<span class="sig-key-item lg-static" title="Oldest to newest line among the requests you have selected. The window span above is unaffected."><i class="ph-bold ph-clock-countdown"></i>selection spans<b>'
+            + _lgSpanTxt(selSpan) + '</b></span>');
+    }
+    if (_lgActiveFacets().length) {
         chips.push('<button type="button" class="sig-key-item" data-lg="clear=" title="Clear every card filter"><i class="ph-bold ph-x"></i>clear</button>');
     }
 
     const scopeTxt = scoped ? _sdNum(total) + ' of the last ' + _sdNum(meta.fetched) + ' lines' : 'sample, not all traffic';
+    const scopeEl = nextLines
+        ? '<button type="button" class="sig-key-scope" data-lg="lines=' + nextLines + '" title="' + _esc(scopeTip) + '">'
+            + '<i class="ph-bold ph-funnel"></i>' + _esc(scopeTxt) + '</button>'
+        : '<span class="sig-key-scope lg-static" title="' + _esc(scopeTip) + '">'
+            + '<i class="ph-bold ph-funnel"></i>' + _esc(scopeTxt) + '</span>';
     const keyHtml = '<div class="sig-key" id="logKey"><span class="sig-key-lab">window</span>' + facts.join('')
         + (chips.length ? '<span class="sig-key-lab">filters</span>' + chips.join('') : '')
-        + '<span class="sig-key-scope" data-lg="' + (nextLines ? 'lines=' + nextLines : '')
-        + '" title="' + _esc(scopeTip) + '"><i class="ph-bold ph-funnel"></i>' + _esc(scopeTxt) + '</span></div>';
+        + scopeEl + '</div>';
 
     if (!total) {
         el.innerHTML = '<div class="sig-wrap' + compact + '" id="logStatsPanel">'
@@ -617,7 +716,9 @@ function renderLogStats(visible, meta) {
     const s4 = bucket['4xx'], s5 = bucket['5xx'];
     const codeRank = [...codes.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]);
 
-    const timed = rows.filter(e => e.durMs != null);
+    const held = rows.filter(e => e.durMs != null && _lgHeldOpen(e));
+    const heldMax = held.length ? held.reduce((a, b) => (b.durMs > a.durMs ? b : a), held[0]) : null;
+    const timed = rows.filter(e => e.durMs != null && !_lgHeldOpen(e));
     const durs = timed.map(e => e.durMs).sort((a, b) => a - b);
     const pick = q => durs.length ? durs[Math.min(durs.length - 1, Math.floor(durs.length * q))] : null;
     const p50 = pick(0.5), p95 = pick(0.95);
@@ -628,6 +729,7 @@ function renderLogStats(visible, meta) {
     const med  = durs.filter(d => d >= 100 && d < 500).length;
     const slow = durs.filter(d => d >= 500).length;
     const vslow = durs.filter(d => d >= 2000).length;
+    const untimed = total - timed.length - held.length;
     const retries = rows.reduce((a, e) => a + (e.retries || 0), 0);
 
     const isJson = meta.format === 'json';
@@ -635,7 +737,8 @@ function renderLogStats(visible, meta) {
     const cards = [];
 
     cards.push(_lgStatusCard(rows, bucket, codeRank, total));
-    cards.push(_lgLatencyCard(rows, timed, { p50, p95, maxDur, avgDur, maxRow, fast, med, slow, vslow, retries, total }));
+    cards.push(_lgLatencyCard(rows, timed, { p50, p95, maxDur, avgDur, maxRow, fast, med, slow, vslow,
+        retries, total, untimed, held: held.length, heldMax }));
     cards.push(_lgMethodsCard(rows, total));
     cards.push(_lgDomainsCard(rows, total, isJson));
     cards.push(_lgPathsCard(rows, total));
@@ -769,8 +872,8 @@ function _lgStatusCard(rows, bucket, codeRank, total) {
     return _lgCard({
         key: 'status', accent: 'var(--blue)', ic: 'ph-fill ph-pulse', title: 'Status Codes',
         health: s5 ? 'down' : (s4 ? 'warn' : ''),
-        go: _lgSpec({ status: s5 ? '5xx' : '4xx' }), goLabel: 'Errors',
-        goTip: 'Filter the log list to failing requests',
+        go: (s5 || s4) ? _lgSpec({ status: _lgErrStatus(s4, s5) }) : '', goLabel: 'Errors',
+        goTip: 'Filter the log list to the ' + _sdNum(s4 + s5) + ' failing requests',
         total: _sdNum(total), flags: flags.join(''), sub: sub,
         body: _lgStrip(groups, aria),
         foot: provs.map(p => _lgProv({
@@ -782,16 +885,26 @@ function _lgStatusCard(rows, bucket, codeRank, total) {
 }
 
 function _lgLatencyCard(rows, timed, d) {
-    const blind = !timed.length;
-    if (blind) {
+    const heldWord = d.held === 1 ? 'upgrade' : 'upgrades';
+    const heldTip = d.held
+        ? _sdNum(d.held) + ' protocol ' + heldWord + ', a websocket or a CONNECT tunnel, the longest held open for '
+            + _lgSpanTxt(d.heldMax.durMs) + '. Traefik logs the whole connection lifetime as the duration, '
+            + 'so these are left out of the average and the bands here. Click to list them.'
+        : '';
+    if (!timed.length) {
         return _lgCard({
             key: 'latency', cls: 'lg-blind', accent: 'var(--teal)', ic: 'ph-fill ph-timer', title: 'Response Time',
-            total: '-', flags: _lgOk('not logged', 'ph-bold ph-info'),
-            sub: _lgSub('this access log format carries no duration'),
-            body: '<p class="lg-note">Traefik\'s generic <code>common</code> writer stops after the user agent, so no request duration reaches the log. Set <code>accessLog.format: json</code> in the static config for timings.</p>',
-            go: 'cfg=accesslog', goLabel: 'Static Config',
-            goTip: 'Open the Static Config tab',
-            foot: _lgProv({ ic: 'ph-bold ph-sliders-horizontal', label: 'open static config', n: '', go: 'cfg=accesslog', tip: 'Open the Static Config tab to change accessLog.format' })
+            total: '-', flags: _lgOk(d.held ? 'upgrades only' : 'not logged', 'ph-bold ph-info'),
+            sub: _lgSub(d.held ? 'nothing here is a completed response' : 'this access log format carries no duration'),
+            body: '<p class="lg-note">' + (d.held
+                ? 'Every duration in this window belongs to a connection Traefik held open rather than to a response it completed, so there is nothing to average. ' + _esc(heldTip)
+                : 'Traefik\'s generic <code>common</code> writer stops after the user agent, so no request duration reaches the log. Set <code>accessLog.format: json</code> in the static config for timings.') + '</p>',
+            go: d.held ? _lgSpec({ dur: 'held' }) : 'cfg=accesslog',
+            goLabel: d.held ? 'Upgrades' : 'Static Config',
+            goTip: d.held ? 'Filter the log list to the held-open connections' : 'Open the Static Config tab',
+            foot: d.held
+                ? _lgProv({ ic: 'ph-bold ph-plugs-connected', label: heldWord, n: d.held, go: _lgSpec({ dur: 'held' }), tip: heldTip })
+                : _lgProv({ ic: 'ph-bold ph-sliders-horizontal', label: 'open static config', n: '', go: 'cfg=accesslog', tip: 'Open the Static Config tab to change accessLog.format' })
         });
     }
     const hero = _lgHeroMs(d.avgDur);
@@ -805,9 +918,12 @@ function _lgLatencyCard(rows, timed, d) {
     if (!flags.length) flags.push(_lgOk('all under 100ms'));
 
     const maxWhere = d.maxRow ? ' ' + d.maxRow.path : '';
+    const tailBits = [];
+    if (d.held) tailBits.push(_sdNum(d.held) + ' ' + heldWord + ', longest ' + _lgSpanTxt(d.heldMax.durMs));
+    if (d.untimed > 0) tailBits.push(_sdNum(d.untimed) + ' untimed');
     const sub = _lgSub('p50 <b>' + _lgMs(d.p50) + '</b>' + SD_SEP + 'p95 <b>' + _lgMs(d.p95) + '</b>'
         + SD_SEP + 'max <b>' + _lgMs(d.maxDur) + '</b>' + _esc(maxWhere),
-        timed.length < d.total ? _sdNum(d.total - timed.length) + ' untimed' : '');
+        tailBits.join(SD_SEP));
 
     const lab = e => _lgMs(e.durMs) + ' ' + e.method + ' ' + e.path + (e.ip ? ' from ' + e.ip : '');
     const groups = [
@@ -831,7 +947,8 @@ function _lgLatencyCard(rows, timed, d) {
             _lgProv({ ic: 'ph-bold ph-hourglass-medium', label: '100-500ms', n: d.med, cls: d.med ? 'sig-prov-warn' : '', go: _lgSpec({ dur: 'med' }),
                 tip: d.med ? 'Filter the log list to the ' + d.med + ' requests between 100ms and 500ms' : 'No request took between 100ms and 500ms' }),
             _lgProv({ ic: 'ph-bold ph-hourglass-high', label: 'over 500ms', n: d.slow, cls: d.slow ? 'sig-prov-bad' : '', go: _lgSpec({ dur: 'slow' }),
-                tip: d.slow ? 'Filter the log list to the ' + d.slow + ' requests slower than 500ms' : 'No request took longer than 500ms' })
+                tip: d.slow ? 'Filter the log list to the ' + d.slow + ' requests slower than 500ms' : 'No request took longer than 500ms' }),
+            d.held ? _lgProv({ ic: 'ph-bold ph-plugs-connected', label: heldWord, n: d.held, go: _lgSpec({ dur: 'held' }), tip: heldTip }) : ''
         ].join('')
     });
 }
@@ -865,24 +982,28 @@ function _lgMethodsCard(rows, total) {
 function _lgDomainsCard(rows, total, isJson) {
     const list = isJson ? _lgRank(rows, e => e.domain, e => e.ep) : [];
     if (!isJson || !list.length) {
-        const note = isJson
-            ? 'These lines carry no <code>RequestHost</code>. Add it with <code>accessLog.fields.names</code> in the static config.'
-            : 'Traefik\'s <code>common</code> format cannot record the request Host. Set <code>accessLog.format: json</code> in the static config to rank domains.';
+        const sel = isJson && _lgSelected();
+        const note = sel
+            ? 'The requests selected right now carry no <code>RequestHost</code>. Clear the filters to rank the whole window.'
+            : (isJson
+                ? 'These lines carry no <code>RequestHost</code>. Add it with <code>accessLog.fields.names</code> in the static config.'
+                : 'Traefik\'s <code>common</code> format cannot record the request Host. Set <code>accessLog.format: json</code> in the static config to rank domains.');
         return _lgCard({
             key: 'domains', cls: 'lg-blind', accent: 'var(--purple)', ic: 'ph-fill ph-globe-simple', title: 'Domains',
-            go: 'cfg=accesslog', goLabel: 'Static Config', goTip: 'Open the Static Config tab',
-            total: '-', flags: _lgOk('not logged', 'ph-bold ph-info'),
-            sub: _lgSub(isJson ? 'no Host field in these lines' : 'the CLF access log has no Host field'),
+            go: sel ? 'clear=all' : 'cfg=accesslog', goLabel: sel ? 'Clear' : 'Static Config',
+            goTip: sel ? 'Clear every filter and the search box' : 'Open the Static Config tab',
+            total: '-', flags: _lgOk(sel ? 'none in selection' : 'not logged', 'ph-bold ph-info'),
+            sub: _lgSub(sel ? 'no Host named in this selection' : (isJson ? 'no Host field in these lines' : 'the CLF access log has no Host field')),
             body: '<p class="lg-note">' + note + '</p>',
-            foot: _lgProv({ ic: 'ph-bold ph-sliders-horizontal', label: 'open static config', n: '', go: 'cfg=accesslog',
+            foot: sel ? '' : _lgProv({ ic: 'ph-bold ph-sliders-horizontal', label: 'open static config', n: '', go: 'cfg=accesslog',
                 tip: 'Open the Static Config tab to change the accessLog block' })
         });
     }
-    const failing = list.filter(o => o.err).length;
+    const bad = list.filter(o => o.err);
+    const failing = bad.length;
     const flags = failing
-        ? [_lgFlag({ cls: list.some(o => o.e5) ? 'd-bad' : 'd-warn', ic: list.some(o => o.e5) ? 'ph-fill ph-x-circle' : 'ph-fill ph-warning',
-            n: failing, label: 'with errors', go: _lgSpec({ status: list.some(o => o.e5) ? '5xx' : '4xx' }),
-            tip: failing + ' domains served at least one failing request' })]
+        ? [_lgFailFlag(bad, { label: 'with errors', one: 'domain', many: 'domains',
+            verb: 'served at least one failing request', facet: o => ({ domain: o.key }) })]
         : [_lgOk('all healthy')];
     const built = _lgRankBody(list, { total: total, noun: 'domains', facet: o => ({ domain: o.key }) });
     const plain = rows.filter(e => e.scheme && e.scheme !== 'https').length;
@@ -918,12 +1039,12 @@ function _lgPathsCard(rows, total) {
         o.label = o.folded ? o.key.slice(1) : o.key;
         o.merged = o.folded ? (patCount.get(o.label) || 0) : 0;
     });
-    const failing = list.filter(o => o.err).length;
+    const bad = list.filter(o => o.err);
+    const failing = bad.length;
     const once = raw.filter(o => o.n === 1).length;
     const flags = failing
-        ? [_lgFlag({ cls: list.some(o => o.e5) ? 'd-bad' : 'd-warn', ic: list.some(o => o.e5) ? 'ph-fill ph-x-circle' : 'ph-fill ph-warning',
-            n: failing, label: 'failing', go: _lgSpec({ status: list.some(o => o.e5) ? '5xx' : '4xx' }),
-            tip: failing + ' paths returned at least one error' })]
+        ? [_lgFailFlag(bad, { label: 'failing', one: 'path', many: 'paths',
+            verb: 'returned at least one error', facet: o => ({ path: o.key }), name: o => o.label })]
         : [_lgOk('all healthy')];
     const built = _lgRankBody(list, {
         total: total, noun: 'paths',
@@ -950,10 +1071,10 @@ function _lgPathsCard(rows, total) {
 
 function _lgClientsCard(rows, total) {
     const list = _lgRank(rows, e => e.ip, e => classifyIp(e.ip));
-    const failing = list.filter(o => o.err && o.err === o.n).length;
-    const flags = failing
-        ? [_lgFlag({ cls: 'd-warn', ic: 'ph-fill ph-crosshair', n: failing, label: 'error only',
-            go: _lgSpec({ status: '4xx' }), tip: failing + ' clients got nothing but errors in this window' })]
+    const bad = list.filter(o => o.err && o.err === o.n);
+    const flags = bad.length
+        ? [_lgFailFlag(bad, { label: 'error only', one: 'client', many: 'clients',
+            verb: 'got nothing but errors in this window', facet: o => ({ ip: o.key }) })]
         : [_lgOk('all served')];
     const built = _lgRankBody(list, {
         total: total, noun: 'clients',
@@ -983,24 +1104,34 @@ function _lgClientsCard(rows, total) {
 
 function _lgServicesCard(rows, total, isJson) {
     const useRouter = !isJson;
+    const what = useRouter ? 'router' : 'service';
     const list = _lgRank(rows, e => (useRouter ? e.router : e.service), e => _lgProvider(useRouter ? e.router : e.service));
     if (!list.length) {
+        const sel = _lgSelected();
+        const note = sel
+            ? 'The requests selected right now carry no ' + what + ' name. Clear the filters to rank the whole window.'
+            : (isJson
+                ? 'These lines carry no <code>ServiceName</code>. Traefik omits it when it answers a request itself, and <code>accessLog.fields.names</code> in the static config controls whether it is written at all.'
+                : 'The generic <code>common</code> writer stops after the user agent, so neither the router nor the service reaches the log. Set <code>accessLog.format: json</code> in the static config.');
         return _lgCard({
             key: 'services', cls: 'lg-blind', accent: 'var(--green)', ic: 'ph-fill ph-hard-drives',
             title: useRouter ? 'Routers' : 'Services',
-            go: 'cfg=accesslog', goLabel: 'Static Config', goTip: 'Open the Static Config tab',
-            total: '-', flags: _lgOk('not logged', 'ph-bold ph-info'),
-            sub: _lgSub('this access log format names no ' + (useRouter ? 'router' : 'service')),
-            body: '<p class="lg-note">The generic <code>common</code> writer stops after the user agent, so neither the router nor the service reaches the log. Set <code>accessLog.format: json</code> in the static config.</p>',
-            foot: _lgProv({ ic: 'ph-bold ph-sliders-horizontal', label: 'open static config', n: '', go: 'cfg=accesslog',
+            go: sel ? 'clear=all' : 'cfg=accesslog', goLabel: sel ? 'Clear' : 'Static Config',
+            goTip: sel ? 'Clear every filter and the search box' : 'Open the Static Config tab',
+            total: '-', flags: _lgOk(sel ? 'none in selection' : 'not logged', 'ph-bold ph-info'),
+            sub: _lgSub(sel ? 'no ' + what + ' named in this selection'
+                : (isJson ? 'no ServiceName on these lines' : 'this access log format names no ' + what)),
+            body: '<p class="lg-note">' + note + '</p>',
+            foot: sel ? '' : _lgProv({ ic: 'ph-bold ph-sliders-horizontal', label: 'open static config', n: '', go: 'cfg=accesslog',
                 tip: 'Open the Static Config tab to change the accessLog block' })
         });
     }
-    const failing = list.filter(o => o.err).length;
+    const bad = list.filter(o => o.err);
+    const failing = bad.length;
     const flags = failing
-        ? [_lgFlag({ cls: list.some(o => o.e5) ? 'd-bad' : 'd-warn', ic: list.some(o => o.e5) ? 'ph-fill ph-x-circle' : 'ph-fill ph-warning',
-            n: failing, label: 'failing', go: _lgSpec({ status: list.some(o => o.e5) ? '5xx' : '4xx' }),
-            tip: failing + ' ' + (useRouter ? 'routers' : 'services') + ' returned at least one error' })]
+        ? [_lgFailFlag(bad, { label: 'failing', one: what, many: what + 's',
+            verb: 'returned at least one error', name: o => _sdShort(o.key),
+            facet: o => (useRouter ? { router: o.key } : { service: o.key }) })]
         : [_lgOk('all healthy')];
     const built = _lgRankBody(list, {
         total: total, noun: useRouter ? 'routers' : 'services',
@@ -1114,9 +1245,11 @@ function _lgRuntime(meta, rows) {
     facts.push('<span class="sig-f ' + (meta.geoOn ? 'sig-f-on' : 'sig-f-off')
         + '" title="' + (meta.geoOn ? 'Country lookup is on, so the Geography panel below is live.' : 'Country lookup is off.')
         + '"><i class="ph-bold ph-globe-hemisphere-west"></i>geoip ' + (meta.geoOn ? 'on' : 'off') + '</span>');
-    facts.push('<span class="sig-f sig-f-off" title="' + _esc('This panel does not poll. It was read ' + _sdAgo(_lgStamp)
-        + ' and only changes when you press refresh or change the window.')
-        + '"><i class="ph-bold ph-arrows-clockwise"></i>auto refresh off</span>');
+    const auto = _lgAutoOn();
+    facts.push('<span class="sig-f ' + (auto ? 'sig-f-on' : 'sig-f-off') + '" title="' + _esc(auto
+        ? 'This panel refetches every ' + (_lgAutoInterval() / 1000) + ' seconds while the Logs tab is open and the browser tab is visible. It pauses while you are typing in the filter box.'
+        : 'This panel does not poll. It was read ' + _sdAgo(_lgStamp) + ' and only changes when you press refresh or change the window.')
+        + '"><i class="ph-bold ph-arrows-clockwise"></i>auto refresh ' + (auto ? 'every ' + (_lgAutoInterval() / 1000) + 's' : 'off') + '</span>');
     return '<div class="sig-runtime" id="logRuntime">' + facts.join('') + '</div>';
 }
 
@@ -1131,18 +1264,22 @@ function renderLogs() {
     const format = (_logParsed.find(o => o.e) || {}).e?.format || null;
 
     const searched = q ? _logParsed.filter(o => o.raw.toLowerCase().includes(q)) : _logParsed;
-    _lgHeal(searched.map(o => o.e).filter(Boolean));
+    const searchedRows = searched.map(o => o.e).filter(Boolean);
+    const facetDead = {};
+    _lgActiveFacets().forEach(k => {
+        facetDead[k] = !searchedRows.some(e => _lgFacetHit(k, _logFacet[k], e));
+    });
 
     const faceted = searched.filter(o => _lgMatch(o.e));
     const countryData = geoOn ? _geoCountryCounts(faceted.map(o => o.e && o.e.ip).filter(Boolean)) : {};
-    if (_logCountryFilter && !countryData[_logCountryFilter]) _logCountryFilter = '';
     const visible = _logCountryFilter
         ? faceted.filter(o => o.e && _geoCache[o.e.ip] && _geoCache[o.e.ip].country_code === _logCountryFilter)
         : faceted;
 
     renderLogStats(visible, {
         fetched: fetched, parsed: parsedN, unparsed: fetched - parsedN,
-        format: format, q: q, geoOn: geoOn
+        format: format, q: q, geoOn: geoOn,
+        all: _logParsed.map(o => o.e).filter(Boolean), facetDead: facetDead
     });
 
     _logRows = visible.map(o => o.e);
@@ -1160,7 +1297,7 @@ function renderLogs() {
         const metaLine = [svcLabel, durLabel].filter(Boolean).join('<span style="color:var(--border);margin:0 4px">&middot;</span>');
         return `<div class="flex items-start gap-3 px-4 py-2.5 border-b cursor-pointer hover:opacity-80 transition-opacity" style="border-color:var(--border)" role="button" tabindex="0" data-lg-i="${i}">
             <span class="text-xs font-mono font-bold flex-shrink-0 mt-px" style="color:var(--muted);min-width:40px">${_esc(e.method)}</span>
-            <span class="inline-flex items-center gap-1 flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded" style="background:${sc}18;color:${sc};border:1px solid ${sc}44;min-width:52px">${e.status||'-'} <span style="font-weight:400;opacity:.8">${_esc(_lgStatusName(e.status))}</span></span>
+            <span class="inline-flex items-center gap-1 flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded" style="background:color-mix(in srgb, ${sc} 12%, transparent);color:${sc};border:1px solid color-mix(in srgb, ${sc} 30%, transparent);min-width:52px">${e.status||'-'} <span style="font-weight:400;opacity:.8">${_esc(_lgStatusName(e.status))}</span></span>
             <div class="flex-1 min-w-0">
                 <div class="text-xs font-mono truncate" style="color:var(--text)" title="${_esc(e.path)}">${_esc(e.path)}</div>
                 ${metaLine ? `<div class="flex items-center gap-1 mt-0.5">${metaLine}</div>` : ''}
@@ -1171,9 +1308,12 @@ function renderLogs() {
 
     const geoPanel = (geoOn && Object.keys(countryData).length) ? _geoPanelHtml('logGeo', countryData, _logCountryFilter, 'clearLogCountryFilter()') : '';
 
+    const emptyTxt = (q || _logCountryFilter || _lgActiveFacets().length)
+        ? 'Nothing matches the active filters. Use the clear button in the panel above.'
+        : (fetched ? 'No line in this window could be read as a log entry.' : 'No log lines in the fetched window.');
     const body = visible.length
         ? `<div style="max-height:600px;overflow-y:auto;background:var(--bg)">${cards}</div>`
-        : `<div class="text-center py-12" style="color:var(--muted);background:var(--bg)"><p class="text-xs">Nothing matches the active filters. Use the clear button in the panel above.</p></div>`;
+        : `<div class="text-center py-12" style="color:var(--muted);background:var(--bg)"><p class="text-xs">${emptyTxt}</p></div>`;
 
     container.innerHTML = geoPanel + `<div class="rounded-xl overflow-hidden" style="border:1px solid var(--border)">
         <div class="flex items-center justify-between px-4 py-2 text-xs" style="background:var(--card);border-bottom:1px solid var(--border);color:var(--muted)">
@@ -1190,8 +1330,8 @@ function openLogDetail(e) {
     const sc = !e.status ? 'var(--muted)' : e.status >= 500 ? 'var(--red)' : e.status >= 400 ? 'var(--yellow)' : 'var(--green)';
     const mc = { GET:'var(--blue)', POST:'var(--green)', PUT:'var(--yellow)', DELETE:'var(--red)', PATCH:'var(--purple)' }[e.method] || 'var(--muted)';
     document.getElementById('ldBadges').innerHTML =
-        `<span class="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded" style="background:${sc}18;color:${sc};border:1px solid ${sc}44">${e.status||'-'} ${_esc(_lgStatusName(e.status))}</span>` +
-        `<span class="text-xs font-mono font-bold px-2 py-1 rounded" style="background:${mc}18;color:${mc};border:1px solid ${mc}44">${_esc(e.method)}</span>`;
+        `<span class="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded" style="background:color-mix(in srgb, ${sc} 12%, transparent);color:${sc};border:1px solid color-mix(in srgb, ${sc} 30%, transparent)">${e.status||'-'} ${_esc(_lgStatusName(e.status))}</span>` +
+        `<span class="text-xs font-mono font-bold px-2 py-1 rounded" style="background:color-mix(in srgb, ${mc} 12%, transparent);color:${mc};border:1px solid color-mix(in srgb, ${mc} 30%, transparent)">${_esc(e.method)}</span>`;
     const _g = _geoCache[e.ip];
     const rows = [
         ['Path', e.path], ['IP', e.ip], ['Date', e.date],

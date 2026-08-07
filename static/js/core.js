@@ -195,6 +195,7 @@ function switchTab(tab) {
     if (tab === 'plugins')       refreshPluginsTab();
     if (tab === 'static')        openStaticTab();
     if (tab === 'logs')          refreshLogs();
+    if (typeof _lgAutoSync === 'function') _lgAutoSync();
     _initMobileFilterBars();
 }
 
@@ -357,6 +358,7 @@ const TM_PREF_DEFAULTS = {
     statBarScope: 'all',
     dashPodDensity: 'list',
     layoutMode: 'classic',
+    logsAutoRefresh: false,
 };
 
 let _prefSaveTimer = null;
@@ -701,27 +703,36 @@ function _geoPanelHtml(panelId, countryData, activeCC, onClearAttr) {
     const max = entries[0][1].count || 1;
     const total = entries.reduce((n, [, d]) => n + d.count, 0) || 1;
     const top = entries.slice(0, 8).map(([cc, d]) => {
-        const w = Math.max(4, Math.round((d.count / max) * 100));
         const sel = activeCC === cc;
-        return `<div class="flex items-center gap-2 py-1 cursor-pointer" style="border-bottom:1px solid var(--border);${sel ? 'background:var(--input-bg)' : ''}" onclick="${panelId}_click('${cc}')">
-            <span style="font-size:14px;line-height:1;flex-shrink:0">${_flagEmoji(cc)}</span>
-            <span class="text-xs truncate" style="color:var(--text);flex:1;min-width:0" title="${_esc(d.name)}">${_esc(d.name)}</span>
-            <div style="width:52px;height:6px;border-radius:3px;background:var(--input-bg);overflow:hidden;flex-shrink:0;margin-left:4px"><div style="height:100%;border-radius:3px;background:var(--blue);width:${w}%"></div></div>
-            <span class="text-xs font-bold tabular-nums flex-shrink-0" style="color:var(--muted);min-width:28px;text-align:right">${d.count.toLocaleString()}</span>
-            <span class="text-xs tabular-nums flex-shrink-0" style="color:var(--muted);opacity:.65;min-width:38px;text-align:right">${(d.count / total * 100).toFixed(1)}%</span>
+        const pct = (d.count / total * 100).toFixed(1);
+        return `<div class="lg-row${sel ? ' lg-row-on' : ''}" role="button" tabindex="0" onclick="${panelId}_click('${cc}')" title="${_esc(d.name)} - ${d.count.toLocaleString()} requests, ${pct}%">
+            <span class="lg-id"><span class="lg-g">${_flagEmoji(cc)}</span><span class="lg-name">${_esc(d.name)}</span></span>
+            <span class="lg-bad"></span>
+            <span class="lg-n">${d.count.toLocaleString()}</span>
+            <span class="lg-pct">${pct}%</span>
         </div>`;
     }).join('');
-    const activeChip = activeCC ? `<button onclick="${onClearAttr}" class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full" style="background:var(--input-bg);color:var(--blue);border:1px solid var(--border)">${_flagEmoji(activeCC)} ${_esc((countryData[activeCC] || {}).name || activeCC)} <i class="ph-bold ph-x"></i></button>` : '';
-    return `<div class="rounded-xl p-4 mb-3" style="background:var(--card);border:1px solid var(--border)">
-        <div class="flex items-center justify-between mb-3">
-            <span class="text-xs font-semibold uppercase tracking-wide" style="color:var(--muted)"><i class="ph-bold ph-globe-hemisphere-west mr-1"></i>Geography</span>
-            ${activeChip}
-        </div>
-        <div class="tm-geo-grid">
-            <div id="${panelId}Map" class="tm-geo-map"></div>
-            <div>${top}</div>
-        </div>
-        <div class="text-xs mt-2" style="color:var(--muted)"><a href="https://db-ip.com" target="_blank" rel="noopener" style="color:var(--muted)">IP Geolocation by DB-IP</a></div>
+    const clear = activeCC
+        ? `<button type="button" class="sig-explore" onclick="${onClearAttr}" title="Clear the country filter">${_flagEmoji(activeCC)} ${_esc((countryData[activeCC] || {}).name || activeCC)} <i class="ph-bold ph-x"></i></button>`
+        : '';
+    const label = entries.length === 1 ? 'country' : 'countries';
+    const more = entries.length > 8 ? `<div class="lg-tail">+${(entries.length - 8).toLocaleString()} more ${entries.length - 8 === 1 ? 'country' : 'countries'}</div>` : '';
+    return `<div class="sig-root">
+        <section class="sig-ep lg-geo">
+            <div class="sig-ep-head">
+                <i class="ph-fill ph-globe-hemisphere-west sig-ep-headic"></i>
+                <span class="sc-sec-label">Geography</span><span class="d-n">${entries.length}</span>
+                <span class="sc-sec-rule"></span>
+                ${clear || `<span class="sig-ep-tot">${entries.length.toLocaleString()} ${label}</span>`}
+            </div>
+            <div class="tm-geo-grid">
+                <div id="${panelId}Map" class="tm-geo-map"></div>
+                <div class="lg-geo-side">
+                    <div class="lg-rows">${top}</div>
+                    ${more}
+                </div>
+            </div>
+        </section>
     </div>`;
 }
 

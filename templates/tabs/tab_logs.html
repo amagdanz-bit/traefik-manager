@@ -1,16 +1,20 @@
 <div id="tab-logs" class="tab-content">
     <div class="flex flex-wrap gap-2 mb-4 items-center filter-bar">
-        <div class="flex gap-1 p-1 rounded-lg" style="background:var(--input-bg);border:1px solid var(--border)">
+        <div class="relative flex-1 min-w-48">
+            <i class="ph-bold ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-sm" style="color:var(--muted)"></i>
+            <input type="text" id="logSearch" oninput="filterLogs()" placeholder="Filter logs..." class="input-field pl-9">
+        </div>
+        <div class="flex gap-1 p-1 rounded-lg fb-secondary" style="background:var(--input-bg);border:1px solid var(--border)">
             <button onclick="setLogLines(100)"  id="log-100"  class="proto-btn active-http text-xs px-3 py-1.5">100</button>
             <button onclick="setLogLines(200)"  id="log-200"  class="proto-btn text-xs px-3 py-1.5">200</button>
             <button onclick="setLogLines(500)"  id="log-500"  class="proto-btn text-xs px-3 py-1.5">500</button>
             <button onclick="setLogLines(1000)" id="log-1000" class="proto-btn text-xs px-3 py-1.5">1000</button>
         </div>
-        <div class="relative flex-1 min-w-0">
-            <i class="ph-bold ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-sm" style="color:var(--muted)"></i>
-            <input type="text" id="logSearch" oninput="filterLogs()" placeholder="Filter logs..." class="input-field pl-9">
+        <div class="flex gap-1 p-1 rounded-lg" style="background:var(--input-bg); border:1px solid var(--border)">
+            <button onclick="clearLogFilters()" class="proto-btn text-xs px-3 py-1.5" title="Clear every filter, the country selection and the search box"><i class="ph-bold ph-x-circle"></i></button>
         </div>
         <div class="flex gap-1 p-1 rounded-lg" style="background:var(--input-bg); border:1px solid var(--border)">
+            <button onclick="toggleLogAutoRefresh()" id="logAutoBtn" class="proto-btn text-xs px-3 py-1.5" title="Auto refresh"><i class="ph-bold ph-play"></i></button>
             <button onclick="refreshLogs()" class="proto-btn text-xs px-3 py-1.5" title="Refresh"><i class="ph-bold ph-arrows-clockwise"></i></button>
         </div>
     </div>

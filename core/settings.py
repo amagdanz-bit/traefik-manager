@@ -15,7 +15,7 @@ OPTIONAL_TABS = ['dashboard', 'routemap', 'docker', 'kubernetes', 'swarm', 'noma
 UI_PREF_BOOLS = (
     'showStatCards', 'compactStatCards', 'showEntrypoints',
     'showDocsLink', 'showApiLink', 'showShortcutsBtn', 'showIpDiagBtn',
-    'showTraefikBadge', 'showTmBadge', 'showRouteIcons',
+    'showTraefikBadge', 'showTmBadge', 'showRouteIcons', 'logsAutoRefresh',
 )
 UI_PREF_VIEWS = ('routeViewMode', 'mwViewMode', 'svcViewMode')
 UI_PREF_SCOPES = ('statBarScope',)
