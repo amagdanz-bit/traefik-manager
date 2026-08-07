@@ -77,6 +77,8 @@ _cs_machine_id             = _crowd._cs_machine_id
 _cs_machine_password       = _crowd._cs_machine_password
 _cs_has_machine            = _crowd._cs_has_machine
 _cs_request                = _crowd._cs_request
+_cs_request_strict         = _crowd._cs_request_strict
+CrowdSecUnavailable        = _crowd.CrowdSecUnavailable
 _cs_jwt_cache              = _crowd._cs_jwt_cache
 _cs_jwt                    = _crowd._cs_jwt
 _cs_machine_request        = _crowd._cs_machine_request
@@ -1146,14 +1148,17 @@ CS_MAX_PAGES = 200
 def api_cs_decisions():
     lapi = _cs_lapi_url()
     key  = _cs_api_key()
-    if not (lapi and key):
+    if not lapi:
         return jsonify({'error': 'CrowdSec not configured'}), 503
+    if not key:
+        return jsonify({'error': 'No bouncer API key. CrowdSec only accepts a bouncer key on /v1/decisions, '
+                                 'the machine token is refused there'}), 503
     try:
         all_decisions = []
         cursor = 0
         for _ in range(CS_MAX_PAGES):
-            chunk = _cs_request('GET', f'/v1/decisions?limit={CS_PAGE_SIZE}&id_gt={cursor}',
-                                lapi=lapi, key=key)
+            chunk = _cs_request_strict('GET', f'/v1/decisions?limit={CS_PAGE_SIZE}&id_gt={cursor}',
+                                       lapi=lapi, key=key)
             if not isinstance(chunk, list) or not chunk:
                 break
             all_decisions.extend(chunk)
@@ -1176,6 +1181,8 @@ def api_cs_decisions():
                     pass
             active.append(d)
         return jsonify(active)
+    except CrowdSecUnavailable as e:
+        return jsonify({'error': str(e)}), 502
     except Exception as e:
         logger.exception("CrowdSec decisions error")
         return jsonify({'error': str(e)}), 500
@@ -1208,9 +1215,7 @@ def api_cs_alerts():
         alerts = resp.json() if resp.content else []
         if not isinstance(alerts, list):
             alerts = []
-        filtered = [al for al in alerts
-                    if not (al.get('decisions') and al['decisions'][0].get('origin') == 'lists')]
-        return jsonify(filtered)
+        return jsonify(alerts)
     except Exception as e:
         logger.exception("CrowdSec alerts error")
         return jsonify({'error': str(e)}), 500
@@ -1221,7 +1226,7 @@ def api_cs_alerts():
 def api_cs_add_decision():
     lapi = _cs_lapi_url()
     key  = _cs_api_key()
-    if not (lapi and key):
+    if not (lapi and (key or _cs_has_machine())):
         return jsonify({'error': 'CrowdSec not configured'}), 503
     data     = request.get_json() or {}
     ip       = data.get('value', '').strip()
@@ -1235,7 +1240,7 @@ def api_cs_add_decision():
     now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     payload = [{
         'capacity': 0,
-        'decisions': [{'duration': duration, 'origin': 'manual', 'scenario': reason,
+        'decisions': [{'duration': duration, 'origin': 'cscli', 'scenario': reason,
                        'scope': 'Ip', 'type': dtype, 'value': ip, 'simulated': False}],
         'events': [], 'events_count': 1, 'labels': None, 'leakspeed': '0',
         'message': reason, 'scenario': reason, 'scenario_hash': '', 'scenario_version': '',
@@ -3090,7 +3095,7 @@ def api_get_settings():
     s['oidc_client_secret_set'] = bool(load_settings().get('oidc_client_secret', ''))
     s['crowdsec_api_key_set']   = bool(_cs_api_key())
     s['crowdsec_machine_password_set'] = bool(_cs_machine_password())
-    s['crowdsec_enabled']       = bool(_cs_lapi_url() and _cs_api_key())
+    s['crowdsec_enabled']       = bool(_cs_lapi_url() and (_cs_api_key() or _cs_has_machine()))
     s['git_backup_token_set']   = bool(s.get('git_backup_token', ''))
     s.pop('git_backup_token', None)
     return jsonify(s)
@@ -4095,7 +4100,7 @@ def index():
                            config_paths_list=config_paths_list,
                            config_dir_set=bool(ACTIVE_CONFIG_DIR),
                            cert_resolvers=cert_resolvers,
-                           crowdsec_enabled=bool(_cs_lapi_url() and _cs_api_key()),
+                           crowdsec_enabled=bool(_cs_lapi_url() and (_cs_api_key() or _cs_has_machine())),
                            ui_prefs=settings.get('ui_prefs', {}))
 
 

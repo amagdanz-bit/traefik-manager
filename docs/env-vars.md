@@ -66,7 +66,7 @@ Variables marked ✅ **override** the corresponding `manager.yml` field on every
 | `GEOIP_DB_PATH` | _(auto-downloaded)_ | ✅ `geoip_db_path` | Path to a custom GeoIP `.mmdb` for [IP geolocation](geoip.md) |
 | `CROWDSEC_LAPI_URL` | _(unset)_ | ✅ `crowdsec_lapi_url` | CrowdSec LAPI base URL (e.g. `http://crowdsec:8080`) |
 | `CROWDSEC_API_KEY` | _(unset)_ | ✅ `crowdsec_api_key` | CrowdSec bouncer API key, reads decisions (stored encrypted) |
-| `CROWDSEC_MACHINE_ID` | _(unset)_ | ✅ `crowdsec_machine_id` | CrowdSec machine login, enables the Alerts view and unban |
+| `CROWDSEC_MACHINE_ID` | _(unset)_ | ✅ `crowdsec_machine_id` | CrowdSec machine login, reads alerts and enables unban |
 | `CROWDSEC_MACHINE_PASSWORD` | _(unset)_ | ✅ `crowdsec_machine_password` | Password for the machine login (stored encrypted) |
 
 ### Agents
@@ -592,7 +592,7 @@ Environment=GEOIP_DB_PATH=/var/lib/traefik-manager/GeoLite2-Country.mmdb
 **Default:** _(unset)_  
 **Overrides:** `crowdsec_lapi_url` in `manager.yml`
 
-Base URL of the CrowdSec Local API. Required to enable the CrowdSec tab. The value set in **Settings → System Monitoring → CrowdSec** takes priority over this env var; the env var is used as a fallback when the settings field is blank.
+Base URL of the CrowdSec Local API. Required to enable the CrowdSec tab, together with a bouncer API key, machine credentials, or both. The value set in **Settings → System Monitoring → CrowdSec** takes priority over this env var; the env var is used as a fallback when the settings field is blank.
 
 :::tabs
 == Docker / Podman
@@ -634,7 +634,7 @@ Environment=CROWDSEC_API_KEY=your-bouncer-key
 **Default:** _(unset)_  
 **Overrides:** `crowdsec_machine_id` / `crowdsec_machine_password` in `manager.yml` (password stored encrypted)
 
-CrowdSec machine credentials. Required to read **alerts** and to **unban** (delete decisions) from the CrowdSec tab - bouncer keys get `403 access forbidden` on those endpoints. Decisions only need `CROWDSEC_API_KEY`. Create a machine with `cscli machines add traefik-manager --auto` and copy the `login` / `password` from `local_api_credentials.yaml`. The settings field values take priority over these env vars.
+CrowdSec machine credentials. Required to read **alerts** and to **unban** (delete decisions) from the CrowdSec tab - bouncer keys get `403 access forbidden` on those endpoints. Alerts are where every attack card on that tab comes from, so without these the tab can only show the bans already in force. The two credentials are complementary rather than tiered: CrowdSec refuses the machine token on `/v1/decisions`, so `CROWDSEC_API_KEY` is still needed alongside these. Create a machine with `cscli machines add traefik-manager --auto` and copy the `login` / `password` from `local_api_credentials.yaml`. The settings field values take priority over these env vars.
 
 :::tabs
 == Docker / Podman

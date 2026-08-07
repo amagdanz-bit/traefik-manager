@@ -4,24 +4,15 @@
         <i class="ph-light ph-shield-slash text-5xl opacity-40"></i>
         <div class="text-center">
             <p class="font-medium text-sm mb-1" style="color:var(--text)">CrowdSec not configured</p>
-            <p class="text-xs">Add your LAPI URL and API key in <strong>Settings &rarr; System Monitoring &rarr; CrowdSec</strong></p>
+            <p class="text-xs">Add your LAPI URL plus a bouncer API key, machine credentials, or both, in <strong>Settings &rarr; System Monitoring &rarr; CrowdSec</strong>.</p>
+            <p class="text-xs mt-1">The bouncer key reads active decisions, the machine login reads alerts. They are complementary, not tiered.</p>
         </div>
     </div>
 
-    <div class="flex flex-wrap gap-2 mb-4 items-center filter-bar">
+    <div id="csFilterBar" class="flex flex-wrap gap-2 mb-4 items-center filter-bar">
         <div class="relative flex-1 min-w-0">
             <i class="ph-bold ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-sm" style="color:var(--muted)"></i>
-            <input type="text" id="csSearch" oninput="_csDecisionsPage=1;_csApplyFilters()" placeholder="Filter by IP or scenario..." class="input-field pl-9">
-        </div>
-        <div class="flex gap-1 p-1 rounded-lg" style="background:var(--input-bg);border:1px solid var(--border)">
-            <button onclick="_setCsView('decisions',this)" id="cs-view-decisions" class="proto-btn active-http text-xs px-3 py-1.5">Decisions</button>
-            <button onclick="_setCsView('alerts',this)" id="cs-view-alerts" class="proto-btn text-xs px-3 py-1.5">Alerts</button>
-        </div>
-        <div id="csTypeFilter" class="flex gap-1 p-1 rounded-lg fb-secondary" style="background:var(--input-bg);border:1px solid var(--border)">
-            <button onclick="_setCsType('all',this)" id="cs-type-all" class="proto-btn active-http text-xs px-3 py-1.5">All</button>
-            <button onclick="_setCsType('ban',this)" id="cs-type-ban" class="proto-btn text-xs px-3 py-1.5">Ban</button>
-            <button onclick="_setCsType('captcha',this)" id="cs-type-captcha" class="proto-btn text-xs px-3 py-1.5">Captcha</button>
-            <button onclick="_setCsType('bypass',this)" id="cs-type-bypass" class="proto-btn text-xs px-3 py-1.5">Bypass</button>
+            <input type="text" id="csSearch" oninput="_csSearchInput()" placeholder="Filter by address, scenario, network, path or agent..." class="input-field pl-9">
         </div>
         <div id="csAddDecisionBtn" class="flex gap-1 p-1 rounded-lg fb-secondary" style="background:var(--input-bg);border:1px solid var(--border)">
             <button onclick="openCsBanModal()" class="proto-btn text-xs px-3 py-1.5"><i class="ph-bold ph-plus"></i> Add Decision</button>
@@ -31,36 +22,7 @@
         </div>
     </div>
 
-    <div id="crowdsecStats" class="grid grid-cols-3 gap-3 mb-4"></div>
-
-    <div id="csStatsPanels"></div>
-    <div id="csGeoPanel"></div>
-
-    <div id="csDecisionsSection">
-        <div class="flex items-center gap-2 mb-2">
-            <span class="font-semibold text-sm" style="color:var(--text)">Active Decisions</span>
-            <span id="csDecisionCount" class="text-xs px-2 py-0.5 rounded-full" style="background:var(--input-bg);border:1px solid var(--border);color:var(--muted)">0</span>
-        </div>
-        <div id="csDecisionsTable" class="rounded-lg overflow-hidden" style="border:1px solid var(--border)">
-            <div class="text-center py-8" style="color:var(--muted)">
-                <i class="ph-light ph-spinner-gap text-3xl block mb-2 animate-spin opacity-40"></i>
-                <p class="text-xs">Loading decisions...</p>
-            </div>
-        </div>
-    </div>
-
-    <div id="csAlertsSection" style="display:none">
-        <div class="flex items-center gap-2 mb-2">
-            <span class="font-semibold text-sm" style="color:var(--text)">Recent Alerts</span>
-            <span id="csAlertCount" class="text-xs px-2 py-0.5 rounded-full" style="background:var(--input-bg);border:1px solid var(--border);color:var(--muted)">0</span>
-        </div>
-        <div id="csAlertsTable" class="rounded-lg overflow-hidden" style="border:1px solid var(--border)">
-            <div class="text-center py-8" style="color:var(--muted)">
-                <i class="ph-light ph-spinner-gap text-3xl block mb-2 animate-spin opacity-40"></i>
-                <p class="text-xs">Loading alerts...</p>
-            </div>
-        </div>
-    </div>
+    <div id="csStats" class="sig-root"></div>
 
 </div>
 
@@ -75,7 +37,7 @@
     </div>
 
         <div class="px-6 py-5 space-y-4">
-            <div id="csBanError" style="display:none;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--red)" class="flex items-center gap-2">
+            <div id="csBanError" style="display:none;background:color-mix(in srgb, var(--red) 8%, transparent);border:1px solid color-mix(in srgb, var(--red) 32%, var(--border));border-radius:8px;padding:8px 12px;font-size:12px;color:var(--red)" class="flex items-center gap-2">
                 <i class="ph-bold ph-warning-circle flex-shrink-0"></i>
                 <span id="csBanErrorMsg"></span>
             </div>

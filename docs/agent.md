@@ -200,7 +200,7 @@ CrowdSec's LAPI uses two different authentication methods for different endpoint
 - **Bouncer key** (`CROWDSEC_API_KEY`) can read the active **decisions** list. This is all you need to see and filter bans, captchas, and bypasses in the CrowdSec tab.
 - **Machine credentials** (`CROWDSEC_MACHINE_ID` + `CROWDSEC_MACHINE_PASSWORD`) are required to read the **alerts** list and to **unban** (delete a decision). Bouncer keys cannot access these endpoints - the LAPI returns `403 access forbidden` or an empty result.
 
-Set both if you want the full CrowdSec tab (decisions **and** alerts plus unban). Set only the bouncer key if you only need the decisions view.
+Set both for the full CrowdSec tab. They are complementary, not tiered: the machine token is refused on `/v1/decisions` and the bouncer key is refused on `/v1/alerts`. With only the bouncer key you get the bans in force and nothing about who attacked you.
 
 **Creating a machine login:**
 

@@ -192,6 +192,7 @@ def _cs_lapi_stub(monkeypatch, capi_count, local_ip, local_origin='crowdsec'):
     monkeypatch.setattr(tm, '_cs_lapi_url', lambda: 'http://lapi:8080')
     monkeypatch.setattr(tm, '_cs_api_key', lambda: 'key')
     monkeypatch.setattr(tm, '_cs_request', fake)
+    monkeypatch.setattr(tm, '_cs_request_strict', fake)
     return calls
 
 
@@ -209,7 +210,7 @@ def test_local_decisions_survive_the_pagination_cap(client, monkeypatch):
 
 
 def test_manually_added_decisions_are_found(client, monkeypatch):
-    """Bans added through Traefik Manager carry origin "manual"."""
+    """Hand added bans carry origin "cscli", or "manual" on rows written before v1.10.0."""
     ip = '198.51.100.7'
     _cs_lapi_stub(monkeypatch, capi_count=6000, local_ip=ip, local_origin='manual')
 
@@ -234,6 +235,39 @@ def test_local_decisions_are_not_duplicated(client, monkeypatch):
     ids = [d['id'] for d in res.get_json()]
     assert len(ids) == len(set(ids)), 'the cursor walk returned a decision twice'
     assert ids.count(999999) == 1
+
+
+def test_unreachable_lapi_is_not_reported_as_zero_decisions(client, monkeypatch):
+    """A failed read used to come back as 200 with an empty list.
+
+    The tab then rendered "LAPI Online, 0 decisions" while nothing was reachable,
+    and an agent returned 502 for the identical failure. Transport failure and an
+    empty result must not share a status code.
+    """
+    import app as tm
+    from core.crowdsec import CrowdSecUnavailable
+
+    def boom(method, path, **kw):
+        raise CrowdSecUnavailable('CrowdSec LAPI unreachable: connection refused')
+
+    monkeypatch.setattr(tm, '_cs_lapi_url', lambda: 'http://lapi:8080')
+    monkeypatch.setattr(tm, '_cs_api_key', lambda: 'key')
+    monkeypatch.setattr(tm, '_cs_request_strict', boom)
+
+    res = client.get('/api/crowdsec/decisions')
+    assert res.status_code == 502, res.data
+    assert 'error' in res.get_json()
+
+
+def test_decisions_without_a_bouncer_key_say_why(client, monkeypatch):
+    """CrowdSec refuses the machine token on /v1/decisions, so the key is not optional."""
+    import app as tm
+    monkeypatch.setattr(tm, '_cs_lapi_url', lambda: 'http://lapi:8080')
+    monkeypatch.setattr(tm, '_cs_api_key', lambda: '')
+
+    res = client.get('/api/crowdsec/decisions')
+    assert res.status_code == 503
+    assert 'bouncer' in res.get_json()['error'].lower()
 
 
 def test_geoip_lookup_no_longer_truncates(client, monkeypatch):

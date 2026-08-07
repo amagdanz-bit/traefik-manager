@@ -16,7 +16,7 @@ That's it - open the Logs or CrowdSec tab and IPs will show their country.
 ## What you get
 
 - **Logs tab** - a flag next to each client IP, the country in the log detail panel, a Top Countries list, and a world map. Click a country to filter the log entries.
-- **CrowdSec tab** - a **Country** column on decisions and alerts, a Top Countries list, and a world map of where banned/flagged IPs are located. Click a country to filter.
+- **CrowdSec tab** - a country flag on every alert row, a Top Countries list, and a world map of where the attacking sources are. Click a country to filter the whole tab. CrowdSec usually resolves the country itself, so the host database is only consulted when the reporting agent did not enrich its alerts, and never for the decisions list.
 
 Remote agents are covered automatically - the Host performs the lookups on the data it fetches from each agent, so no agent-side configuration is needed.
 

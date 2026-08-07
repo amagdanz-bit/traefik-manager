@@ -34,22 +34,37 @@ def _cs_has_machine() -> bool:
     return bool(_cs_machine_id() and _cs_machine_password())
 
 
-def _cs_request(method: str, path: str, lapi: str = None, key: str = None, **kwargs):
+class CrowdSecUnavailable(Exception):
+    """The LAPI could not be reached or refused the read. Never the same as an empty result."""
+
+
+def _cs_request_strict(method: str, path: str, lapi: str = None, key: str = None, **kwargs):
     if lapi is None:
         lapi = _cs_lapi_url()
     if key is None:
         key = _cs_api_key()
-    lapi = lapi.rstrip('/')
+    lapi = (lapi or '').rstrip('/')
     if not lapi or not key:
-        return None
+        raise CrowdSecUnavailable('CrowdSec LAPI URL or bouncer API key is not set')
     try:
         resp = requests.request(method, f"{lapi}{path}",
                                 headers={'X-Api-Key': key, 'Accept': 'application/json'},
                                 timeout=5, **kwargs)
         resp.raise_for_status()
-        return resp.json() if resp.content else None
+    except requests.HTTPError as e:
+        status = e.response.status_code if e.response is not None else '?'
+        logger.warning(f"CrowdSec LAPI error {method} {path}: {e}")
+        raise CrowdSecUnavailable(f'LAPI answered HTTP {status} on {path}') from e
     except Exception as e:
         logger.warning(f"CrowdSec LAPI error {method} {path}: {e}")
+        raise CrowdSecUnavailable(f'CrowdSec LAPI unreachable: {e}') from e
+    return resp.json() if resp.content else None
+
+
+def _cs_request(method: str, path: str, lapi: str = None, key: str = None, **kwargs):
+    try:
+        return _cs_request_strict(method, path, lapi=lapi, key=key, **kwargs)
+    except CrowdSecUnavailable:
         return None
 
 

@@ -120,7 +120,7 @@ Optional tabs - toggle on in **Settings - Interface - Tabs** or during the setup
 | [Dashboard](tab-dashboard.md) | Routes grouped by category with app icons, custom groups, per-card editing, and one-click app launching |
 | [Route Map](tab-routemap.md)  | Topology connection map - entry points → routes → middlewares → services       |
 | [TLS Options](tab-tls-options.md) | Named `tls.options` profiles - min/max version, ciphers, mTLS - assignable per route |
-| [CrowdSec](tab-crowdsec.md)   | Decisions and alerts from a CrowdSec LAPI; ban, captcha, bypass or unban with one click |
+| [CrowdSec](tab-crowdsec.md)   | Who is attacking, from where, how and what they went after, from a CrowdSec LAPI; ban, captcha, bypass or unban with one click |
 
 ---
 
