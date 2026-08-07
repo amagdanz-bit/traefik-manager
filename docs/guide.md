@@ -70,6 +70,18 @@ These tabs are always visible. They let you read and write your Traefik dynamic 
 
 ---
 
+## Stat panel
+
+Above the content on the Dashboard, Routes, Middlewares and Services tabs sits a panel that answers one question: is anything wrong right now.
+
+A verdict line sums up every problem in plain language and names the providers responsible. Four cards - HTTP routers, TCP/UDP routers, services and middlewares - each show a total, a strip with one cell per object sorted worst-first, and counts you can click to jump straight to the broken ones. Below them, entry points are listed with their protocol, flags, address, how many routers are bound to each, and a runtime footer with the Traefik version, uptime and whether metrics, access logs and tracing are on.
+
+Colour is rationed: a healthy install is calm and almost monochrome, so anything coloured is worth reading. A provider strip lets you scope all four cards to one provider in a click.
+
+Choose which of the four tabs show it under **Settings - Interface - Show on**, and switch it to a denser layout with **Compact stat cards**. The same visual language is used by the [Logs](tab-logs.md) and [CrowdSec](tab-crowdsec.md) analytics panels.
+
+---
+
 ## Static Config Editor
 
 Edit your Traefik static config (`traefik.yml`) directly from the UI - no SSH or file editor needed. Changes are staged and backed up automatically; a one-click restart applies them via your configured restart method.
@@ -132,7 +144,7 @@ Optional tabs - each requires a file mounted into the container.
 |-----|----------------|-------------|
 | [Certificates](tab-certs.md) | `acme.json:/app/acme.json:ro` | TLS certificates with expiry tracking. `ACME_JSON_PATH` accepts several files or a directory, for setups with one resolver per storage file |
 | [Plugins](tab-plugins.md) | `traefik.yml:/app/traefik.yml:ro` | Plugins declared in your static config |
-| [Logs](tab-logs.md) | `access.log:/app/logs/access.log:ro` | Live Traefik access log tail, with source-IP classification and an optional [world map](geoip.md) |
+| [Logs](tab-logs.md) | `access.log:/app/logs/access.log:ro` | Access log analytics: status, latency, paths, clients and services as clickable cards over a live tail, with optional auto refresh and a [world map](geoip.md) |
 
 ---
 

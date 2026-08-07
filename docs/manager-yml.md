@@ -389,7 +389,8 @@ Display preferences, stored here rather than in the browser so they follow you a
 | `showStatCards`, `compactStatCards`, `showEntrypoints` | boolean | `true`, `false`, `true` |
 | `layoutMode` | `classic` \| `modern` | Classic top tab row, or the Modern collapsible sidebar with full-width content |
 | `dashPodDensity` | `list` \| `icons` | Dashboard categories as rows with domains, or a compact grid of app icons |
-| `statBarScope` | string | `all` (default) or `dashboard` - where the stat cards and entry points bar appear |
+| `statBarScope` | string | Which tabs show the stat cards and entry points. A comma separated list of `dashboard`, `services` (Routes), `middlewares` and `live` (Services). `all` (default) means all four, `none` means no tab. The cards never appear on any other tab. |
+| `logsAutoRefresh` | boolean | `false` - poll the access log while the Logs tab is open and visible |
 | `showDocsLink`, `showApiLink`, `showShortcutsBtn`, `showIpDiagBtn` | boolean | `true`, `false`, `true`, `true` |
 | `showTraefikBadge`, `showTmBadge`, `showRouteIcons` | boolean | `true`, `true`, `false` |
 | `routeViewMode`, `mwViewMode`, `svcViewMode` | `grid` or `list` | `grid` |

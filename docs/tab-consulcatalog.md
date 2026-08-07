@@ -14,8 +14,6 @@ The **Consul Catalog** tab shows all routes discovered by Traefik's Consul Catal
 - Full detail view via the info button
 
 
-In the [Modern layout](guide.md), these read-only routes use the redesigned card shared by the rest of the app, with the same host, target and footer layout as the Routes tab.
-
 Routes are **read-only** - edit them via your Consul service registrations and Traefik tags.
 
 ## Enabling the tab

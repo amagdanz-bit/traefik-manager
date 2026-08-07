@@ -4,6 +4,26 @@ The **CrowdSec** tab connects to a CrowdSec Local API (LAPI) and answers one que
 
 The tab is optional and must be enabled in Settings or during the setup wizard.
 
+## Using it
+
+The tab works the same way as the [Logs tab](tab-logs.md): read the verdict, click whatever looks wrong, and the feed below narrows to it. Alerts lead because they are the evidence; the bans they produced are one click behind.
+
+Some worked examples:
+
+**"Am I actually under attack, or is this background noise?"** The verdict answers directly. A host being probed constantly but absorbed cleanly renders grey and says so - that is not a problem, it is CrowdSec working. Colour only appears when something got through unhandled: yellow when a source tripped a scenario and holds no ban, red when a whole vector produced no ban at all.
+
+**"Who is hitting me?"** **Attacking sources** ranks addresses worst-first, where "worst" means still unbanned rather than merely loud. Click one to see every alert it raised. From the row detail you can jump to its network or its country in one more click.
+
+**"What are they going after?"** **Targeted paths** ranks the URIs from the alert metadata, so you can see whether someone is sweeping for `/.env` and `/wp-login.php` or hammering one real endpoint. On an SSH-only host the same card becomes **Targeted accounts** and ranks usernames instead.
+
+**"Is this one person or a botnet?"** **Networks** ranks by ASN. A single AS with many distinct addresses is usually one actor on a cloud provider; many ASNs hitting the same path is usually a distributed scan. **Tooling** tells you what they used - `curl`, `masscan` and friends are unambiguous, a copied browser string less so.
+
+**"Why is this address still allowed in?"** Click `loose` on the Attacking sources card. Those are sources that tripped a scenario and hold no active decision, which is the gap worth looking at. Add a ban with **+ Add Decision**, or leave it if the scenario was a false positive.
+
+**"What is CrowdSec actually blocking for me?"** **Bans in force** is the doorway to the decisions view. Its footer splits your own detections from the community blocklist, which matters: a typical install has tens of thousands of subscribed entries and only a handful earned locally. Click `crowdsec` to see the ones your own rules produced.
+
+Filters combine with AND, clicking the same one twice clears it, and the window row lists everything active with a **clear** button.
+
 ## How the page reads
 
 Everything lives in one panel, rendered from a single state:

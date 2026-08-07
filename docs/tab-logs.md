@@ -2,6 +2,30 @@
 
 The **Logs** tab displays Traefik's access log - a record of every HTTP request routed through Traefik, including status codes, response times, upstream targets, and client IPs.
 
+## Using it
+
+The tab is built around one loop: **read the verdict, click the number that looks wrong, read the rows it leaves behind.** Every count in the panel is a filter, so you narrow by clicking rather than by typing.
+
+Some worked examples:
+
+**"Something is returning errors."** The verdict line names the worst class, for example `9 server errors`. Click it and the log list drops to those nine requests. The **Where it fails** panel underneath already groups them by path, so `3 502s out of 3 requests to /immich` tells you a specific service is down, while `3 404s out of 900 on /favicon.ico` tells you to ignore it.
+
+**"A page feels slow."** Open **Response Time** and read `p95` rather than the average - one slow request cannot move a p95 the way it moves a mean. Click the `over 500ms` band to see only the slow requests, then click the worst path to see whether it is one endpoint or the whole site.
+
+**"Who is hammering me?"** **Clients** ranks source addresses, and the scope glyph separates real public traffic from your own gateway's hairpin NAT. Click an address to see everything it asked for. If it is abusive, the [CrowdSec tab](tab-crowdsec.md) is where you ban it.
+
+**"Is anyone probing me?"** **Paths** folds `/api/x/1`, `/api/x/2` into one pattern, so scans stand out as a single high-count row rather than a thousand unique ones. Combine with a `404` click to see only the misses.
+
+**"Which of my services is busiest?"** **Services** on a JSON log, or **Routers** on a `common` log. Click one to scope everything else - the status split, the latency, the client list - to just that service.
+
+To leave any of it, use **Clear** in the toolbar. It resets every card filter, the country selection and the search box in one click, and only appears when something is actually filtered.
+
+### Live tailing
+
+The **play** button in the toolbar turns on auto refresh. It refetches every 10 seconds at 100 or 200 lines, and every 30 seconds at 500 or 1000, because a thousand-line window is a much heavier read on the server.
+
+It only polls while you are actually looking: it stops when you switch tabs, pauses when the browser tab is in the background, and skips a tick while you are typing in the filter box. Your filters, the country selection and your scroll position all survive each refresh, so a live view does not reset itself under you. The setting is remembered per user and is off by default. The runtime footer at the bottom of the panel always states the current state, either `auto refresh off` or `auto refresh every 10s`.
+
 ## Analytics panel
 
 Above the log list, an analytics panel summarises the loaded entries. It uses the same visual language as the dashboard stat cards: a plain-language verdict, a scope row, seven cards and a runtime footer. Colour is rationed - a healthy card shows colour only in its small category glyph, and problems appear as coloured counts and a coloured card spine.
@@ -43,8 +67,8 @@ The panel only ever describes the last N lines of the access log, chosen with th
 
 Each log entry is parsed into a card showing:
 
-- **Method badge** - color-coded HTTP verb (GET, POST, DELETE, etc.)
-- **Status badge** - status code with description (e.g. `404 Not Found`, `502 Bad Gateway`)
+- **Method** - the HTTP verb (GET, POST, DELETE, etc.)
+- **Status** - status code with description (e.g. `404 Not Found`, `502 Bad Gateway`), coloured only when the request failed
 - **Path** - request path, truncated if long
 - **IP** - client IP address
 - **Service name** - Traefik service that handled the request (when available)

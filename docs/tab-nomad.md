@@ -12,8 +12,6 @@ The **Nomad** tab shows all routes discovered by Traefik's HashiCorp Nomad provi
 - Full detail view via the info button
 
 
-In the [Modern layout](guide.md), these read-only routes use the redesigned card shared by the rest of the app, with the same host, target and footer layout as the Routes tab.
-
 Routes are **read-only** - edit them via your Nomad job definitions.
 
 ## Enabling the tab

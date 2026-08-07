@@ -12,8 +12,6 @@ The **ECS** tab shows all routes discovered by Traefik's Amazon ECS provider in 
 - Full detail view via the info button
 
 
-In the [Modern layout](guide.md), these read-only routes use the redesigned card shared by the rest of the app, with the same host, target and footer layout as the Routes tab.
-
 Routes are **read-only** - edit them via your ECS task definitions and Traefik labels.
 
 ## Enabling the tab

@@ -1,6 +1,6 @@
 # IP Geolocation
 
-Traefik Manager can resolve client IP addresses to countries and show them in the [Logs](tab-logs.md) and [CrowdSec](tab-crowdsec.md) tabs - a country flag on every IP, a **Top Countries** breakdown, and a shaded **world map** you can click to filter.
+Traefik Manager can resolve client IP addresses to countries and show them in the [Logs](tab-logs.md) and [CrowdSec](tab-crowdsec.md) tabs - a country flag on every IP, a **Geography** panel with a shaded **world map** and a ranked country list, either of which you can click to filter.
 
 ::: tip Privacy
 All lookups happen **on the server against a local database**. IP addresses are never sent to any third-party geolocation API, there are no per-request network calls, and it keeps working offline. Only the database file itself is downloaded (once a month) from DB-IP.
@@ -15,8 +15,8 @@ That's it - open the Logs or CrowdSec tab and IPs will show their country.
 
 ## What you get
 
-- **Logs tab** - a flag next to each client IP, the country in the log detail panel, a Top Countries list, and a world map. Click a country to filter the log entries.
-- **CrowdSec tab** - a country flag on every alert row, a Top Countries list, and a world map of where the attacking sources are. Click a country to filter the whole tab. CrowdSec usually resolves the country itself, so the host database is only consulted when the reporting agent did not enrich its alerts, and never for the decisions list.
+- **Logs tab** - a flag next to each client IP, the country in the log detail panel, and a Geography panel pairing the world map with a ranked country list. Click a country on either to filter the log entries.
+- **CrowdSec tab** - a country flag on every alert row, and the same Geography panel showing where the attacking sources are. Click a country to filter the whole tab. CrowdSec usually resolves the country itself, so the host database is only consulted when the reporting agent did not enrich its alerts, and never for the decisions list.
 
 Remote agents are covered automatically - the Host performs the lookups on the data it fetches from each agent, so no agent-side configuration is needed.
 

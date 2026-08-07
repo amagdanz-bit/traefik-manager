@@ -12,8 +12,6 @@ The **Redis** tab shows all routes stored in Traefik's Redis KV provider in read
 - Full detail view via the info button
 
 
-In the [Modern layout](guide.md), these read-only routes use the redesigned card shared by the rest of the app, with the same host, target and footer layout as the Routes tab.
-
 Routes are **read-only** - edit them directly in your Redis KV store.
 
 ## Enabling the tab
