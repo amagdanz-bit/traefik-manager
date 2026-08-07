@@ -74,7 +74,7 @@ body > footer { flex-shrink: 0; }
 .sig-root .sig-flag { display: inline-flex; align-items: center; gap: 4px; min-width: 0; background: none; border: none; padding: 0; cursor: pointer; font: 400 11.5px/1 'JetBrains Mono', monospace; letter-spacing: -.01em; white-space: nowrap; color: inherit; }
 .sig-root .sig-flag > i { font-size: 11px; flex-shrink: 0; }
 .sig-root .sig-flag > b { font-weight: 700; font-variant-numeric: tabular-nums; }
-.sig-root .sig-flag:hover { text-decoration: underline; text-underline-offset: 2px; }
+.sig-root .sig-flag:hover { background: color-mix(in srgb, currentColor 12%, transparent); border-radius: 4px; }
 .sig-root .sig-flag:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 3px; }
 .sig-root .sig-ok { display: inline-flex; align-items: center; gap: 6px; font: 400 11.5px/1 'JetBrains Mono', monospace; color: var(--muted); }
 .sig-root .sig-fl { display: inline; }
@@ -133,7 +133,7 @@ body > footer { flex-shrink: 0; }
 .sig-root .sig-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; letter-spacing: -.01em; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sig-root .sig-explore { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; background: none; border: none; padding: 2px 0; cursor: pointer; font: 500 11px Inter, sans-serif; color: var(--muted); opacity: 0; transition: opacity .12s, color .12s; }
 .sig-root .sig-card:hover .sig-explore, .sig-root .sig-card:focus-within .sig-explore { opacity: 1; color: var(--blue); }
-.sig-root .sig-explore:hover { text-decoration: underline; }
+.sig-root .sig-explore:hover { color: var(--text); }
 
 .sig-root .sig-metric { display: flex; align-items: baseline; gap: 10px; margin-top: 8px; min-width: 0; }
 .sig-root .sig-total { flex-shrink: 0; font-size: 26px; font-weight: 700; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--text); }
