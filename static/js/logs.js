@@ -1287,23 +1287,30 @@ function renderLogs() {
     const statusColor = s => !s ? 'var(--muted)' : s >= 500 ? 'var(--red)' : s >= 400 ? 'var(--yellow)' : 'var(--green)';
 
     const cards = visible.map(({ raw, e }, i) => {
-        if (!e) return `<div class="px-4 py-2 text-xs font-mono border-b" style="color:var(--muted);border-color:var(--border);overflow-x:auto;white-space:nowrap">${_esc(raw)}</div>`;
-        const sc = statusColor(e.status);
+        if (!e) {
+            return '<div class="sig-ep-row lg-raw" data-health="idle" title="' + _esc('No access log format matched this line') + '">'
+                + '<span class="sig-ep-id"><span class="sig-ep-name">' + _esc(raw) + '</span></span>'
+                + '<span class="sig-ep-flags"><span class="sig-idle-txt">unparsed</span></span></div>';
+        }
+        const s = Number(e.status) || 0;
+        const health = s >= 500 ? 'down' : s >= 400 ? 'warn' : '';
+        const statCls = s >= 500 ? 'd-bad' : s >= 400 ? 'd-warn' : s ? 'd-on' : 'd-off';
         const geo = _geoCache[e.ip];
-        const flag = (geoOn && geo && geo.country_code) ? `<span style="font-size:12px;line-height:1;flex-shrink:0" title="${_esc(geo.country_name || geo.country_code)}">${_flagEmoji(geo.country_code)}</span>` : '';
-        const owner = e.service || e.router;
-        const svcLabel = owner ? `<span class="text-xs font-mono truncate" style="color:var(--blue);max-width:180px">${_esc(_sdShort(owner))}</span>` : '';
-        const durLabel = e.duration && e.duration !== '-' ? `<span class="text-xs" style="color:var(--muted)">${_esc(e.duration)}</span>` : '';
-        const metaLine = [svcLabel, durLabel].filter(Boolean).join('<span style="color:var(--border);margin:0 4px">&middot;</span>');
-        return `<div class="flex items-start gap-3 px-4 py-2.5 border-b cursor-pointer hover:opacity-80 transition-opacity" style="border-color:var(--border)" role="button" tabindex="0" data-lg-i="${i}">
-            <span class="text-xs font-mono font-bold flex-shrink-0 mt-px" style="color:var(--muted);min-width:40px">${_esc(e.method)}</span>
-            <span class="inline-flex items-center gap-1 flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded" style="background:color-mix(in srgb, ${sc} 12%, transparent);color:${sc};border:1px solid color-mix(in srgb, ${sc} 30%, transparent);min-width:52px">${e.status||'-'} <span style="font-weight:400;opacity:.8">${_esc(_lgStatusName(e.status))}</span></span>
-            <div class="flex-1 min-w-0">
-                <div class="text-xs font-mono truncate" style="color:var(--text)" title="${_esc(e.path)}">${_esc(e.path)}</div>
-                ${metaLine ? `<div class="flex items-center gap-1 mt-0.5">${metaLine}</div>` : ''}
-            </div>
-            <span class="text-xs flex-shrink-0 hidden sm:flex items-center gap-1 mt-px" style="color:var(--muted)">${flag}${_esc(e.ip)}</span>
-        </div>`;
+        const cc = (geoOn && geo && geo.country_code) ? geo.country_code : '';
+        const owner = _sdShort(e.service || e.router || '');
+        const dur = (e.duration && e.duration !== '-') ? e.duration : '';
+        const kind = [owner, dur].filter(Boolean).join(' · ');
+        return '<div class="sig-ep-row" role="button" tabindex="0" data-lg-i="' + i + '"'
+            + (health ? ' data-health="' + health + '"' : '')
+            + ' title="' + _esc(e.method + ' ' + e.path + ' - ' + (e.status || '?') + ' ' + _lgStatusName(e.status)) + '">'
+            + '<span class="sig-ep-id"><span class="sig-ep-name">' + _esc(e.path || '/') + '</span>'
+            + '<span class="sig-idle-txt">' + _esc(e.method || '') + '</span></span>'
+            + '<span class="sig-ep-addr">'
+            + (cc ? _flagEmoji(cc) + ' ' : '') + _esc(e.ip || '') + '</span>'
+            + '<span class="sig-ep-n ' + statCls + '">' + (e.status || '-') + '</span>'
+            + '<span class="sig-ep-flags"><span class="sig-idle-txt">' + _esc(_lgStatusName(e.status)) + '</span></span>'
+            + (kind ? '<span class="sig-ep-kind">' + _esc(kind) + '</span>' : '')
+            + '</div>';
     }).join('');
 
     const geoPanel = (geoOn && Object.keys(countryData).length) ? _geoPanelHtml('logGeo', countryData, _logCountryFilter, 'clearLogCountryFilter()') : '';
@@ -1312,16 +1319,18 @@ function renderLogs() {
         ? 'Nothing matches the active filters. Use the clear button in the panel above.'
         : (fetched ? 'No line in this window could be read as a log entry.' : 'No log lines in the fetched window.');
     const body = visible.length
-        ? `<div style="max-height:600px;overflow-y:auto;background:var(--bg)">${cards}</div>`
-        : `<div class="text-center py-12" style="color:var(--muted);background:var(--bg)"><p class="text-xs">${emptyTxt}</p></div>`;
+        ? '<div class="sig-ep-rows lg-feed-rows">' + cards + '</div>'
+        : '<div class="atk-empty"><i class="ph-fill ph-terminal"></i>'
+            + '<div class="atk-empty-t">Nothing to show</div><p class="lg-note">' + _esc(emptyTxt) + '</p></div>';
 
-    container.innerHTML = geoPanel + `<div class="rounded-xl overflow-hidden" style="border:1px solid var(--border)">
-        <div class="flex items-center justify-between px-4 py-2 text-xs" style="background:var(--card);border-bottom:1px solid var(--border);color:var(--muted)">
-            <span><i class="ph-bold ph-terminal mr-1"></i>Access Log</span>
-            <span>${_sdNum(visible.length)} of ${_sdNum(fetched)} lines</span>
-        </div>
-        ${body}
-    </div>`;
+    container.innerHTML = geoPanel + '<div class="sig-root"><section class="sig-ep lg-feed">'
+        + '<div class="sig-ep-head">'
+        + '<i class="ph-fill ph-terminal sig-ep-headic"></i>'
+        + '<span class="sc-sec-label">Access log</span>'
+        + '<span class="d-n">' + _sdNum(visible.length) + '</span>'
+        + '<span class="sc-sec-rule"></span>'
+        + '<span class="sig-idle-txt">' + _sdNum(visible.length) + ' of ' + _sdNum(fetched) + ' lines</span>'
+        + '</div>' + body + '</section></div>';
 
     if (geoPanel) renderGeoMap(document.getElementById('logGeoMap'), countryData, logGeo_click, _logCountryFilter);
 }
