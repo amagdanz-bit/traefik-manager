@@ -39,14 +39,18 @@
             if (!pref('showIpDiagBtn', true))    d.add('tm-hide-ipdiag');
             if (pref('layoutMode', 'classic') === 'modern') d.add('tm-modern');
             if (localStorage.getItem('tm-nav-collapsed') === '1') d.add('tm-nav-collapsed');
-            if (pref('statBarScope', 'all') === 'dashboard') d.add('tm-scope-dash');
+            var sbs = pref('statBarScope', 'all');
+            var sbSet = (sbs === 'all' || sbs === true || sbs === undefined || sbs === null || sbs === '')
+                ? ['dashboard', 'services', 'middlewares', 'live']
+                : (sbs === 'none' ? [] : String(sbs).split(','));
+            if (sbSet.indexOf('services') !== -1) d.add('tm-stats-here');
         })();
     </script>
     <style>
         html.tm-hide-stats #overviewSection { display: none !important; }
         html.tm-hide-entrypoints #entrypointsBar { display: none !important; }
-        html.tm-scope-dash:not(.tm-tab-dashboard) #overviewSection { display: none !important; }
-        html.tm-scope-dash:not(.tm-tab-dashboard) #entrypointsBar { display: none !important; }
+        html:not(.tm-stats-here) #overviewSection { display: none !important; }
+        html:not(.tm-stats-here) #entrypointsBar { display: none !important; }
         html.tm-hide-docs .nav-docs-link { display: none !important; }
         html.tm-hide-api .nav-api-link { display: none !important; }
         html.tm-hide-shortcuts .shortcuts-btn-wrap { display: none !important; }

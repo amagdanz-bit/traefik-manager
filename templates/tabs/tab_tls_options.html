@@ -4,12 +4,12 @@
             <i class="ph-bold ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-sm" style="color:var(--muted)"></i>
             <input type="text" id="tlsOptsSearch" oninput="filterTlsOptions()" placeholder="Search TLS profiles..." class="input-field pl-9">
         </div>
+        <div class="flex gap-1 p-1 rounded-lg fb-secondary" style="background:var(--input-bg); border:1px solid var(--border)">
+            <button onclick="openTlsOptionModal()" class="proto-btn text-xs px-3 py-1.5"><i class="ph-bold ph-plus"></i> Add TLS Profile</button>
+        </div>
         <div class="flex gap-1 p-1 rounded-lg" style="background:var(--input-bg); border:1px solid var(--border)">
             <button onclick="refreshTlsOptionsTab()" class="proto-btn text-xs px-3 py-1.5" title="Refresh"><i class="ph-bold ph-arrows-clockwise"></i></button>
         </div>
-        <button onclick="openTlsOptionModal()" class="btn-primary text-xs flex items-center gap-1.5" style="height:38px;padding:0 14px">
-            <i class="ph-bold ph-plus"></i> Add TLS Profile
-        </button>
     </div>
     <div id="tlsOptsContent">
         <div class="text-center py-16" style="color:var(--muted)">

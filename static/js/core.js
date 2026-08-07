@@ -151,6 +151,16 @@ function applyTabVisibility(map) {
 }
 
 let _statsHomeMarker = null;
+const STAT_TABS = ['dashboard', 'services', 'middlewares', 'live'];
+
+function _statTabSet() {
+    const raw = typeof tmPref === 'function' ? tmPref('statBarScope') : 'all';
+    if (raw === 'all' || raw === undefined || raw === null || raw === '') return new Set(STAT_TABS);
+    if (raw === 'none') return new Set();
+    if (raw === 'dashboard') return new Set(['dashboard']);
+    return new Set(String(raw).split(',').map(s => s.trim()).filter(t => STAT_TABS.includes(t)));
+}
+
 function placeStatCards() {
     const ov = document.getElementById('overviewSection');
     if (!ov) return;
@@ -159,14 +169,17 @@ function placeStatCards() {
         _statsHomeMarker.style.display = 'none';
         ov.parentElement.insertBefore(_statsHomeMarker, ov);
     }
-    const anchor = document.getElementById('dashFilterBar');
-    const scoped = typeof tmPref === 'function' && tmPref('statBarScope') === 'dashboard';
-    if (scoped && anchor) anchor.insertAdjacentElement('afterend', ov);
-    else _statsHomeMarker.insertAdjacentElement('afterend', ov);
+    const active = document.querySelector('.tab-content.active');
+    const tab = active ? active.id.replace(/^tab-/, '') : '';
+    if (!_statTabSet().has(tab)) { _statsHomeMarker.insertAdjacentElement('afterend', ov); return; }
+    const bar = active.querySelector('.filter-bar');
+    if (bar) bar.insertAdjacentElement('afterend', ov);
+    else active.insertAdjacentElement('afterbegin', ov);
 }
 
 function switchTab(tab) {
     document.documentElement.classList.toggle('tm-tab-dashboard', tab === 'dashboard');
+    document.documentElement.classList.toggle('tm-stats-here', _statTabSet().has(tab));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     document.querySelectorAll('.side-nav-item').forEach(i => i.classList.remove('active'));
     document.getElementById('sbtn-' + tab)?.classList.add('active');
@@ -196,6 +209,7 @@ function switchTab(tab) {
     if (tab === 'static')        openStaticTab();
     if (tab === 'logs')          refreshLogs();
     if (typeof _lgAutoSync === 'function') _lgAutoSync();
+    placeStatCards();
     _initMobileFilterBars();
 }
 

@@ -1108,7 +1108,8 @@ function applyUiPrefs() {
     html.classList.toggle('tm-hide-stats', !showStats);
     html.classList.toggle('tm-compact-stats', compact);
     html.classList.toggle('tm-hide-entrypoints', !_uiPref('showEntrypoints'));
-    html.classList.toggle('tm-scope-dash', tmPref('statBarScope') === 'dashboard');
+    const _act = document.querySelector('.tab-content.active');
+    html.classList.toggle('tm-stats-here', !!_act && _statTabSet().has(_act.id.replace(/^tab-/, '')));
     html.classList.toggle('tm-modern', tmPref('layoutMode') === 'modern');
     buildSideNav();
     placeStatCards();
@@ -1122,11 +1123,11 @@ function applyUiPrefs() {
 }
 
 function loadUiTogglesIntoModal() {
-    const scope = tmPref('statBarScope') === 'dashboard' ? 'dashboard' : 'all';
-    const bAll  = document.getElementById('scope-stats-all');
-    const bDash = document.getElementById('scope-stats-dash');
-    if (bAll)  bAll.className  = 'proto-btn' + (scope === 'all' ? ' active-http' : '');
-    if (bDash) bDash.className = 'proto-btn' + (scope === 'dashboard' ? ' active-http' : '');
+    const on = _statTabSet();
+    STAT_TABS.forEach(t => {
+        const b = document.getElementById('scope-stats-' + t);
+        if (b) b.className = 'proto-btn' + (on.has(t) ? ' active-http' : '');
+    });
     const layout = tmPref('layoutMode') === 'modern' ? 'modern' : 'classic';
     const lC = document.getElementById('layout-classic');
     const lM = document.getElementById('layout-modern');
@@ -1191,10 +1192,13 @@ function _rerenderCardGrids() {
     if (active && typeof switchTab === 'function') switchTab(active.id.replace(/^tab-/, ''));
 }
 
-function setStatBarScope(v) {
-    tmSetPref('statBarScope', v);
+function toggleStatTab(tab) {
+    const on = _statTabSet();
+    if (on.has(tab)) on.delete(tab); else on.add(tab);
+    tmSetPref('statBarScope', STAT_TABS.filter(t => on.has(t)).join(',') || 'none');
     applyUiPrefs();
     loadUiTogglesIntoModal();
+    placeStatCards();
 }
 
 function setDashPodDensity(v) {

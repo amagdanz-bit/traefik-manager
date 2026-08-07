@@ -768,11 +768,13 @@
                             <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
                                 <div>
                                     <div class="text-xs font-medium" style="color:var(--text)">Show on</div>
-                                    <div class="text-xs" style="color:var(--muted)">Where the stat cards and entry points appear</div>
+                                    <div class="text-xs" style="color:var(--muted)">Which tabs show the stat cards and entry points</div>
                                 </div>
-                                <div class="flex gap-1">
-                                    <button type="button" id="scope-stats-all" onclick="setStatBarScope('all')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">All tabs</button>
-                                    <button type="button" id="scope-stats-dash" onclick="setStatBarScope('dashboard')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Dashboard</button>
+                                <div class="flex gap-1 flex-wrap justify-end">
+                                    <button type="button" id="scope-stats-dashboard" onclick="toggleStatTab('dashboard')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Dashboard</button>
+                                    <button type="button" id="scope-stats-services" onclick="toggleStatTab('services')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Routes</button>
+                                    <button type="button" id="scope-stats-middlewares" onclick="toggleStatTab('middlewares')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Middlewares</button>
+                                    <button type="button" id="scope-stats-live" onclick="toggleStatTab('live')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Services</button>
                                 </div>
                             </div>
                             <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">

@@ -44,8 +44,8 @@
     --code-bg: #f6f8fa;
 }
 
-body { background: var(--bg); color: var(--text); overflow-x: hidden; display: flex; flex-direction: column; }
-main { overflow-x: hidden; flex: 1 0 auto; width: 100%; }
+body { background: var(--bg); color: var(--text); overflow-x: clip; display: flex; flex-direction: column; }
+main { overflow-x: clip; flex: 1 0 auto; width: 100%; }
 body > footer { flex-shrink: 0; }
 
 .tab-content { display: none; }
@@ -302,6 +302,8 @@ html.tm-compact-stats .sig-root .sig-ep-n { font-size: 12px; }
 .sig-root .lg-row { display: grid; align-items: center; grid-template-columns: minmax(0, 1fr) auto 30px; column-gap: 8px; min-width: 0; padding: 5px 2px 5px 6px; border-bottom: 1px solid var(--border); border-radius: 4px; cursor: pointer; transition: background .12s, box-shadow .12s; }
 .sig-root .lg-row:last-child { border-bottom: none; }
 .sig-root .lg-row-on { background: color-mix(in srgb, var(--blue) 10%, transparent); box-shadow: inset 2px 0 0 var(--blue); }
+.tab-content > .filter-bar { position: sticky; top: 0; z-index: 30; background: var(--bg); margin-bottom: 12px; padding-bottom: 10px; }
+html.tm-modern .tab-content > .filter-bar { top: var(--tm-nav-h, 54px); }
 .sig-root .lg-geo { margin-bottom: 12px; }
 .sig-root .lg-geo .tm-geo-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; margin-top: 6px; }
 .sig-root .lg-geo .tm-geo-map svg { display: block; width: 100%; height: auto; }
