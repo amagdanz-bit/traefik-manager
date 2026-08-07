@@ -26,12 +26,17 @@ window.rmIconFallback = function(img) {
     }
 };
 
+function _rmServerId() {
+    return (typeof _activeAgent !== 'undefined' && _activeAgent) ? _activeAgent.id : '';
+}
+
 async function rmSaveConfig() {
     const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
-    await fetch('/api/dashboard/config', {
+    const srv = _rmServerId();
+    await fetch('/api/dashboard/config' + (srv ? '?server=' + encodeURIComponent(srv) : ''), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-        body: JSON.stringify(_rmConfig)
+        body: JSON.stringify({ ..._rmConfig, server: srv })
     });
 }
 
@@ -70,7 +75,7 @@ window.rmEnsureData = async function(force, opts) {
         const [routeRes, epRes, cfgRes, rtrRes, svcRes] = await Promise.all([
             fetch(routeUrl, { headers: { 'X-Requested-With': 'fetch' } }),
             agentFetch('/api/traefik/entrypoints'),
-            fetch('/api/dashboard/config'),
+            fetch('/api/dashboard/config' + (_rmServerId() ? '?server=' + encodeURIComponent(_rmServerId()) : '')),
             agentFetch('/api/traefik/routers').catch(() => null),
             wantSvc ? agentFetch('/api/traefik/services').catch(() => null) : null
         ]);
