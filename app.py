@@ -353,7 +353,7 @@ def _get_signal_file_path() -> str:
 
 
 def _best_entrypoint() -> str:
-    eps = traefik_api_get('/api/entrypoints') or []
+    eps = traefik_api_get_all('/api/entrypoints') or []
     for ep in eps:
         addr = ep.get('address', '')
         if ':443' in addr or '/443' in addr:
@@ -1117,7 +1117,7 @@ def api_manager_router_names():
 @app.route('/api/traefik/entrypoints')
 @login_required
 def api_entrypoints():
-    eps = traefik_api_get('/api/entrypoints')
+    eps = traefik_api_get_all('/api/entrypoints')
     if eps is None:
         return jsonify({'error': 'Traefik API unreachable'}), 502
     return jsonify(eps)

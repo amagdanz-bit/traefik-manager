@@ -19,12 +19,12 @@ function _setLiveDdActive(menuId, val) {
     });
 }
 
-function pickLiveStatus(val, label) {
+function pickLiveStatus(val, label, silent) {
     _svcFilter = val;
     document.getElementById('dd-status-label').textContent = label;
     document.getElementById('dd-status-btn').classList.toggle('active', val !== 'all');
     _setLiveDdActive('dd-status-menu', val);
-    toggleLiveDd('dd-status');
+    if (!silent) toggleLiveDd('dd-status');
     renderServicesTable();
 }
 
@@ -37,12 +37,12 @@ function pickLiveProto(val, label) {
     renderServicesTable();
 }
 
-function pickLiveProvider(val, label) {
+function pickLiveProvider(val, label, silent) {
     _providerFilter = val;
     document.getElementById('dd-provider-label').textContent = label;
     document.getElementById('dd-provider-btn').classList.toggle('active', val !== 'all');
     _setLiveDdActive('dd-provider-menu', val);
-    toggleLiveDd('dd-provider');
+    if (!silent) toggleLiveDd('dd-provider');
     renderServicesTable();
 }
 
@@ -98,10 +98,15 @@ function filterServices(f) {
 
 function renderServicesTable() {
     const search = (document.getElementById('svcSearch')?.value || '').toLowerCase();
+    const anyDownOf = s => {
+        const m = s.serverStatus;
+        if (!m || typeof m !== 'object') return false;
+        return Object.keys(m).some(k => String(m[k]).toUpperCase() !== 'UP');
+    };
     const statusOf = s => {
         const st = (s.status || '').toLowerCase();
-        if (st === 'enabled') return 'success';
         if (st === 'disabled' || st === 'error') return 'error';
+        if (st === 'enabled') return anyDownOf(s) ? 'warning' : 'success';
         return 'warning';
     };
     const providerOf = s => {

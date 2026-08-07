@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -82,30 +83,75 @@ func (a *App) traefikProxy(w http.ResponseWriter, r *http.Request, traefikPath s
 	io.Copy(w, resp.Body)
 }
 
-func (a *App) traefikFetchProto(ctx context.Context, traefikPath string) (json.RawMessage, error) {
-	target := strings.TrimRight(a.cfg.TraefikAPIURL, "/") + traefikPath
+const (
+	traefikPageSize = 1000
+	traefikMaxPages = 50
+)
+
+func (a *App) traefikFetchPage(ctx context.Context, target string) (json.RawMessage, int, error) {
 	ctx2, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx2, http.MethodGet, target, nil)
 	if err != nil {
-		return json.RawMessage("[]"), err
+		return nil, 0, err
 	}
 	a.applyTraefikAuth(req)
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		a.debugf("traefik fetch %s failed: %v", target, err)
-		return json.RawMessage("[]"), err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		a.debugf("traefik fetch %s returned status %d", target, resp.StatusCode)
-		return json.RawMessage("[]"), fmt.Errorf("traefik returned status %d", resp.StatusCode)
+		return nil, 0, fmt.Errorf("traefik returned status %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		return nil, 0, err
+	}
+	next, _ := strconv.Atoi(resp.Header.Get("X-Next-Page"))
+	return json.RawMessage(body), next, nil
+}
+
+func (a *App) traefikFetchProto(ctx context.Context, traefikPath string) (json.RawMessage, error) {
+	sep := "?"
+	if strings.Contains(traefikPath, "?") {
+		sep = "&"
+	}
+	base := strings.TrimRight(a.cfg.TraefikAPIURL, "/") + traefikPath + sep + "per_page=" + strconv.Itoa(traefikPageSize)
+	all := []json.RawMessage{}
+	page := 1
+	for i := 0; i < traefikMaxPages; i++ {
+		target := base
+		if page > 1 {
+			target += "&page=" + strconv.Itoa(page)
+		}
+		body, next, err := a.traefikFetchPage(ctx, target)
+		if err != nil {
+			if i == 0 {
+				return json.RawMessage("[]"), err
+			}
+			break
+		}
+		var chunk []json.RawMessage
+		if err := json.Unmarshal(body, &chunk); err != nil {
+			if i == 0 {
+				return body, nil
+			}
+			break
+		}
+		all = append(all, chunk...)
+		if len(chunk) == 0 || next <= page {
+			break
+		}
+		page = next
+	}
+	out, err := json.Marshal(all)
+	if err != nil {
 		return json.RawMessage("[]"), err
 	}
-	return json.RawMessage(body), nil
+	return json.RawMessage(out), nil
 }
 
 func (a *App) routersHandler(w http.ResponseWriter, r *http.Request) {

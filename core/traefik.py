@@ -13,7 +13,10 @@ def _traefik_verify():
         return False
     return True
 
-def traefik_api_get(path):
+TRAEFIK_PAGE_SIZE = 1000
+TRAEFIK_MAX_PAGES = 50
+
+def _traefik_request(path):
     settings = settings_mod.load_settings()
     base_url = settings['traefik_api_url']
     if not config.safe_api_url(base_url):
@@ -25,14 +28,51 @@ def traefik_api_get(path):
     try:
         resp = requests.get(f"{base_url}{path}", timeout=3, auth=auth, verify=_traefik_verify())
         if resp.status_code == 200:
-            return resp.json()
+            return resp
     except Exception as e:
         logger.debug(f"Traefik API unavailable: {e}")
     return None
 
+def traefik_api_get(path):
+    resp = _traefik_request(path)
+    if resp is None:
+        return None
+    try:
+        return resp.json()
+    except Exception as e:
+        logger.debug(f"Traefik API returned an unreadable body: {e}")
+        return None
+
+def _traefik_next_page(resp, page):
+    header = getattr(resp, 'headers', None) or {}
+    raw = str(header.get('X-Next-Page', '') or '')
+    if not raw.isdigit():
+        return 0
+    nxt = int(raw)
+    return nxt if nxt > page else 0
+
 def traefik_api_get_all(path):
     sep = '&' if '?' in path else '?'
-    return traefik_api_get(f"{path}{sep}per_page=1000")
+    out = None
+    page = 1
+    for _ in range(TRAEFIK_MAX_PAGES):
+        query = f"{sep}per_page={TRAEFIK_PAGE_SIZE}" + (f"&page={page}" if page > 1 else '')
+        resp = _traefik_request(f"{path}{query}")
+        if resp is None:
+            return out
+        try:
+            chunk = resp.json()
+        except Exception as e:
+            logger.debug(f"Traefik API returned an unreadable body: {e}")
+            return out
+        if not isinstance(chunk, list):
+            return chunk
+        out = chunk if out is None else out + chunk
+        nxt = _traefik_next_page(resp, page)
+        if not nxt or not chunk:
+            break
+        page = nxt
+    return out
 
 def _fetch_traefik_routers_and_services():
     all_routers  = {}

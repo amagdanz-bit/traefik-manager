@@ -153,7 +153,7 @@ func (a *App) router(w http.ResponseWriter, r *http.Request) {
 	case p == "/api/traefik/middlewares" && m == http.MethodGet:
 		a.middlewaresHandler(w, r)
 	case p == "/api/traefik/entrypoints" && m == http.MethodGet:
-		a.traefikProxy(w, r, "/api/entrypoints")
+		a.traefikProxy(w, r, "/api/entrypoints?per_page=1000")
 	case p == "/api/traefik/version" && m == http.MethodGet:
 		a.traefikProxy(w, r, "/api/version")
 	case p == "/api/traefik/logs" && m == http.MethodGet:

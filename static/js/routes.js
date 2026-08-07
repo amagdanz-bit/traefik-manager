@@ -1,7 +1,26 @@
 let currentProtoFilter = 'all';
 let _routeCardEls = [];
 
+let _apiStatusFilter = '';
+let _routeEpFilter = '';
+
+function filterApiStatus(v) {
+    _apiStatusFilter = _apiStatusFilter === v ? '' : v;
+    filterRoutes();
+}
+
+function filterRouteEntryPoint(name) {
+    _routeEpFilter = _routeEpFilter === name ? '' : name;
+    filterRoutes();
+}
+
+function clearRouteApiFilters() {
+    _apiStatusFilter = '';
+    _routeEpFilter = '';
+}
+
 function filterProto(proto) {
+    clearRouteApiFilters();
     currentProtoFilter = proto;
     ['all','HTTP','TCP','UDP'].forEach(p => {
         const btn = document.getElementById('filter' + (p === 'all' ? 'All' : p));
@@ -17,6 +36,7 @@ let currentRouteDomainFilter = '';
 let currentRouteStatusFilter = 'all';
 
 function filterRouteStatus(status) {
+    clearRouteApiFilters();
     currentRouteStatusFilter = status;
     ['all','active','inactive'].forEach(s => {
         const btn = document.getElementById('filterStatus-' + s);
@@ -29,6 +49,7 @@ function filterRouteStatus(status) {
 }
 
 function pickRouteDomain(val, label) {
+    clearRouteApiFilters();
     currentRouteDomainFilter = val;
     document.getElementById('dd-route-domain-label').textContent = label;
     const btn = document.getElementById('dd-route-domain-btn');
@@ -40,19 +61,48 @@ function pickRouteDomain(val, label) {
     filterRoutes();
 }
 
+function clearRouteDeepFilters() {
+    clearRouteApiFilters();
+    filterRoutes();
+}
+
+function _renderRouteDeepFilters() {
+    const bar = document.getElementById('routeDeepFilters');
+    if (!bar) return;
+    const chips = [];
+    if (_routeEpFilter) {
+        chips.push(['ph-door-open', 'entry point', _routeEpFilter, 'filterRouteEntryPoint(' + JSON.stringify(_routeEpFilter) + ')']);
+    }
+    if (_apiStatusFilter) {
+        chips.push(['ph-pulse', 'status', _apiStatusFilter, 'filterApiStatus(' + JSON.stringify(_apiStatusFilter) + ')']);
+    }
+    if (!chips.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    bar.innerHTML = chips.map(([icon, label, value, clear]) =>
+        '<button type="button" class="route-deep-chip" onclick="' + _esc(clear) + ';filterRoutes()">'
+        + '<i class="ph-bold ' + icon + '"></i>'
+        + '<span class="route-deep-label">' + _esc(label) + '</span>'
+        + '<span class="route-deep-value">' + _esc(value) + '</span>'
+        + '<i class="ph-bold ph-x"></i></button>').join('');
+    bar.style.display = 'flex';
+}
+
 function filterRoutes() {
     const q = document.getElementById('searchRoutes').value.toLowerCase();
+    _renderRouteDeepFilters();
     let visible = 0;
     for (const card of _routeCardEls) {
         const name    = card.dataset.name || '';
         const proto   = card.dataset.protocol || '';
         const domains = (card.dataset.domains || '').split('|').filter(Boolean);
         const enabled = card.dataset.enabled !== 'false';
+        const eps = (card.dataset.eps || '').split('|').filter(Boolean);
         const show =
             (!q || name.includes(q)) &&
             (currentProtoFilter === 'all' || proto === currentProtoFilter) &&
             (!currentRouteDomainFilter || domains.some(d => d === currentRouteDomainFilter || d.endsWith('.' + currentRouteDomainFilter))) &&
-            (currentRouteStatusFilter === 'all' || (currentRouteStatusFilter === 'active' && enabled) || (currentRouteStatusFilter === 'inactive' && !enabled));
+            (currentRouteStatusFilter === 'all' || (currentRouteStatusFilter === 'active' && enabled) || (currentRouteStatusFilter === 'inactive' && !enabled)) &&
+            (!_apiStatusFilter || card.dataset.apistatus === _apiStatusFilter || card.dataset.apibound === _apiStatusFilter) &&
+            (!_routeEpFilter || eps.includes(_routeEpFilter));
         card.style.display = show ? '' : 'none';
         if (show) visible++;
     }
@@ -63,8 +113,26 @@ function filterRoutes() {
             const sub = document.getElementById('routeEmptySub');
             const cta = document.getElementById('routeEmptyCta');
             if (t) t.textContent = 'No routes match your filters';
-            if (sub) sub.style.display = 'none';
-            if (cta) cta.style.display = 'none';
+            if (sub) {
+                if (_routeEpFilter) {
+                    sub.textContent = 'No route binds the entry point ' + _routeEpFilter + '.';
+                    sub.style.display = '';
+                } else if (_apiStatusFilter) {
+                    sub.textContent = 'No route currently reports status ' + _apiStatusFilter + '.';
+                    sub.style.display = '';
+                } else {
+                    sub.style.display = 'none';
+                }
+            }
+            if (cta) {
+                if (_routeEpFilter || _apiStatusFilter) {
+                    cta.style.display = 'inline-flex';
+                    cta.setAttribute('onclick', 'clearRouteDeepFilters()');
+                    cta.innerHTML = '<i class="ph-bold ph-x"></i> Clear filter';
+                } else {
+                    cta.style.display = 'none';
+                }
+            }
             emptyEl.style.display = '';
         } else {
             emptyEl.style.display = 'none';
@@ -738,7 +806,7 @@ function _tmRouteCard(app, i, opts) {
         ? `<input type="checkbox" class="bulk-check" onclick="event.stopPropagation()" ${bulkSel ? 'checked' : ''} onchange="toggleBulkSelect('${_esc(app.id)}')" style="width:15px;height:15px;accent-color:var(--blue);cursor:pointer;flex-shrink:0;margin-top:6px">`
         : '';
 
-    const dataAttrs = `data-protocol="${proto}" data-name="${_esc(app.name.toLowerCase())}" data-routekey="${_esc(app.name)}" data-idx="${i}" data-enabled="${enabled}" data-domains="${allDomains.map(d => _esc(d)).join('|')}" data-target="${_esc(app.target)}" data-configfile="${_esc(app.configFile || '')}"`;
+    const dataAttrs = `data-protocol="${proto}" data-name="${_esc(app.name.toLowerCase())}" data-routekey="${_esc(app.name)}" data-idx="${i}" data-enabled="${enabled}" data-domains="${allDomains.map(d => _esc(d)).join('|')}" data-target="${_esc(app.target)}" data-configfile="${_esc(app.configFile || '')}" data-eps="${(app.entryPoints || []).map(e => _esc(e)).join('|')}"`;
 
     return `<div class="tm-card route-card${bulkSel ? ' tm-sel' : ''}" ${dataAttrs} style="--tm-accent:var(--blue)" onclick="openRouteDetailFromCard(this)">
         <div class="tm-head">${bulkCheckbox}${head}
@@ -774,8 +842,15 @@ function renderRouteGrid(apps) {
             const sub = document.getElementById('routeEmptySub');
             const cta = document.getElementById('routeEmptyCta');
             if (t) t.textContent = _activeAgent ? 'No routes on this server yet' : 'No routes yet';
-            if (sub) sub.style.display = '';
-            if (cta) cta.style.display = 'inline-flex';
+            if (sub) {
+                sub.textContent = 'Create your first route to start managing your Traefik proxy.';
+                sub.style.display = '';
+            }
+            if (cta) {
+                cta.setAttribute('onclick', 'openModal()');
+                cta.innerHTML = '<i class="ph-bold ph-plus"></i> Add Route';
+                cta.style.display = 'inline-flex';
+            }
             emptyEl.style.display = '';
         }
         return;
@@ -818,7 +893,7 @@ function renderRouteGrid(apps) {
         const httpBody = `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">${ruleLabel}</div>${domainDisplay}</div><div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Target</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div>${(app.servers||[]).length>1?`<span class="badge badge-muted" style="font-size:9px" title="${(app.servers||[]).length} backends">+${(app.servers||[]).length-1}</span>`:''}<button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div></div>`; const tcpBody = `${app.rule ? `<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Rule</div><div class="text-xs font-mono truncate" style="color:var(--blue)">${_esc(app.rule)}</div></div>` : ''}<div class="rounded-md p-2.5" style="background:var(--input-bg);border:1px solid var(--border)"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--muted)">Target</div><div style="display:flex;align-items:center;gap:4px"><div class="text-xs font-mono truncate" style="color:var(--green)">${_esc(app.target)}</div>${(app.servers||[]).length>1?`<span class="badge badge-muted" style="font-size:9px" title="${(app.servers||[]).length} backends">+${(app.servers||[]).length-1}</span>`:''}<button onclick="event.stopPropagation();_copyToClipboard('${_esc(app.target)}')" title="Copy" style="background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);flex-shrink:0;line-height:1;border-radius:3px" onmouseover="this.style.color='var(--green)'" onmouseout="this.style.color='var(--muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-56,176H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></div></div>`;
         const cfArg = app.configFile ? `,'${_esc(app.configFile)}'` : ',\'\'';
         const cfBadge = (epBadges || mwBadges || epMwBadges || app.configFile) ? `<div class="flex flex-wrap items-center gap-1 mt-2">${epBadges}${mwBadges}${epMwBadges}${app.configFile ? `<span class="badge badge-muted" style="font-size:9px;margin-left:auto">${_esc(app.configFile)}</span>` : ''}</div>` : '';
-        const dataAttrs = `data-protocol="${proto}" data-name="${_esc(app.name.toLowerCase())}" data-routekey="${_esc(app.name)}" data-idx="${i}" data-enabled="${enabled}" data-domains="${allDomains.map(d => _esc(d)).join('|')}" data-target="${_esc(app.target)}" data-configfile="${_esc(app.configFile||'')}"`;
+        const dataAttrs = `data-protocol="${proto}" data-name="${_esc(app.name.toLowerCase())}" data-routekey="${_esc(app.name)}" data-idx="${i}" data-enabled="${enabled}" data-domains="${allDomains.map(d => _esc(d)).join('|')}" data-target="${_esc(app.target)}" data-configfile="${_esc(app.configFile||'')}" data-eps="${(app.entryPoints||[]).map(e => _esc(e)).join('|')}"`;
         const isBulkSelected = _bulkMode && _bulkSelected.has(app.id);
         const bulkOutline = isBulkSelected ? 'outline:2px solid var(--blue);outline-offset:-2px;' : '';
         const bulkCheckbox = _bulkMode ? `<input type="checkbox" class="bulk-check" onclick="event.stopPropagation()" ${isBulkSelected ? 'checked' : ''} onchange="toggleBulkSelect('${_esc(app.id)}')" style="width:15px;height:15px;accent-color:var(--blue);cursor:pointer;flex-shrink:0;border-radius:3px;margin-right:2px">` : '';
@@ -849,6 +924,8 @@ function renderRouteGrid(apps) {
         grid.className = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4';
     }
     _routeCardEls = Array.from(grid.querySelectorAll('.route-card'));
+    if (typeof _sdApplyRouteCards === 'function') _sdApplyRouteCards(false);
+    if (document.getElementById('searchRoutes')) filterRoutes();
 }
 
 

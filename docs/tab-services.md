@@ -17,7 +17,7 @@ In the [Modern layout](guide.md), grid view uses the redesigned card: the servic
 ## Filtering 
 
 - **Search** - filter by service name
-- **Status buttons** - show All / Success / Warnings / Errors
+- **Status buttons** - show All / Success / Warnings / Errors. A service Traefik reports as `enabled` counts as a warning when any of its backends is not `UP`, so the stat panel's **backends down** count and this filter always agree
 
 ## Requirements
 

@@ -1115,8 +1115,10 @@ function applyUiPrefs() {
     const overviewSection = document.getElementById('overviewSection');
     if (overviewSection) overviewSection.classList.toggle('hidden', !showStats);
     _applyEntrypointsVisibility();
-    const grid = document.getElementById('statsGrid');
-    if (grid) grid.classList.toggle('stats-compact', compact);
+    const panel = document.getElementById('statsPanel');
+    if (panel) panel.classList.toggle('sig-compact', compact);
+    const logPanel = document.getElementById('logStatsPanel');
+    if (logPanel) logPanel.classList.toggle('sig-compact', compact);
 }
 
 function loadUiTogglesIntoModal() {
