@@ -302,6 +302,22 @@ html.tm-compact-stats .sig-root .sig-ep-n { font-size: 12px; }
 .sig-root .lg-row { display: grid; align-items: center; grid-template-columns: minmax(0, 1fr) auto 30px; column-gap: 8px; min-width: 0; padding: 5px 2px 5px 6px; border-bottom: 1px solid var(--border); border-radius: 4px; cursor: pointer; transition: background .12s, box-shadow .12s; }
 .sig-root .lg-row:last-child { border-bottom: none; }
 .sig-root .lg-row-on { background: color-mix(in srgb, var(--blue) 10%, transparent); box-shadow: inset 2px 0 0 var(--blue); }
+html.tm-modern .svc-list { border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 4px 6px 6px; overflow: visible; }
+html.tm-modern .svc-list-header { background: none; border-bottom: 1px solid var(--border); padding: 7px 8px 8px 10px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; color: var(--muted); }
+html.tm-modern .svc-list-row { padding: 6px 8px 7px 10px; border-bottom: 1px solid var(--border); border-radius: 6px; transition: background .12s, box-shadow .12s, opacity .12s; }
+html.tm-modern .svc-list-row:last-child { border-bottom: none; }
+html.tm-modern .svc-list-row:hover { background: color-mix(in srgb, var(--blue) 5%, transparent); box-shadow: inset 2px 0 0 var(--blue); }
+html.tm-modern .svc-list-row:focus-within { outline: 2px solid var(--blue); outline-offset: -2px; background: color-mix(in srgb, var(--blue) 5%, transparent); }
+html.tm-modern .svc-list-row.opacity-50 { opacity: .55; }
+html.tm-modern .svc-list-row.opacity-50:hover { opacity: 1; }
+html.tm-modern .svc-list-col-name { font: 600 12px/1.35 'JetBrains Mono', monospace; letter-spacing: -.01em; }
+html.tm-modern .svc-list-row .pill-btn { visibility: hidden; opacity: 0; transition: opacity .12s; }
+html.tm-modern .svc-list-row:hover .pill-btn,
+html.tm-modern .svc-list-row:focus-within .pill-btn { visibility: visible; opacity: 1; }
+html.tm-modern .svc-list-row .toggle-switch { transform: scale(.88); transform-origin: right center; }
+@media (hover: none) {
+    html.tm-modern .svc-list-row .pill-btn { visibility: visible; opacity: 1; }
+}
 .sig-root .lg-feed { margin-top: 12px; }
 .sig-root .lg-feed-rows { max-height: 620px; overflow-y: auto; overflow-x: hidden; }
 .sig-root .lg-feed .sig-ep-row { grid-template-columns: minmax(0, 1fr) auto 42px 92px; grid-template-areas: "id addr n flags" "kind kind kind kind"; }
