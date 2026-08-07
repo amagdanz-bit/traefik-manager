@@ -16,7 +16,7 @@ TM stores some data in separate files alongside `manager.yml` in the same config
 | `agents.yml` | Remote agent registrations (encrypted API keys). Auto-created and migrated from `manager.yml` on first start after v1.5.0 |
 | `templates.yml` | Custom middleware templates created in Settings - Templates |
 | `notifications.yml` | Recent notification history |
-| `dashboard.yml` | Dashboard widget layout |
+| `dashboard.yml` | Dashboard custom groups and per-card overrides, kept per server |
 
 None of these companion files need to be edited by hand. Back up the entire config directory to preserve all TM state.
 

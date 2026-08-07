@@ -338,13 +338,17 @@ Read-only diagnostic for the current request. Returns what the app sees as the c
 
 ### `GET /api/dashboard/config`
 
-Get saved dashboard configuration - custom groups and per-route icon/name overrides.
+Get saved dashboard configuration - custom groups and per-route icon, name, link and hidden overrides.
+
+Pass `?server=<agent-id>` to read an agent's configuration. Without it you get the Host's. Each server keeps its own groups and overrides.
 
 ---
 
 ### `POST /api/dashboard/config`
 
-Save dashboard configuration. Replaces the full config in `dashboard.yml`.
+Save dashboard configuration. Replaces that server's section of `dashboard.yml`, leaving the other servers untouched.
+
+Pass `?server=<agent-id>`, or a `server` key in the body, to write an agent's configuration. Without it the Host's is written.
 
 ```json
 {

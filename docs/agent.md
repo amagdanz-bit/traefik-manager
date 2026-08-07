@@ -82,6 +82,8 @@ services:
       - CROWDSEC_MACHINE_PASSWORD=your-machine-password
     volumes:
       - /host/config:/app/config
+      # Required by STATIC_CONFIG_PATH above. Must be the same traefik.yml Traefik
+      # itself reads, and must be writable - no :ro
       - /etc/traefik/traefik.yml:/etc/traefik/traefik.yml
       - tma_backups:/app/backups
 
@@ -93,14 +95,35 @@ volumes:
 
 ## Static config editing
 
-Two additions to the agent service enable the **Static Config** tab for that server:
+Two additions to the agent service enable the **Static Config** tab for that server: the env var, and a volume that actually puts the file inside the agent container.
 
 ```yaml
+services:
+  traefik-manager-agent:
+    environment:
+      - STATIC_CONFIG_PATH=/etc/traefik/traefik.yml
+    volumes:
+      - /etc/traefik/traefik.yml:/etc/traefik/traefik.yml
+```
+
+The two must agree: `STATIC_CONFIG_PATH` is the path **inside the agent container**, which is the right-hand side of the volume. Mount it wherever you like, as long as the env var names the same place.
+
+The left-hand side is the host path, and it must be the very file your Traefik reads. If Traefik runs in Docker, use the same host path its own compose mounts:
+
+```yaml
+services:
+  traefik:
+    volumes:
+      - /srv/traefik/traefik.yml:/traefik.yml:ro      # Traefik reads it here
+
+  traefik-manager-agent:
     environment:
       - STATIC_CONFIG_PATH=/traefik.yml
     volumes:
-      - ./traefik/traefik.yml:/traefik.yml
+      - /srv/traefik/traefik.yml:/traefik.yml          # agent edits the same file
 ```
+
+Note the paths inside the two containers do not have to match - only the host path does. Traefik may keep its copy read-only; the agent's must not be.
 
 - The mount must be **writable** - no `:ro`. A `.bak` backup is created in `BACKUP_DIR` before every save. Single-file bind mounts are supported.
 - The path is wherever you mount the file inside the **agent** container - it does not have to match the path inside the Traefik container.

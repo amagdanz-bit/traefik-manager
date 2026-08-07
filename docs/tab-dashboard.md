@@ -76,7 +76,9 @@ The expander reports the health of what it is hiding: when the hidden set contai
 
 ## Per-card editing
 
-Click the pencil icon that appears on a route row when you hover it to open the Edit Route modal.
+Click the pencil that appears on a route row when you hover it, or in the corner of an icon tile, to open the **Card settings** panel. It slides in from the right like the other editors.
+
+Everything here changes how the app looks on the dashboard. None of it touches the route itself, so nothing you do in this panel affects how traffic is served.
 
 ### Display name
 
@@ -102,21 +104,35 @@ Override which group the route belongs to. Select **Auto-detect** to let the key
 
 ### Link URL
 
-Override the URL the card opens, for cards where the route's URL is not the right landing page - for example a route that serves an API while the UI lives elsewhere. Only `http://` and `https://` URLs are accepted, on save, on read and again at render time. The **Disable link for this card** checkbox turns the card back into a plain informational row.
+Override the URL the card opens, for cards where the route's URL is not the right landing page - for example a route that serves an API while the UI lives elsewhere. Only `http://` and `https://` URLs are accepted, on save, on read and again at render time. The **Do not make this card clickable** checkbox turns the card back into a plain informational row.
 
 ---
 
 ## Custom groups
 
-Click the tag icon in the filter bar to open the Route Groups modal.
+Click the tag icon in the filter bar to open the **Dashboard settings** panel. It slides in from the right and manages both custom groups and hidden apps.
 
 Routes not matched by any built-in category go into **Other**. Custom groups let you catch specific routes and give them their own card instead.
 
-To add a group: enter a name. Routes are assigned to it via the pencil icon on each route row - select the group in the Group assignment field. Custom groups appear at the top of the group dropdown in the edit modal.
+To add a group: enter a name. Routes are assigned to it via the pencil on each route row or icon tile - select the group in the Group assignment field. Custom groups appear at the top of the group dropdown in Card settings.
 
 A custom group with no routes assigned yet still renders as an empty pod with a line telling you how to fill it, so a group you just created is never invisible. It is hidden while a search or filter is active.
 
 Custom groups are saved to `/config/dashboard.yml` and persist across restarts.
+
+Groups and every per-card override are stored **per server**. A group you create while an agent is selected belongs to that agent alone and does not appear on the Host or on your other agents, and two servers with a route of the same name keep separate icons, names and links.
+
+---
+
+## Hiding apps
+
+Tick **Hide from the dashboard** in Card settings to drop an app from the dashboard. It disappears from both the list and icon views straight away.
+
+Hiding is a dashboard-view setting only. The route keeps running, keeps serving traffic, and still appears on the [Routes](tab-routes.md) tab and everywhere else. Nothing is disabled.
+
+Hidden apps are listed under **Hidden apps** in the Dashboard settings panel, each with a **show** button to put it back. The section header carries the count, so you always know how many are out of sight.
+
+Useful for routes that are real but not things you launch: API-only routers, health endpoints, internal services, or the second and third hostname of an app you already have a card for.
 
 ---
 
