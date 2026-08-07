@@ -1,6 +1,6 @@
 # Traefik Manager - UI Examples
 
-Switch (light / dark toggle in the top-right corner).
+Every screenshot follows the site theme, so use the light and dark toggle in the top-right corner to see either. Click any image to open it full screen, then use the arrow keys to move between them and Escape to close.
 
 <style>
 .ui-cards {

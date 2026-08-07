@@ -17,8 +17,8 @@ async function capture(theme) {
     await page.goto(BASE, { waitUntil: 'networkidle2', timeout: 60000 });
     await sleep(4500);
     await js(`document.querySelectorAll('body > div[style*="--red"]').forEach(b => b.remove())`);
-    await js(`fetch('/api/settings/ui', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch', ..._csrfHeaders() }, body: JSON.stringify({ ui_prefs: { layoutMode: 'modern', statBarScope: 'dashboard' } }) })`);
-    await js(`tmSetPref('layoutMode', 'modern'); tmSetPref('statBarScope', 'dashboard'); applyUiPrefs();`);
+    await js(`fetch('/api/settings/ui', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch', ..._csrfHeaders() }, body: JSON.stringify({ ui_prefs: { layoutMode: 'modern', statBarScope: 'all' } }) })`);
+    await js(`tmSetPref('layoutMode', 'modern'); tmSetPref('statBarScope', 'all'); applyUiPrefs();`);
     await sleep(1200);
 
     await tab('services');
@@ -47,6 +47,12 @@ async function capture(theme) {
     await shot('route-map');
     await tab('certs');
     await shot('certs');
+    await js(`if (typeof _visibleTabsCache !== 'undefined' && !_visibleTabsCache.tls) toggleTabVisibility('tls')`); await sleep(700);
+    await tab('tls', 2000);
+    await shot('tls-options');
+    await js(`if (typeof _visibleTabsCache !== 'undefined' && !_visibleTabsCache.crowdsec) toggleTabVisibility('crowdsec')`); await sleep(700);
+    await tab('crowdsec', 4000);
+    await shot('crowdsec');
     await tab('logs', 2500);
     await tab('plugins', 2000);
     await shot('plugins');

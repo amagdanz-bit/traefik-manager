@@ -8,6 +8,7 @@ import MobileRelease from './components/MobileRelease.vue'
 import UnraidCAStatus from './components/UnraidCAStatus.vue'
 import ImageCarousel from './components/ImageCarousel.vue'
 import DesktopScreenshots from './components/DesktopScreenshots.vue'
+import ScreenshotGrid from './components/ScreenshotGrid.vue'
 import MobileScreenshots from './components/MobileScreenshots.vue'
 import ComposeUpgrader from './components/ComposeUpgrader.vue'
 import ShowcaseMockup from './components/ShowcaseMockup.vue'
@@ -42,6 +43,7 @@ export default {
     app.component('UnraidCAStatus', UnraidCAStatus)
     app.component('ImageCarousel', ImageCarousel)
     app.component('DesktopScreenshots', DesktopScreenshots)
+    app.component('ScreenshotGrid', ScreenshotGrid)
     app.component('MobileScreenshots', MobileScreenshots)
     app.component('ComposeUpgrader', ComposeUpgrader)
     app.component('ShowcaseMockup', ShowcaseMockup)

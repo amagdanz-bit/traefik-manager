@@ -10,10 +10,18 @@ for theme in ("dark", "light"):
         im.save(f"/img/{theme}-{f[:-4]}.png", optimize=True)
         copied += 1
 
+CAROUSEL = ("dashboard", "routes-cards", "middlewares-cards", "services-cards", "route-map",
+            "tls-options", "certs", "crowdsec", "logs", "plugins", "static-config")
+
 for theme in ("dark", "light"):
-    frames = [Image.open(f"/img/{theme}-{n}.png").convert("RGB").resize((1280, 720), Image.LANCZOS)
-              for n in ("dashboard", "routes-cards", "middlewares-cards", "route-map")]
+    frames = []
+    for n in CAROUSEL:
+        p = f"/img/{theme}-{n}.png"
+        if not os.path.exists(p):
+            print(f"carousel: missing {theme}-{n}.png, skipped")
+            continue
+        frames.append(Image.open(p).convert("RGB").resize((1280, 720), Image.LANCZOS))
     frames[0].save(f"/img/readme-carousel-{theme}.gif", save_all=True,
                    append_images=frames[1:], duration=2400, loop=0, optimize=True)
 
-print(f"{copied} screenshots installed, 2 carousel GIFs rebuilt")
+print(f"{copied} screenshots installed, 2 carousel GIFs rebuilt from {len(CAROUSEL)} tabs")

@@ -1,43 +1,77 @@
 <script setup lang="ts">
-import ImageCarousel from './ImageCarousel.vue'
+import ScreenshotGrid from './ScreenshotGrid.vue'
 
-const slides = [
-  { light: '/images/light-login.png',                  dark: '/images/dark-login.png',                  label: 'Login' },
-  { light: '/images/light-setup-welcome.png',          dark: '/images/dark-setup-welcome.png',          label: 'Setup - Welcome' },
-  { light: '/images/light-setup-connection.png',       dark: '/images/dark-setup-connection.png',       label: 'Setup - Connection & Domains' },
-  { light: '/images/light-setup-self-route.png',       dark: '/images/dark-setup-self-route.png',       label: 'Setup - Self Route' },
-  { light: '/images/light-setup-monitoring.png',       dark: '/images/dark-setup-monitoring.png',       label: 'Setup - Optional Tabs' },
-  { light: '/images/light-setup-password.png',         dark: '/images/dark-setup-password.png',         label: 'Setup - Set Password' },
-  { light: '/images/light-dashboard.png',              dark: '/images/dark-dashboard.png',              label: 'Dashboard' },
-  { light: '/images/light-dashboard-hover.png',        dark: '/images/dark-dashboard-hover.png',        label: 'Dashboard - Launcher' },
-  { light: '/images/light-route-map.png',              dark: '/images/dark-route-map.png',              label: 'Route Map' },
-  { light: '/images/light-routes-cards.png',           dark: '/images/dark-routes-cards.png',           label: 'Routes - Card View' },
-  { light: '/images/light-routes-list.png',            dark: '/images/dark-routes-list.png',            label: 'Routes - List View' },
-  { light: '/images/light-routes-add-http.png',        dark: '/images/dark-routes-add-http.png',        label: 'Routes - Add HTTP Route' },
-  { light: '/images/light-routes-add-tcp.png',         dark: '/images/dark-routes-add-tcp.png',         label: 'Routes - Add TCP Route' },
-  { light: '/images/light-routes-add-udp.png',         dark: '/images/dark-routes-add-udp.png',         label: 'Routes - Add UDP Route' },
-  { light: '/images/light-middlewares-cards.png',      dark: '/images/dark-middlewares-cards.png',      label: 'Middlewares - Card View' },
-  { light: '/images/light-middlewares-list.png',       dark: '/images/dark-middlewares-list.png',       label: 'Middlewares - List View' },
-  { light: '/images/light-middlewares-add.png',        dark: '/images/dark-middlewares-add.png',        label: 'Middlewares - Add' },
-  { light: '/images/light-services-cards.png',         dark: '/images/dark-services-cards.png',         label: 'Services - Card View' },
-  { light: '/images/light-services-list.png',          dark: '/images/dark-services-list.png',          label: 'Services - List View' },
-  { light: '/images/light-certs.png',                  dark: '/images/dark-certs.png',                  label: 'Certificates' },
-  { light: '/images/light-logs.png',                   dark: '/images/dark-logs.png',                   label: 'Access Logs' },
-  { light: '/images/light-plugins.png',                dark: '/images/dark-plugins.png',                label: 'Plugins' },
-  { light: '/images/light-plugins-add.png',            dark: '/images/dark-plugins-add.png',            label: 'Plugins - Add' },
-  { light: '/images/light-settings-interface.png',     dark: '/images/dark-settings-interface.png',     label: 'Settings - Interface' },
-  { light: '/images/light-settings-auth-password.png', dark: '/images/dark-settings-auth-password.png', label: 'Settings - Authentication' },
-  { light: '/images/light-settings-auth-apikeys.png',  dark: '/images/dark-settings-auth-apikeys.png',  label: 'Settings - API Keys' },
-  { light: '/images/light-settings-auth-oidc.png',     dark: '/images/dark-settings-auth-oidc.png',     label: 'Settings - OIDC / SSO' },
-  { light: '/images/light-settings-static-config.png', dark: '/images/dark-settings-static-config.png', label: 'Settings - Static Config' },
-  { light: '/images/light-settings-backups.png',       dark: '/images/dark-settings-backups.png',       label: 'Settings - Backups' },
-  { light: '/images/light-settings-system.png',        dark: '/images/dark-settings-system.png',        label: 'Settings - System Monitoring' },
-  { light: '/images/light-settings-routes.png',        dark: '/images/dark-settings-routes.png',        label: 'Settings - Route Monitoring' },
-  { light: '/images/light-settings-connection.png',    dark: '/images/dark-settings-connection.png',    label: 'Settings - Connection' },
-  { light: '/images/light-settings-about.png',         dark: '/images/dark-settings-about.png',         label: 'Settings - About' },
+const s = (n: string, label: string, note?: string) => ({
+  light: `/images/light-${n}.png`,
+  dark: `/images/dark-${n}.png`,
+  label,
+  note,
+})
+
+const groups = [
+  {
+    title: 'Management',
+    shots: [
+      s('routes-cards', 'Routes', 'Card view'),
+      s('routes-list', 'Routes', 'List view'),
+      s('routes-add-http', 'Add HTTP route'),
+      s('routes-add-tcp', 'Add TCP route'),
+      s('routes-add-udp', 'Add UDP route'),
+      s('middlewares-cards', 'Middlewares', 'Card view'),
+      s('middlewares-list', 'Middlewares', 'List view'),
+      s('middlewares-add', 'Add middleware'),
+      s('services-cards', 'Services', 'Card view'),
+      s('services-list', 'Services', 'List view'),
+      s('static-config', 'Static Config', 'traefik.yml editor'),
+    ],
+  },
+  {
+    title: 'Visualizations',
+    shots: [
+      s('dashboard', 'Dashboard'),
+      s('dashboard-hover', 'Dashboard', 'App launcher'),
+      s('route-map', 'Route Map'),
+      s('tls-options', 'TLS Options'),
+      s('crowdsec', 'CrowdSec', 'Attack surface'),
+    ],
+  },
+  {
+    title: 'Monitoring',
+    shots: [
+      s('certs', 'Certificates'),
+      s('logs', 'Access Logs'),
+      s('plugins', 'Plugins'),
+      s('plugins-add', 'Install a plugin'),
+    ],
+  },
+  {
+    title: 'Settings',
+    shots: [
+      s('settings-interface', 'Interface'),
+      s('settings-auth-password', 'Authentication'),
+      s('settings-auth-apikeys', 'API keys'),
+      s('settings-auth-oidc', 'OIDC / SSO'),
+      s('settings-backups', 'Backups'),
+      s('settings-system', 'System monitoring'),
+      s('settings-routes', 'Route monitoring'),
+      s('settings-connection', 'Connection'),
+      s('settings-about', 'About'),
+    ],
+  },
+  {
+    title: 'First run',
+    shots: [
+      s('login', 'Login'),
+      s('setup-welcome', 'Setup', 'Welcome'),
+      s('setup-connection', 'Setup', 'Connection and domains'),
+      s('setup-self-route', 'Setup', 'Self route'),
+      s('setup-monitoring', 'Setup', 'Optional tabs'),
+      s('setup-password', 'Setup', 'Set a password'),
+    ],
+  },
 ]
 </script>
 
 <template>
-  <ImageCarousel :slides="slides" />
+  <ScreenshotGrid :groups="groups" />
 </template>

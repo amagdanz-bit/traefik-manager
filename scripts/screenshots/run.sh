@@ -6,7 +6,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 WORK="$(mktemp -d)"
 cleanup() {
-  docker rm -f tmshot-app tmshot-traefik >/dev/null 2>&1 || true
+  docker rm -f tmshot-app tmshot-traefik tmshot-cs >/dev/null 2>&1 || true
   docker network rm tmshot-net >/dev/null 2>&1 || true
   docker run --rm -v "$WORK:/w" alpine rm -rf /w/node >/dev/null 2>&1 || true
   rm -rf "$WORK"
@@ -40,6 +40,9 @@ docker network create tmshot-net >/dev/null
 docker run -d --name tmshot-traefik --network tmshot-net \
   -v "$WORK/traefik:/etc/traefik:ro" traefik:v3.6 >/dev/null
 
+docker run -d --name tmshot-cs --network tmshot-net \
+  -v "$HERE/cs_stub.py:/cs_stub.py:ro" python:3-slim python3 /cs_stub.py >/dev/null
+
 SETUP_PW=screenshot-demo-password
 
 start_app() {
@@ -49,6 +52,10 @@ start_app() {
     -e CONFIG_PATH=/config/dynamic.yml \
     -e SETTINGS_PATH="$1" \
     -e STATIC_CONFIG_PATH=/config/traefik-static.yml \
+    -e CROWDSEC_LAPI_URL=http://tmshot-cs:8098 \
+    -e CROWDSEC_API_KEY=screenshot-stub-key \
+    -e CROWDSEC_MACHINE_ID=screenshot \
+    -e CROWDSEC_MACHINE_PASSWORD=screenshot \
     ${2:+-e ADMIN_PASSWORD=$2} \
     "$IMAGE" >/dev/null
   sleep 10
