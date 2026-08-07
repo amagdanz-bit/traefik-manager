@@ -860,7 +860,7 @@ function _initMobileFilterBars() {
         searchBtn.innerHTML = '<i class="ph-bold ph-magnifying-glass" style="font-size:13px"></i>';
         searchBtn.onclick = () => {
             bar.classList.add('fb-open');
-            bar.querySelector('input[type=text]')?.focus();
+            bar.querySelector('input[type=text],input[type=search]')?.focus();
         };
         const cancelBtn = document.createElement('button');
         cancelBtn.className = 'fb-cancel-icon';
@@ -868,7 +868,7 @@ function _initMobileFilterBars() {
         cancelBtn.innerHTML = '<i class="ph-bold ph-arrow-left" style="font-size:13px"></i>';
         cancelBtn.onclick = () => {
             bar.classList.remove('fb-open');
-            const inp = bar.querySelector('input[type=text]');
+            const inp = bar.querySelector('input[type=text],input[type=search]');
             if (inp) { inp.value = ''; inp.dispatchEvent(new Event('input')); }
         };
         bar.insertBefore(cancelBtn, bar.firstChild);

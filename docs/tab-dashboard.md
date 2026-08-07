@@ -1,6 +1,8 @@
 # Dashboard Tab
 
-The **Dashboard** tab shows all your Traefik routes grouped by category, with app icons, per-card editing, and custom group management. Cards are clickable, so the Dashboard doubles as a homepage-style launcher for your services.
+The **Dashboard** tab shows all your Traefik routes grouped by category, with app icons, per-route editing, and custom group management. Rows and tiles are clickable, so the Dashboard doubles as a homepage-style launcher for your services.
+
+It is built as a launcher first. The stat panel above it already answers "how is my estate", so the pods below spend their space on icon, name and hit target, and stay quiet until something needs attention.
 
 ## Enabling the tab
 
@@ -10,35 +12,65 @@ The Dashboard tab is hidden by default. To show it, go to **Settings - Interface
 
 ## Groups view
 
-Routes are automatically grouped into categories by name - Media, Monitoring, Infrastructure, Security, Home, Files & Data, Network, Dev, Servers, and Other. Each group is a card showing all its routes.
+Routes are automatically grouped into categories by name - Media, Monitoring, Infrastructure, Security, Home, Files & Data, Network, Dev, Servers, and Other. Each group is a pod: a flat header of icon, name and count, a hairline rule, then its routes. **Other** always sorts last, custom groups sit between the built-ins and Other, and routes inside a pod are sorted alphabetically by the name you see, so the grid stays where your muscle memory left it.
+
+Category colours are gone. The pod header glyph and every healthy row are neutral, and colour is spent only on something that needs attention.
 
 ### Route rows
 
+A healthy, launchable route is a single flat line: icon plate, name, host. Nothing else. A row grows a second line **only** when there is a reason it cannot be launched or is not working, so "this row is two lines tall" is itself the signal.
+
 Each route row shows:
 
-- **App icon with a status dot** - the icon comes from the selfh.st icon CDN, cached locally in `/config/cache/`; the small dot on its corner is live router state from the Traefik API: green up, red down or router error, hollow when the API is unavailable
-- **Name** - display name (customisable) or route name, with a TCP/UDP chip when not HTTP
-- **Domain** - the URL the card opens, in blue monospace, when the card is clickable; otherwise the backend target
-- **Security glyph** - only when something is worth flagging: an amber open lock for a public route without TLS, a muted house for internal-only. Secure routes show nothing, like a browser address bar
-- **Launch arrow** - a faint arrow at the row's end marks clickable cards
+- **App icon plate with a status dot** - the icon comes from the selfh.st icon CDN. When no icon matches, the plate shows a two-letter monogram of the display name instead of an empty box. Images are lazy-loaded, and only the visible rows are built
+- **Name** - display name (customisable) or route name. The whole row is the launch target, so middle-click, ctrl-click and "open in new tab" work anywhere on it
+- **Protocol tag** - a flat, muted `TCP` or `UDP` for non-HTTP routes. No coloured chip
+- **Host** - the launch host at the right of the name line, in monospace. The scheme is printed only when it is not `https`, so `http://plex.lan:32400` reads as such and everything else reads as a bare host. Unlaunchable routes show the backend target here instead. The host is dropped on very narrow pods so the name never truncates first
+- **Note** - the exception line: `backend unreachable 0/2 servers`, `router error, missing middleware authelia`, `disabled, not served by Traefik`, `stream route, nothing to open`, `no launch URL, wildcard host. Set one in edit`, `declared here, not reported by Traefik`
 
-The backend target, full URL, and middleware list live in the row's tooltip; full detail stays in the route panel.
+Everything else the tab knows - backend target, provider, entry points, server count, middleware names, cert resolver, config file - is in the row's tooltip; full detail stays in the route panel.
 
-Under **Settings - Interface** you can switch **Dashboard categories** from **Rows** to **Icons**, which renders each category as a compact five-across grid of app icons with a status dot, showing 25 per category before a *Show more* button. Useful once you have enough routes that the row list gets long.
+### The status dot
+
+The dot on the icon plate has five states, and only failure is loud:
+
+- **quiet grey** - the router is loaded and, where Traefik reports backend health, every server is up. Grey rather than green because a loaded router only proves Traefik parsed the config; forty grey dots read as texture so one red dot reads as an alarm
+- **hollow square** - the route is disabled, or the Traefik API did not answer at all
+- **hollow circle** - Traefik is answering but has never reported this router
+- **yellow** - the backend is degraded, some servers up and some down
+- **red with a glow** - the router is errored, or every backend server is down
+
+Backend health comes from `/api/traefik/services` `serverStatus`, the same source the stat panel above uses. Traefik only reports it for services that have a health check configured; without one the dot means "the router is loaded", which is what its tooltip says.
+
+Every dot carries a full-sentence tooltip. When the Traefik API cannot be read at all, the tab says so once above the pods rather than drawing an unexplained ring on every route. `/api/traefik/routers` and `/api/traefik/services` carry a `reachable` flag for exactly this, so "Traefik answered with no routers" and "Traefik did not answer" stay distinguishable.
+
+Disabled routes are now shown, dimmed, with a `disabled, not served by Traefik` note. They used to be dropped silently while the stat panel directly above counted them as errors. They sort to the end of their category so they never push a live app behind **N more**.
+
+### Failure at a glance
+
+A pod with a failing route gets a red left spine, a red-tinted border, and a `2 down` flag in its header. The flag is a button: clicking it expands the pod and jumps to the first failing route. A pod whose only trouble is a degraded backend gets the same treatment in yellow. A healthy pod shows none of this.
+
+### Icons view
+
+Under **Settings - Interface** you can switch **Dashboard categories** from **Rows** to **Icons**. This is not the row at a smaller size, it is a different set of fields: a grid of 40px icon plates with the app name under each, and nothing else. The column count follows the pod's own width rather than the viewport, so a narrow pod gets four across and a wide one gets more.
+
+Icons view keeps the same plate, the same monogram fallback, and the same status dot with the same tooltip. A failing tile also takes a coloured ring, because a 7px dot is too weak to carry a failure at tile scale. Tiles with nothing to launch are dimmed and inert.
+
+Each tile has two corner buttons, revealed on hover and always visible on touch: an info button top-left that opens the route detail panel, and a pencil top-right that opens the card editor. That closes the dead ends the old icons view had, where both were reachable only from the row list, so an icons-view user with a wrong icon had to switch to Rows, fix it, and switch back.
 
 ### Launching apps
 
-Clicking a card opens the service in a new tab. The URL is derived from the route itself: the first `Host` in the rule, `https` when the router has TLS enabled and `http` otherwise, with a `PathPrefix` from the same rule appended.
+Clicking a row or tile opens the service in a new tab. The URL is derived from the route itself: the first usable `Host` in the rule, `https` when the router has TLS enabled and `http` otherwise, with the `PathPrefix` **from the same `||` branch as that host** appended. A rule like ``Host(`a.com`) || (Host(`b.com`) && PathPrefix(`/x`))`` therefore opens `https://a.com`, not `https://a.com/x`.
 
-Hovering a card reveals two buttons: an info button that opens the route detail panel, and the pencil that opens the card editor.
+Hovering a row reveals two buttons at its right: an info button that opens the route detail panel, and the pencil that opens the card editor. Both are real buttons, so Enter and Space work. On touch they are permanently visible at a larger size instead of hidden behind a hover.
 
-Cards for routes with nothing to open stay unlinked: TCP and UDP routes, `HostSNI` and regex rules, rules without a `Host`, wildcard hosts, and cards with the link disabled. Everything else on those cards works the same.
-
-Middle-click and ctrl-click open in a background tab, since cards are real links.
+Rows and tiles for routes with nothing to open stay unlinked, and now say why: TCP and UDP routes, `HostSNI` and regex rules, rules without a `Host`, wildcard hosts, and cards with the link disabled. A link override that is not an `http://` or `https://` URL is treated the same way, whether it was typed into the editor or written straight into `dashboard.yml` by hand.
 
 ### Expand / collapse
 
-Groups with more than 5 routes show only the first 5 by default. Click **Show X more** at the bottom of the group to expand, and **Show less** to collapse.
+Groups with more than 6 routes (24 in Icons view) show only the first few. Click **N more** at the bottom of the pod to expand, **show less** to collapse. Only the visible rows are built, so a 200-route category does not fire 200 icon requests for content you cannot see.
+
+The expander reports the health of what it is hiding: when the hidden set contains a failure it takes a red spine and appends `- 1 down`, so a red dot can never sit silently behind a neutral grey button. Expansion also survives a re-render, so typing in the search box or saving a group edit no longer re-collapses every pod.
 
 ---
 
@@ -58,7 +90,7 @@ Three modes:
 - **selfh.st slug** - enter a slug directly (e.g. `plex`, `grafana`) - see [selfh.st/icons](https://selfh.st/icons/) for available icons
 - **Custom URL** - enter any direct image URL to use as the icon
 
-Icons are fetched once and cached on disk at `/config/cache/{slug}.png` so they are served locally on subsequent loads.
+Icons are requested straight from the selfh.st CDN by the browser. If a slug does not resolve, the plate falls back to a two-letter monogram of the display name. (A server-side caching endpoint exists at `/api/dashboard/icon/<slug>` but the frontend does not use it yet.)
 
 If a self-route is configured for Traefik Manager (**Settings → System → Expose via Traefik**), its dashboard card automatically shows the Traefik Manager icon instead of a CDN lookup.
 
@@ -70,7 +102,7 @@ Override which group the route belongs to. Select **Auto-detect** to let the key
 
 ### Link URL
 
-Override the URL the card opens, for cards where the route's URL is not the right landing page - for example a route that serves an API while the UI lives elsewhere. Only `http://` and `https://` URLs are accepted. The **Disable link for this card** checkbox turns the card back into a plain informational row.
+Override the URL the card opens, for cards where the route's URL is not the right landing page - for example a route that serves an API while the UI lives elsewhere. Only `http://` and `https://` URLs are accepted, on save, on read and again at render time. The **Disable link for this card** checkbox turns the card back into a plain informational row.
 
 ---
 
@@ -82,34 +114,42 @@ Routes not matched by any built-in category go into **Other**. Custom groups let
 
 To add a group: enter a name. Routes are assigned to it via the pencil icon on each route row - select the group in the Group assignment field. Custom groups appear at the top of the group dropdown in the edit modal.
 
+A custom group with no routes assigned yet still renders as an empty pod with a line telling you how to fill it, so a group you just created is never invisible. It is hidden while a search or filter is active.
+
 Custom groups are saved to `/config/dashboard.yml` and persist across restarts.
 
 ---
 
 ## Group detection
 
-Groups are assigned automatically by matching the route or service name against a built-in keyword list. Routes that do not match any category go into **Other**.
+Groups are assigned automatically by matching the route or service name against a built-in keyword list. The list is checked **in table order** and the first match wins, so a keyword that appears in an earlier group is never reached by a later one. Routes that do not match any category go into **Other**.
 
 | Group | Matches |
 |-------|---------|
 | Media | jellyfin, sonarr, radarr, immich, qbittorrent, plex, prowlarr, ... |
 | Monitoring | grafana, prometheus, uptime-kuma, glances, speedtest, ... |
-| Infrastructure | traefik, portainer, gitea, n8n, komodo, ... |
+| Infrastructure | traefik, portainer, gitea, gitlab, forgejo, drone, jenkins, proxmox, cockpit, n8n, komodo, ... |
 | Security | authentik, authelia, vaultwarden, crowdsec, wireguard, ... |
 | Home | home-assistant, node-red, esphome, zigbee2mqtt, frigate, ... |
 | Files & Data | nextcloud, paperless, mealie, bookstack, syncthing, ... |
 | Network | pihole, adguard, unifi, tailscale, ... |
-| Dev | gitea, gitlab, forgejo, code-server, coder, drone, jenkins, argocd, harbor, sonar, jupyter, ... |
-| Servers | proxmox, cockpit, idrac, ilo, ipmi, truenas, freenas, opnsense, pfsense, unraid, synology, ... |
+| Dev | code-server, coder, argocd, harbor, sonar, jupyter, woodpecker, airflow, ... |
+| Servers | idrac, ipmi, esxi, truenas, freenas, opnsense, pfsense, unraid, synology, ... |
 | Other | everything else |
+
+Because Infrastructure is checked before Dev and Servers, the git and CI keywords (`gitea`, `gitlab`, `forgejo`, `drone`, `jenkins`) and the hypervisor keywords (`proxmox`, `cockpit`) always land in Infrastructure. Use the pencil on a route to move it if you would rather it sat elsewhere.
 
 ---
 
 ## Filtering
 
-- **Search** - type to filter routes by name
+- **Search** - matches the display name, the route name, the service name, the backend target, and the hosts in the rule, so searching for what you can see works even when a route is renamed. Debounced, so typing does not rebuild the grid on every keystroke
 - **Protocol** - show only HTTP, TCP, or UDP routes
-- **Provider** - filter by Traefik provider (file, docker, kubernetes, etc.). Only appears when routes from more than one provider are present.
+- **Provider** - filter by Traefik provider (file, docker, kubernetes, etc.). Only appears when routes from more than one provider are present
+
+When a filter matches nothing, the tab names the filters responsible and offers **clear search** and **reset all filters**. That is a different panel from the one shown when there are genuinely no routes yet.
+
+On a phone the protocol buttons, the provider buttons and the groups button collapse behind the filter-bar's **more filters** control instead of being clipped off the edge of the screen.
 
 ---
 
@@ -125,11 +165,14 @@ Routes from non-file providers are read-only: the per-card pencil icon lets you 
 
 Fetches from:
 
-- `/api/routes` - routes from all providers (file-managed + live from Traefik API)
+- `/api/routes/all` - routes from all providers (file-managed + live from Traefik API)
 - `/api/traefik/entrypoints` - entry point names from the Traefik API
 - `/api/dashboard/config` - custom groups and per-route overrides from `dashboard.yml`
-- `/api/dashboard/icon/<slug>` - app icons (cached from selfh.st CDN)
+- `/api/traefik/routers` - live router state for the status dot
+- `/api/traefik/services` - `serverStatus` per backend server, for the degraded and unreachable dot states
 
-Data is cached for 30 seconds. Opening the tab re-renders it, and refetches once the cache is older than that, so config changes made outside this browser tab (another session, the static config editor, or a direct file edit) appear without a page reload. Adding, editing, deleting, or toggling a route refreshes it immediately.
+Router and service state is keyed on the full `name@provider`, so `whoami@docker` and `whoami@file` no longer collapse into one entry and show each other's status.
 
-If the Traefik API cannot be reached, the tab shows an error toast and retries the next time you open it instead of caching the empty result.
+Data is cached for 30 seconds and shared with the Route Map tab. Opening the tab re-renders it, and refetches once the cache is older than that, so config changes made outside this browser tab (another session, the static config editor, or a direct file edit) appear without a page reload. Adding, editing, deleting, or toggling a route refreshes it immediately.
+
+If the route list itself cannot be read, the tab shows a panel explaining that with a **retry** button, rather than a filter bar over an empty screen. If only the Traefik API calls fail, the pods still render from your config with one line above them saying live status is unavailable.

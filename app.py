@@ -1076,23 +1076,22 @@ if not os.environ.get('REQUESTS_CA_BUNDLE'):
 def api_overview():
     return jsonify(traefik_api_get('/api/overview') or {})
 
+def _traefik_proto_payload(kind):
+    fetched = {p: traefik_api_get_all(f'/api/{p}/{kind}') for p in ('http', 'tcp', 'udp')}
+    out = {p: (v or []) for p, v in fetched.items()}
+    out['reachable'] = any(v is not None for v in fetched.values())
+    return out
+
+
 @app.route('/api/traefik/routers')
 @login_required
 def api_routers():
-    return jsonify({
-        'http': traefik_api_get_all('/api/http/routers') or [],
-        'tcp':  traefik_api_get_all('/api/tcp/routers')  or [],
-        'udp':  traefik_api_get_all('/api/udp/routers')  or [],
-    })
+    return jsonify(_traefik_proto_payload('routers'))
 
 @app.route('/api/traefik/services')
 @login_required
 def api_services():
-    return jsonify({
-        'http': traefik_api_get_all('/api/http/services') or [],
-        'tcp':  traefik_api_get_all('/api/tcp/services')  or [],
-        'udp':  traefik_api_get_all('/api/udp/services')  or [],
-    })
+    return jsonify(_traefik_proto_payload('services'))
 
 @app.route('/api/traefik/middlewares')
 @login_required
@@ -3789,22 +3788,32 @@ def api_configs():
     })
 
 
-def _read_groups_config():
+def _read_groups_file():
     if not os.path.exists(GROUPS_CONFIG_FILE):
-        return {'custom_groups': [], 'route_overrides': {}}
+        return {}
     try:
         _y = SafeYAML(typ='safe')
         with open(GROUPS_CONFIG_FILE, 'r') as f:
-            data = _y.load(f)
-        if not data:
-            return {'custom_groups': [], 'route_overrides': {}}
-        return {
-            'custom_groups':   list(data.get('custom_groups', []) or []),
-            'route_overrides': dict(data.get('route_overrides', {}) or {}),
-        }
+            return _y.load(f) or {}
     except Exception:
         logger.exception("Failed to read dashboard config")
-        return {'custom_groups': [], 'route_overrides': {}}
+        return {}
+
+
+def _groups_scope_key(server):
+    s = str(server or '').strip()
+    return s if s and s != 'host' else ''
+
+
+def _read_groups_config(server=''):
+    data = _read_groups_file()
+    key = _groups_scope_key(server)
+    if key:
+        data = ((data.get('servers') or {}).get(key)) or {}
+    return {
+        'custom_groups':   list(data.get('custom_groups', []) or []),
+        'route_overrides': _sanitize_route_overrides(data.get('route_overrides', {}) or {}),
+    }
 
 def _sanitize_route_overrides(overrides):
     out = {}
@@ -3821,18 +3830,28 @@ def _sanitize_route_overrides(overrides):
     return out
 
 
-def _write_groups_config(data):
+def _write_groups_config(data, server=''):
+    doc = _read_groups_file()
+    scope = {
+        'custom_groups':   list(data.get('custom_groups', []) or []),
+        'route_overrides': _sanitize_route_overrides(data.get('route_overrides', {})),
+    }
+    key = _groups_scope_key(server)
+    if key:
+        servers = dict(doc.get('servers') or {})
+        servers[key] = scope
+        doc['servers'] = servers
+    else:
+        doc['custom_groups'] = scope['custom_groups']
+        doc['route_overrides'] = scope['route_overrides']
     _y = SafeYAML(typ='safe')
     with open(GROUPS_CONFIG_FILE, 'w') as f:
-        _y.dump({
-            'custom_groups':   list(data.get('custom_groups', []) or []),
-            'route_overrides': _sanitize_route_overrides(data.get('route_overrides', {})),
-        }, f)
+        _y.dump(doc, f)
 
 @app.route('/api/dashboard/config', methods=['GET'])
 @login_required
 def dashboard_config_get():
-    cfg = _read_groups_config()
+    cfg = _read_groups_config(request.args.get('server', ''))
     sr  = load_settings().get('self_route', {})
     cfg['tm_route_name'] = sr.get('router_name', 'traefik-manager') or 'traefik-manager'
     return jsonify(cfg)
@@ -3842,7 +3861,7 @@ def dashboard_config_get():
 @csrf_protect
 def dashboard_config_post():
     data = request.get_json() or {}
-    _write_groups_config(data)
+    _write_groups_config(data, data.get('server', '') or request.args.get('server', ''))
     return jsonify({'ok': True})
 
 @app.route('/api/dashboard/icon/<slug>')
@@ -4523,6 +4542,26 @@ def save_entry():
                 visible_tabs=settings['visible_tabs'],
                 managed_middlewares=_ledger,
             )
+        _was_disabled = False
+        if is_edit and original_id:
+            _disabled_now = load_settings().get('disabled_routes', {})
+            _old_dkey = f"agent_{agent_id}::{original_id}" if agent else original_id
+            _was_disabled = _old_dkey in _disabled_now
+        if _was_disabled:
+            _sec = config.get(protocol, {})
+            _kept_router = dict(_sec.get('routers', {}).pop(router_name, {}))
+            _kept_svc = {}
+            if not _service_shared(config, service_name, router_name):
+                _kept_svc = dict(_sec.get('services', {}).pop(service_name, {}))
+            else:
+                _kept_svc = dict(_sec.get('services', {}).get(service_name, {}))
+            disabled = dict(load_settings().get('disabled_routes', {}))
+            disabled.pop(_old_dkey, None)
+            _new_rid = f"{cfg_filename}::{router_name}" if agent else router_name
+            _new_dkey = f"agent_{agent_id}::{_new_rid}" if agent else _new_rid
+            disabled[_new_dkey] = {'protocol': protocol, 'router': _kept_router,
+                                   'service': _kept_svc, 'configFile': cfg_filename}
+            save_settings(disabled_routes=disabled)
         if agent:
             _agent_write_config(agent, cfg_filename, config)
             threading.Thread(target=lambda: _git_push_agent_if_enabled(agent, 'route save'), daemon=True).start()
@@ -4530,12 +4569,6 @@ def save_entry():
             save_config(_strip_empty_sections(config), target_path)
             _register_config_path(target_path)
             threading.Thread(target=lambda: _git_push_if_enabled('route save'), daemon=True).start()
-        if is_edit and original_id:
-            disabled = settings.get('disabled_routes', {})
-            dkey = f"agent_{agent_id}::{original_id}" if agent else original_id
-            if dkey in disabled:
-                disabled.pop(dkey)
-                save_settings(disabled_routes=disabled)
         action = "updated" if is_edit else "created"
         msg = f"Route {svc_name} {action}"
         add_notification('success', msg)

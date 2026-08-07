@@ -4,6 +4,9 @@ const RM_ICON_CDN = 'https://cdn.jsdelivr.net/gh/selfhst/icons/png';
 let _rmConfig    = { custom_groups: [], route_overrides: {} };
 let _rmAllRoutes = [];
 let _rmRouterStatus = {};
+let _rmSvcStatus = {};
+let _rmSvcLoaded = false;
+let _rmStatusBlind = true;
 let _rmAllEps    = {};
 let _rmDataLoaded = false;
 let _rmLoadedAt   = 0;
@@ -32,17 +35,44 @@ async function rmSaveConfig() {
     });
 }
 
-window.rmEnsureData = async function(force) {
-    if (_rmDataLoaded && !force && (Date.now() - _rmLoadedAt) < RM_DATA_TTL) return true;
+function _rmProtoRows(data) {
+    const rows = [];
+    ['http', 'tcp', 'udp'].forEach(p => {
+        const arr = data && Array.isArray(data[p]) ? data[p] : [];
+        arr.forEach(item => { if (item && item.name) rows.push([p, item]); });
+    });
+    return rows;
+}
+
+function _rmStatusMap(rows, build) {
+    const out = {}, seen = {}, bare = {};
+    rows.forEach(([proto, item]) => {
+        const st = build(item);
+        if (!st) return;
+        out[proto + ':' + item.name] = st;
+        const bk = proto + ':' + item.name.split('@')[0];
+        seen[bk] = (seen[bk] || 0) + 1;
+        if (seen[bk] === 1) bare[bk] = st;
+    });
+    Object.keys(bare).forEach(k => {
+        if (seen[k] === 1 && out[k] === undefined) out[k] = bare[k];
+    });
+    return out;
+}
+
+window.rmEnsureData = async function(force, opts) {
+    const wantSvc = !!(opts && opts.services);
+    if (_rmDataLoaded && !force && (Date.now() - _rmLoadedAt) < RM_DATA_TTL && (!wantSvc || _rmSvcLoaded)) return true;
     try {
         const routeUrl = _activeAgent
             ? '/api/agents/' + _activeAgent.id + '/routes'
             : '/api/routes/all';
-        const [routeRes, epRes, cfgRes, rtrRes] = await Promise.all([
+        const [routeRes, epRes, cfgRes, rtrRes, svcRes] = await Promise.all([
             fetch(routeUrl, { headers: { 'X-Requested-With': 'fetch' } }),
             agentFetch('/api/traefik/entrypoints'),
             fetch('/api/dashboard/config'),
-            agentFetch('/api/traefik/routers').catch(() => null)
+            agentFetch('/api/traefik/routers').catch(() => null),
+            wantSvc ? agentFetch('/api/traefik/services').catch(() => null) : null
         ]);
         if (!routeRes.ok) throw new Error('routes ' + routeRes.status);
         const routeData = await routeRes.json();
@@ -58,21 +88,44 @@ window.rmEnsureData = async function(force) {
         } catch(_) { _rmAllEps = {}; }
         try { _rmConfig = await cfgRes.json() || { custom_groups: [], route_overrides: {} }; } catch(_) {}
         _rmRouterStatus = {};
+        _rmStatusBlind  = true;
         try {
             if (rtrRes && rtrRes.ok) {
                 const rd = await rtrRes.json();
-                [...(rd.http || []), ...(rd.tcp || []), ...(rd.udp || [])].forEach(rt => {
-                    if (!rt || !rt.name) return;
-                    _rmRouterStatus[rt.name.split('@')[0]] = {
-                        up:  rt.status === 'enabled' && !(rt.error && rt.error.length),
-                        err: !!(rt.error && rt.error.length),
+                _rmStatusBlind = rd.reachable === false;
+                _rmRouterStatus = _rmStatusMap(_rmProtoRows(rd), rt => {
+                    const errs = [].concat(rt.error || []).filter(Boolean).map(String);
+                    return {
+                        up:  rt.status === 'enabled' && !errs.length,
+                        err: !!errs.length,
+                        msg: errs.join('; '),
                     };
                 });
             }
         } catch(_) {}
+        _rmSvcStatus = {};
+        _rmSvcLoaded = wantSvc;
+        try {
+            if (wantSvc && svcRes && svcRes.ok) {
+                const sd = await svcRes.json();
+                _rmSvcStatus = _rmStatusMap(_rmProtoRows(sd), sv => {
+                    const map = sv.serverStatus;
+                    if (!map || typeof map !== 'object') return null;
+                    const keys = Object.keys(map);
+                    if (!keys.length) return null;
+                    let up = 0;
+                    keys.forEach(k => { if (String(map[k]).toUpperCase() === 'UP') up++; });
+                    return { up: up, total: keys.length };
+                });
+            }
+        } catch(_) {}
     } catch(e) {
-        _rmAllRoutes = [];
-        _rmAllEps    = {};
+        _rmAllRoutes    = [];
+        _rmAllEps       = {};
+        _rmRouterStatus = {};
+        _rmSvcStatus    = {};
+        _rmSvcLoaded    = false;
+        _rmStatusBlind  = true;
         return false;
     }
     _rmDataLoaded = true;

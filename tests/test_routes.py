@@ -479,3 +479,20 @@ def test_delete_a_disabled_route_stored_under_a_bare_id(client, app_module):
     r = post_form(client, "/delete/gone")
     assert r.status_code < 400, r.data
     assert "gone" not in app_module.load_settings().get("disabled_routes", {})
+
+
+def test_editing_a_disabled_route_keeps_it_disabled(client, app_module):
+    _save_http(client, backendsJsonHttp=BACKENDS)
+    client.post("/api/routes/app1/toggle", json={"enable": False, "csrf_token": "testtoken"},
+                headers={"X-CSRF-Token": "testtoken"})
+    assert "app1" not in (read_config().get("http", {}).get("routers") or {})
+
+    _save_http(client, isEdit="true", originalId="app1", backendsJsonHttp=BACKENDS)
+
+    routers = read_config().get("http", {}).get("routers") or {}
+    assert "app1" not in routers, \
+        "editing a disabled route must not write it back into the config file as enabled"
+
+    disabled = app_module.load_settings().get("disabled_routes", {})
+    assert "app1" in disabled, "the route must still be recorded as disabled after the edit"
+    assert disabled["app1"]["router"], "the stored disabled route must carry the edited router"

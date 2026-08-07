@@ -541,3 +541,59 @@ def test_servers_transport_defaults_roundtrip(client):
         'st_dial': '', 'st_resp_header': '', 'st_idle_conn': '',
     })
     assert bad.status_code == 400
+
+
+def test_dashboard_config_is_scoped_per_server(client):
+    hdrs = {'X-CSRF-Token': 'testtoken', 'X-Requested-With': 'fetch'}
+    host = {'custom_groups': [{'name': 'Host Work'}],
+            'route_overrides': {'r1': {'group': 'Host Work'}}}
+    assert client.post('/api/dashboard/config', json=host, headers=hdrs).status_code == 200
+
+    agent = {'custom_groups': [{'name': 'Agent Media'}],
+             'route_overrides': {'r1': {'group': 'Agent Media'}}, 'server': 'agent-abc'}
+    assert client.post('/api/dashboard/config?server=agent-abc', json=agent,
+                       headers=hdrs).status_code == 200
+
+    got_host = client.get('/api/dashboard/config').get_json()
+    assert [g['name'] for g in got_host['custom_groups']] == ['Host Work'], \
+        'an agent group must not appear on the host'
+    assert got_host['route_overrides']['r1']['group'] == 'Host Work'
+
+    got_agent = client.get('/api/dashboard/config?server=agent-abc').get_json()
+    assert [g['name'] for g in got_agent['custom_groups']] == ['Agent Media']
+    assert got_agent['route_overrides']['r1']['group'] == 'Agent Media', \
+        'same route id on two servers must not share an override'
+
+    other = client.get('/api/dashboard/config?server=agent-zzz').get_json()
+    assert other['custom_groups'] == [] and other['route_overrides'] == {}, \
+        'a server with no config of its own starts empty, not with another servers groups'
+
+
+def test_routers_and_services_report_traefik_reachability(client, app_module, monkeypatch):
+    for path in ('/api/traefik/routers', '/api/traefik/services'):
+        body = client.get(path).get_json()
+        assert body['reachable'] is False, \
+            path + ' must say the API is unreachable, not answer 200 with empty lists'
+        assert body['http'] == [] and body['tcp'] == [] and body['udp'] == []
+
+    monkeypatch.setattr(app_module, 'traefik_api_get_all', lambda p: [])
+    for path in ('/api/traefik/routers', '/api/traefik/services'):
+        body = client.get(path).get_json()
+        assert body['reachable'] is True, \
+            'an estate with genuinely zero routers is reachable, not blind'
+
+
+def test_dashboard_config_read_drops_a_hand_written_javascript_link(client, app_module):
+    with open(app_module.GROUPS_CONFIG_FILE, 'w') as f:
+        f.write('custom_groups: []\n'
+                'route_overrides:\n'
+                '  evil:\n'
+                "    url: 'javascript:alert(1)'\n"
+                '  fine:\n'
+                "    url: 'https://ok.example'\n")
+    got = client.get('/api/dashboard/config').get_json()
+    with open(app_module.GROUPS_CONFIG_FILE, 'w') as f:
+        f.write('custom_groups: []\nroute_overrides: {}\n')
+    assert 'url' not in got['route_overrides']['evil'], \
+        'a non http link written straight into the file must not be served back'
+    assert got['route_overrides']['fine']['url'] == 'https://ok.example'
