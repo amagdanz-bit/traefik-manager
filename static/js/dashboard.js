@@ -1059,6 +1059,7 @@ function _sdApplyRouteCards(ping) {
 }
 
 async function loadOverviewStats() {
+    const runServer = _activeAgent ? _activeAgent.id : '';
     try {
         const [overview, routers, services, middlewares, version, entrypoints] = await Promise.allSettled([
             agentFetch('/api/traefik/overview').then(r => r.json()),
@@ -1068,6 +1069,7 @@ async function loadOverviewStats() {
             agentFetch('/api/traefik/version').then(r => r.json()),
             agentFetch('/api/traefik/entrypoints').then(r => r.json()),
         ]);
+        if (runServer !== (_activeAgent ? _activeAgent.id : '')) return;
 
         const val = (res, fallback) => {
             if (res.status !== 'fulfilled') return fallback;
@@ -1139,7 +1141,7 @@ async function loadOverviewStats() {
             try {
                 const srRes = await fetch('/api/settings/self-route');
                 const sr = await srRes.json();
-                if (sr.domain && sr.entry_point && !epNames.includes(sr.entry_point)) {
+                if (!_activeAgent && sr.domain && sr.entry_point && !epNames.includes(sr.entry_point)) {
                     _showSelfRouteEpWarning(sr.entry_point, sr.default_entry_point || epNames[0]);
                 }
             } catch (e) {}
