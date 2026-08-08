@@ -597,3 +597,18 @@ def test_dashboard_config_read_drops_a_hand_written_javascript_link(client, app_
     assert 'url' not in got['route_overrides']['evil'], \
         'a non http link written straight into the file must not be served back'
     assert got['route_overrides']['fine']['url'] == 'https://ok.example'
+
+
+def test_tls_options_are_not_shown_for_agents(client, monkeypatch, app_module):
+    host = client.get('/api/tls-options').get_json()
+    assert isinstance(host, list)
+
+    monkeypatch.setattr(app_module, '_agent_by_id', lambda i: {'id': i, 'name': i, 'url': 'http://x'})
+    monkeypatch.setattr(app_module, '_agent_load_configs', lambda a: {'dynamic.yml': {}})
+    agent = client.get('/api/tls-options?server=agent-abc').get_json()
+    assert agent == [], 'an agent with no tls options must not show the hosts profiles'
+
+    monkeypatch.setattr(app_module, '_agent_load_configs',
+                        lambda a: {'dynamic.yml': {'tls': {'options': {'agentonly': {'minVersion': 'VersionTLS13'}}}}})
+    agent2 = client.get('/api/tls-options?server=agent-abc').get_json()
+    assert [o['name'] for o in agent2] == ['agentonly']

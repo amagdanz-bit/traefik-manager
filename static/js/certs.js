@@ -107,12 +107,16 @@ async function refreshCertsTab() {
 
 let _tlsOptions = [];
 
+function _tlsSrv() {
+    return (typeof _activeAgent !== 'undefined' && _activeAgent) ? _activeAgent.id : '';
+}
+
 async function refreshTlsOptionsTab() {
     const el = document.getElementById('tlsOptsContent');
     if (!el) return;
     el.innerHTML = `<div class="text-center py-16" style="color:var(--muted)"><i class="ph-light ph-spinner-gap text-4xl block mb-3 animate-spin opacity-40"></i><p>Loading TLS profiles...</p></div>`;
     try {
-        const res = await fetch('/api/tls-options');
+        const res = await fetch('/api/tls-options' + (_tlsSrv() ? '?server=' + encodeURIComponent(_tlsSrv()) : ''));
         _tlsOptions = await res.json();
         renderTlsOptions(_tlsOptions);
     } catch(e) {
@@ -353,7 +357,7 @@ async function saveTlsOption() {
         const res = await fetch('/api/tls-options', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch', 'X-CSRF-Token': token },
-            body: JSON.stringify(body),
+            body: JSON.stringify({ ...body, server: _tlsSrv() }),
         });
         const json = await res.json();
         if (json.ok) {
@@ -370,7 +374,8 @@ async function saveTlsOption() {
 async function deleteTlsOption(name, configFile) {
     if (!confirm(`Delete TLS profile "${name}"?`)) return;
     const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
-    const params = configFile ? `?configFile=${encodeURIComponent(configFile)}` : '';
+    const _sv = _tlsSrv();
+    const params = '?' + new URLSearchParams({ ...(configFile ? { configFile } : {}), ...(_sv ? { server: _sv } : {}) }).toString();
     try {
         const res = await fetch(`/api/tls-options/${encodeURIComponent(name)}${params}`, {
             method: 'DELETE',

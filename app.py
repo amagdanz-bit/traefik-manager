@@ -2896,13 +2896,24 @@ def api_notifications_update():
         add_notification('info', f"{product} v{version} is available - update now")
     return jsonify({'ok': True})
 
+def _tls_opt_sources(server):
+    agent = _agent_by_id(server) if server else None
+    if agent:
+        cfgs = _agent_load_configs(agent)
+        return [(name, cfg, name) for name, cfg in cfgs.items()], True
+    out = []
+    for p in env.CONFIG_PATHS:
+        short = os.path.basename(p) if (env.MULTI_CONFIG or ACTIVE_CONFIG_DIR) else ''
+        out.append((short, _load_config_display(p), p))
+    return out, False
+
+
 @app.route('/api/tls-options')
 @login_required
 def api_tls_options_list():
     opts = []
-    for p in env.CONFIG_PATHS:
-        config = _load_config_display(p)
-        short = os.path.basename(p) if (env.MULTI_CONFIG or ACTIVE_CONFIG_DIR) else ''
+    sources, _is_agent = _tls_opt_sources(request.args.get('server', ''))
+    for short, config, p in sources:
         for name, data in (config.get('tls') or {}).get('options', {}).items():
             data = data or {}
             buf = StringIO()
@@ -2934,9 +2945,17 @@ def api_tls_options_save():
     config_file = data.get('configFile', '').strip()
     if not name:
         return jsonify({'ok': False, 'message': 'Profile name is required'}), 400
-    target_path = _resolve_config_path(config_file) or env.CONFIG_PATH
-    create_backup(target_path)
-    config = load_config(target_path)
+    server = str(data.get('server') or request.args.get('server', '')).strip()
+    agent = _agent_by_id(server) if server else None
+    if agent:
+        cfgs = _agent_load_configs(agent)
+        cfg_name = config_file or (next(iter(cfgs), 'dynamic.yml'))
+        config = cfgs.get(cfg_name, {})
+        target_path = None
+    else:
+        target_path = _resolve_config_path(config_file) or env.CONFIG_PATH
+        create_backup(target_path)
+        config = load_config(target_path)
     opts = {}
     if data.get('minVersion'):
         opts['minVersion'] = data['minVersion']
@@ -2961,7 +2980,10 @@ def api_tls_options_save():
             ca_obj['caFiles'] = ca_cas
         opts['clientAuth'] = ca_obj
     config.setdefault('tls', {}).setdefault('options', {})[name] = opts
-    save_config(_strip_empty_sections(config), target_path)
+    if agent:
+        _agent_write_config(agent, cfg_name, config)
+    else:
+        save_config(_strip_empty_sections(config), target_path)
     add_notification('success', f"TLS profile '{name}' saved")
     return jsonify({'ok': True})
 
@@ -2971,14 +2993,25 @@ def api_tls_options_save():
 @login_required
 def api_tls_options_delete(name):
     config_file = request.args.get('configFile', '').strip()
-    target_path = _resolve_config_path(config_file) or env.CONFIG_PATH
-    config = load_config(target_path)
+    server = request.args.get('server', '').strip()
+    agent = _agent_by_id(server) if server else None
+    if agent:
+        cfgs = _agent_load_configs(agent)
+        cfg_name = config_file or (next(iter(cfgs), 'dynamic.yml'))
+        config = cfgs.get(cfg_name, {})
+        target_path = None
+    else:
+        target_path = _resolve_config_path(config_file) or env.CONFIG_PATH
+        config = load_config(target_path)
     tls_opts = (config.get('tls') or {}).get('options', {})
     if name not in tls_opts:
         return jsonify({'ok': False, 'message': 'Profile not found'}), 404
-    create_backup(target_path)
     del tls_opts[name]
-    save_config(_strip_empty_sections(config), target_path)
+    if agent:
+        _agent_write_config(agent, cfg_name, config)
+    else:
+        create_backup(target_path)
+        save_config(_strip_empty_sections(config), target_path)
     add_notification('success', f"TLS profile '{name}' deleted")
     return jsonify({'ok': True})
 
