@@ -1418,6 +1418,25 @@ function _atkSelect() {
     };
 }
 
+function _atkAnyFilter() {
+    return _atkActive().length > 0 || !!_atkQuery
+        || !!(document.getElementById('csSearch') || {}).value;
+}
+
+function clearCsFilters() {
+    _atkClearFacets();
+    _atkQuery = '';
+    const box = document.getElementById('csSearch');
+    if (box) box.value = '';
+    _atkPage = 1; _atkOpen = '';
+    _csRender();
+}
+
+function _atkPaintClear() {
+    const wrap = document.getElementById('csClearWrap');
+    if (wrap) wrap.style.display = _atkAnyFilter() ? '' : 'none';
+}
+
 function _csRender() {
     const el = document.getElementById('csStats');
     if (!el || !_csConfigured) return;
@@ -1450,6 +1469,7 @@ function _csRender() {
             + _atkRuntime(d) + geo.html + _atkFeed(d, sel);
     }
     el.innerHTML = '<div class="sig-wrap' + compact + '" id="csStatsPanel">' + inner + '</div>';
+    _atkPaintClear();
     if (geo.html) {
         renderGeoMap(document.getElementById('csGeoMap'), geo.counts, csGeo_click, _atkFacet.cc);
     }
