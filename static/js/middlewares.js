@@ -419,7 +419,7 @@ async function saveMwAjax(event) {
 }
 
 async function deleteMw(name, configFile) {
-    if (!await _confirm('Delete middleware "' + name + '"?', 'Delete Middleware', 'Delete')) return;
+    if (!await _confirm('Delete middleware "' + name + '"? Any route still referencing it will stop working.', 'Delete Middleware', 'Delete', 'DELETE')) return;
     const data = new FormData();
     data.append('csrf_token', document.querySelector('meta[name="csrf-token"]')?.content || '');
     if (configFile) data.append('configFile', configFile);

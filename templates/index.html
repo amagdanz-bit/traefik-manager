@@ -96,6 +96,10 @@
     <div style="max-width:380px;width:90%;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:24px;box-shadow:0 16px 48px rgba(0,0,0,0.4);">
         <p class="font-semibold text-sm mb-1" style="color:var(--text)" id="customConfirmTitle"></p>
         <p class="text-sm mb-6" style="color:var(--muted);line-height:1.6" id="customConfirmMsg"></p>
+        <div id="customConfirmTypeWrap" style="display:none;margin:-12px 0 18px">
+            <label class="text-xs block mb-1.5" style="color:var(--muted)">Type <button type="button" id="customConfirmWord" title="Click to copy" style="color:var(--red);letter-spacing:0.06em;font-weight:700;background:none;border:none;padding:0 2px;cursor:copy;font-size:inherit;font-family:inherit">DELETE</button> to confirm</label>
+            <input type="text" id="customConfirmType" class="input-field" autocomplete="off" spellcheck="false" placeholder="DELETE">
+        </div>
         <div class="flex gap-2 justify-end">
             <button id="customConfirmCancel" class="btn-secondary text-xs">Cancel</button>
             <button id="customConfirmOk" class="btn-primary text-xs">Confirm</button>
@@ -251,23 +255,17 @@
                 <span class="badge badge-muted" id="countMw">-</span>
             </span>
         </button>
-        <button onclick="switchTab('tls')" id="btn-tls" class="tab-btn tab-optional" data-tab="tls">
+        <button onclick="switchTab('live')" id="btn-live" class="tab-btn">
             <span class="flex items-center gap-2">
-                <i class="ph-bold ph-lock-key"></i>
-                TLS Options
+                <i class="ph-bold ph-lightning"></i>
+                Services
+                <span class="badge badge-muted" id="svcTabCount">-</span>
             </span>
         </button>
         <button onclick="switchTab('routemap')" id="btn-routemap" class="tab-btn tab-optional" data-tab="routemap">
             <span class="flex items-center gap-2">
                 <i class="ph-bold ph-graph"></i>
                 Route Map
-            </span>
-        </button>
-        <button onclick="switchTab('live')" id="btn-live" class="tab-btn">
-            <span class="flex items-center gap-2">
-                <i class="ph-bold ph-lightning"></i>
-                Services
-                <span class="badge badge-muted" id="svcTabCount">-</span>
             </span>
         </button>
         <button onclick="switchTab('docker')" id="btn-docker" class="tab-btn tab-optional" data-tab="docker">
@@ -354,11 +352,23 @@
                 <span class="badge badge-muted" id="fileExternalTabCount">-</span>
             </span>
         </button>
+        <button onclick="switchTab('tls')" id="btn-tls" class="tab-btn tab-optional" data-tab="tls">
+            <span class="flex items-center gap-2">
+                <i class="ph-bold ph-lock-key"></i>
+                TLS Options
+            </span>
+        </button>
         <button onclick="switchTab('certs')" id="btn-certs" class="tab-btn tab-optional" data-tab="certs">
             <span class="flex items-center gap-2">
                 <i class="ph-bold ph-certificate"></i>
                 Certs
                 <span class="badge badge-muted" id="certsTabCount">-</span>
+            </span>
+        </button>
+        <button onclick="switchTab('logs')" id="btn-logs" class="tab-btn tab-optional" data-tab="logs">
+            <span class="flex items-center gap-2">
+                <i class="ph-bold ph-terminal"></i>
+                Logs
             </span>
         </button>
         <button onclick="switchTab('crowdsec')" id="btn-crowdsec" class="tab-btn tab-optional" data-tab="crowdsec">
@@ -372,12 +382,6 @@
                 <i class="ph-bold ph-puzzle-piece"></i>
                 Plugins
                 <span class="badge badge-muted" id="pluginsTabCount">-</span>
-            </span>
-        </button>
-        <button onclick="switchTab('logs')" id="btn-logs" class="tab-btn tab-optional" data-tab="logs">
-            <span class="flex items-center gap-2">
-                <i class="ph-bold ph-terminal"></i>
-                Logs
             </span>
         </button>
         <button onclick="switchTab('static')" id="btn-static" class="tab-btn tab-optional" data-tab="static">

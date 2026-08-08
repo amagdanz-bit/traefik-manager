@@ -575,7 +575,9 @@ async function saveRouteAjax(event) {
 }
 
 async function deleteRoute(id, configFile) {
-    if (!await _confirm('Delete route "' + id + '"?', 'Delete Route', 'Delete')) return;
+    const shown = String(id).includes('::') ? String(id).split('::').slice(1).join('::') : String(id);
+    const where = configFile ? ' from ' + configFile : '';
+    if (!await _confirm('Delete route "' + shown + '"' + where + '? This removes it from the config file and stops serving it.', 'Delete Route', 'Delete', 'DELETE')) return;
     const data = new FormData();
     data.append('csrf_token', document.querySelector('meta[name="csrf-token"]')?.content || '');
     if (configFile) data.append('configFile', configFile);
@@ -1727,7 +1729,7 @@ async function bulkDisable() {
 async function bulkDelete() {
     const ids = [..._bulkSelected];
     if (!ids.length) return;
-    if (!await _confirm(`Delete ${ids.length} route${ids.length > 1 ? 's' : ''}?`, 'Bulk Delete', 'Delete')) return;
+    if (!await _confirm(`Delete ${ids.length} route${ids.length > 1 ? 's' : ''}? This removes them from the config files and stops serving them.`, 'Bulk Delete', 'Delete', 'DELETE')) return;
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
     let failed = 0;
     for (const id of ids) {

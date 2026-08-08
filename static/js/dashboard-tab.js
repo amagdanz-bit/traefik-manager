@@ -66,10 +66,11 @@ window.rmRenderHiddenList = function() {
         return;
     }
     const all = window._rmAllRoutes || [];
+    const plain = v => String(v).includes('::') ? String(v).split('::').slice(1).join('::') : String(v);
     el.innerHTML = ids.map(id => {
         const r = all.find(x => x.id === id);
         const ov = (_rmConfig.route_overrides || {})[id] || {};
-        const name = ov.display_name || (r && r.name) || id;
+        const name = ov.display_name || (r && r.name) || plain(id);
         return '<div class="lg-row">'
             + '<span class="lg-id"><span class="lg-name">' + _esc(name) + '</span></span>'
             + '<span class="lg-bad"></span>'

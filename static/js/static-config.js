@@ -7,25 +7,52 @@ let _staticPendingChanges  = false;
 let _staticSectionEdits    = false;
 let _staticSaved           = false;
 
-function _confirm(message, title, okLabel) {
+function _confirm(message, title, okLabel, typeWord) {
     return new Promise(resolve => {
         const overlay = document.getElementById('customConfirmOverlay');
         const msg     = document.getElementById('customConfirmMsg');
         const ttl     = document.getElementById('customConfirmTitle');
         const ok      = document.getElementById('customConfirmOk');
         const cancel  = document.getElementById('customConfirmCancel');
+        const wrap    = document.getElementById('customConfirmTypeWrap');
+        const input   = document.getElementById('customConfirmType');
+        const wordEl  = document.getElementById('customConfirmWord');
+        const word    = typeWord ? String(typeWord) : '';
         if (msg)    msg.textContent = message;
         if (ttl)    ttl.textContent = title || '';
         if (ok)     ok.textContent  = okLabel || 'Confirm';
+        if (wrap)   wrap.style.display = word ? '' : 'none';
+        if (wordEl) wordEl.textContent = word;
+        if (input) { input.value = ''; input.placeholder = word; }
+        const matches = () => !word || (input && input.value.trim().toUpperCase() === word.toUpperCase());
+        const sync = () => { if (ok) ok.disabled = !matches(); };
+        sync();
         if (overlay) overlay.style.display = 'flex';
+        if (word && input) setTimeout(() => input.focus(), 60);
+        const onKey = e => {
+            if (e.key === 'Escape') done(false);
+            if (e.key === 'Enter' && matches()) done(true);
+        };
         const done = (val) => {
             if (overlay) overlay.style.display = 'none';
-            if (ok)     ok.onclick     = null;
+            if (ok)     { ok.onclick = null; ok.disabled = false; }
             if (cancel) cancel.onclick = null;
-            resolve(val);
+            if (input)  input.oninput  = null;
+            if (wordEl) { wordEl.onclick = null; wordEl.textContent = word; }
+            document.removeEventListener('keydown', onKey);
+            resolve(val && matches());
         };
-        if (ok)     ok.onclick     = () => done(true);
-        if (cancel) cancel.onclick = () => done(false);
+        if (input)  input.oninput   = sync;
+        if (wordEl) wordEl.onclick  = () => {
+            if (typeof _copyToClipboard === 'function') _copyToClipboard(word);
+            const was = wordEl.textContent;
+            wordEl.textContent = 'copied';
+            setTimeout(() => { wordEl.textContent = was; }, 900);
+            if (input) input.focus();
+        };
+        if (ok)     ok.onclick      = () => { if (matches()) done(true); };
+        if (cancel) cancel.onclick  = () => done(false);
+        document.addEventListener('keydown', onKey);
     });
 }
 
