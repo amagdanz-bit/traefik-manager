@@ -709,14 +709,24 @@
                                     <button type="button" id="theme-opt-system" onclick="setTheme('system')" class="proto-btn" title="System" style="padding:4px 12px;font-size:11px;border-radius:6px"><i class="ph-bold ph-desktop"></i></button>
                                 </div>
                             </div>
-                            <div class="flex items-center justify-between" style="padding:10px 12px;border-bottom:1px solid var(--border)">
-                                <div>
-                                    <div class="text-xs font-medium" style="color:var(--text)">Layout</div>
-                                    <div class="text-xs" style="color:var(--muted)">Collapsible side navigation and full-width content</div>
+                            <div style="padding:10px 12px;border-bottom:1px solid var(--border)">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <div class="text-xs font-medium" style="color:var(--text)">Layout</div>
+                                        <div class="text-xs" style="color:var(--muted)">Collapsible side navigation and full-width content</div>
+                                    </div>
+                                    <div class="flex gap-1 flex-shrink-0" style="margin-left:12px">
+                                        <button type="button" id="layout-classic" onclick="setLayoutMode('classic')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Classic</button>
+                                        <button type="button" id="layout-modern" onclick="setLayoutMode('modern')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Modern</button>
+                                    </div>
                                 </div>
-                                <div class="flex gap-1 flex-shrink-0" style="margin-left:12px">
-                                    <button type="button" id="layout-classic" onclick="setLayoutMode('classic')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Classic</button>
-                                    <button type="button" id="layout-modern" onclick="setLayoutMode('modern')" class="proto-btn" style="padding:4px 12px;font-size:11px;border-radius:6px">Modern</button>
+                                <div id="layoutSunsetNote" class="flex items-start gap-2 mt-2.5 rounded-lg" style="padding:8px 10px;background:color-mix(in srgb, var(--blue) 8%, transparent);border:1px solid color-mix(in srgb, var(--blue) 24%, transparent)">
+                                    <i class="ph-bold ph-info shrink-0" style="color:var(--blue);margin-top:1px;font-size:13px"></i>
+                                    <div class="text-xs" style="color:var(--muted);line-height:1.55">
+                                        <b style="color:var(--text)">Try the new design - Classic is being phased out in v1.11.0.</b>
+                                        Run into anything?
+                                        <a href="https://github.com/chr0nzz/traefik-manager/issues" target="_blank" rel="noopener" style="color:var(--blue)">Open an issue</a>
+                                    </div>
                                 </div>
                             </div>
                         </div>
