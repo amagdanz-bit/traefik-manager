@@ -56,11 +56,19 @@ def readable_config_path(path: str) -> str:
         return ''
     resolved = os.path.realpath(path)
     allowed  = list(env.ALLOWED_FILE_PREFIXES)
+    exact    = []
     for _ev in ('STATIC_CONFIG_PATH', 'ACCESS_LOG_PATH', 'ACME_JSON_PATH', 'PLUGINS_DIR'):
-        _v = os.environ.get(_ev, '').strip()
-        if _v:
-            allowed.append(os.path.dirname(os.path.realpath(_v)) + os.sep)
-    if any(resolved.startswith(p) for p in allowed):
+        for _part in os.environ.get(_ev, '').split(','):
+            _part = _part.strip()
+            if not _part:
+                continue
+            _r = os.path.realpath(_part)
+            _base = _r if os.path.isdir(_r) else os.path.dirname(_r)
+            if _base and _base != os.sep:
+                allowed.append(_base.rstrip(os.sep) + os.sep)
+            else:
+                exact.append(_r)
+    if resolved in exact or any(resolved.startswith(p) for p in allowed):
         return resolved
     logger.warning(f"Blocked read of unsafe path: {path!r}")
     return ''
