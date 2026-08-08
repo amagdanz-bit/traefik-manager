@@ -411,6 +411,8 @@ html.tm-compact-stats .sig-root .lg-note { margin-top: 6px; font-size: 10px; }
 html.tm-compact-stats .sig-root .atk-feed .sig-ep-kind { padding-left: 0; }
 .sig-root .atk-unban { color: var(--muted); }
 .sig-root .atk-unban:hover { color: var(--red); }
+.sig-root .atk-ban { color: var(--muted); }
+.sig-root .atk-ban:hover { color: var(--red); }
 
 .sig-root .atk-decs .sig-ep-row { grid-template-columns: minmax(0, 1fr) auto 94px 44px; grid-template-areas: "id addr n flags" "sub sub sub sub"; }
 .sig-root .atk-decs .sig-ep-n { font: 600 11.5px/1 'JetBrains Mono', monospace; color: var(--text-secondary); }

@@ -352,6 +352,7 @@ function _atkGo(spec) {
     if ('cfg' in p) { _atkOpenCsSettings(); return; }
     if ('reload' in p) { refreshCrowdSecTab(); return; }
     if ('unban' in p) { csUnban(Number(p.unban)); return; }
+    if ('ban' in p) { openCsBanModal(p.ban); return; }
     if ('page' in p) { _atkPage = Math.max(1, parseInt(p.page, 10) || 1); _atkOpen = ''; _csRender(); return; }
     if ('open' in p) { _atkOpen = (_atkOpen === p.open) ? '' : p.open; _csRender(); return; }
     if ('view' in p) {
@@ -1197,6 +1198,10 @@ function _atkAlertRow(a) {
                     tip: 'Simulation mode: CrowdSec matched this scenario and enforced nothing' })
                 : _atkFlag({ tag: 'span', cls: 'd-warn', ic: 'ph-bold ph-lock-open', n: '', label: 'loose', words: false,
                     tip: 'No active decision for this source right now. The ban has probably expired' })))
+        + ((!a.handled && a.ip)
+            ? '<button type="button" class="sig-flag d-off atk-ban" data-atk="' + _esc(_atkSpec({ ban: a.ip }))
+                + '" title="Ban this source. Opens the decision form with the address filled in, the type and duration stay yours to pick">'
+                + '<i class="ph-bold ph-gavel"></i></button>' : '')
         + '<span class="sig-idle-txt">' + _esc(a.start ? _sdAgo(a.start) : 'no time') + '</span></span>'
         + '<span class="sig-ep-sub">' + _esc(sub) + '</span>'
         + '<span class="sig-ep-kind">' + _esc(_scenShort(a.scenario) + ' · ' + (a.uris[0] || a.users[0] || '-')) + '</span>'
@@ -1252,8 +1257,12 @@ function _atkAlertOpen(a) {
             go: _atkSpec({ agent: _uaShort(a.uas[0]) }), tip: a.uas[0] })
             + ' <span class="atk-none">' + _esc(a.uas[0]) + '</span>'
         : none('no user_agent in meta[]'));
+    const banAct = (!a.handled && a.ip)
+        ? ' ' + _atkFlag({ cls: 'd-bad', ic: 'ph-bold ph-gavel', n: '', label: 'ban ' + a.ip,
+            go: _atkSpec({ ban: a.ip }), tip: 'Open the decision form with this address filled in. Type, duration and reason stay yours to pick' })
+        : '';
     push('outcome', !a.known
-        ? none('the decisions read failed, so the ban state of this source is not knowable right now')
+        ? none('the decisions read failed, so the ban state of this source is not knowable right now') + banAct
         : a.handled
         ? _atkFlag({ cls: 'd-off', ic: 'ph-bold ph-prohibit', n: '', label: 'active ban on ' + a.ip,
             go: _atkSpec({ view: 'decisions', ip: a.ip }), tip: 'Jump to the decisions view filtered to this source' })
@@ -1261,7 +1270,7 @@ function _atkAlertOpen(a) {
             ? _atkFlag({ cls: 'd-warn', ic: 'ph-bold ph-eye-slash', n: '', label: 'simulated, nothing enforced',
                 go: _atkSpec({ outcome: 'sim' }), tip: 'Show every simulated alert' })
             : _atkFlag({ cls: 'd-warn', ic: 'ph-bold ph-lock-open', n: '', label: 'no active decision',
-                go: _atkSpec({ outcome: 'loose' }), tip: 'Show every alert whose source is currently unbanned' })));
+                go: _atkSpec({ outcome: 'loose' }), tip: 'Show every alert whose source is currently unbanned' })) + banAct);
     push('reported by', _esc(a.machine || 'unknown') + ' <span class="atk-none">alert ' + _esc(a.uuid) + '</span>');
     return '<div class="atk-open">' + kv.join('') + '</div>';
 }
@@ -1477,8 +1486,8 @@ function _csRender() {
     _atkTickAge();
 }
 
-function openCsBanModal() {
-    document.getElementById('csBanIp').value       = '';
+function openCsBanModal(prefill) {
+    document.getElementById('csBanIp').value       = typeof prefill === 'string' ? prefill : '';
     document.getElementById('csBanReason').value   = '';
     document.getElementById('csBanDuration').value = '24h';
     const errEl = document.getElementById('csBanError');
