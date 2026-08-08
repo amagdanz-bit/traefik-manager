@@ -330,6 +330,10 @@ html.tm-modern .svc-list-row .toggle-switch { transform: scale(.88); transform-o
 }
 .tab-content > .filter-bar { position: sticky; top: 0; z-index: 30; background: var(--bg); margin-bottom: 12px; padding-bottom: 10px; }
 html.tm-modern .tab-content > .filter-bar { top: var(--tm-nav-h, 54px); }
+@media (max-width: 640px) {
+    .tab-content > .filter-bar,
+    html.tm-modern .tab-content > .filter-bar { position: static; z-index: auto; }
+}
 .sig-root .lg-geo { margin-bottom: 12px; }
 .sig-root .lg-geo .tm-geo-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; margin-top: 6px; }
 .sig-root .lg-geo .tm-geo-map svg { display: block; width: 100%; height: auto; }
